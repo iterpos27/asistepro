@@ -1,0 +1,320 @@
+const { pool } = require('../config/database');
+const { calculateDistanceMeters } = require('../utils/geo.util');
+
+const MARCACION_TIPOS = ['entrada', 'salida'];
+const MOTIVOS_NOVEDAD = [
+  'Reemplazo',
+  'Apoyo temporal',
+  'Emergencia',
+  'Autorizacion supervisor',
+  'Otro',
+];
+
+function validateMarcacionPayload(payload) {
+  const errors = [];
+
+  if (!payload.qr_token) errors.push('qr_token es requerido');
+  if (!MARCACION_TIPOS.includes(payload.tipo)) errors.push('tipo debe ser entrada o salida');
+
+  const latitud = Number(payload.latitud);
+  const longitud = Number(payload.longitud);
+
+  if (Number.isNaN(latitud) || latitud < -90 || latitud > 90) errors.push('latitud invalida');
+  if (Number.isNaN(longitud) || longitud < -180 || longitud > 180) errors.push('longitud invalida');
+
+  if (payload.motivo_novedad && !MOTIVOS_NOVEDAD.includes(payload.motivo_novedad)) {
+    errors.push('motivo_novedad invalido');
+  }
+
+  if (errors.length) {
+    const error = new Error(errors.join(', '));
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+async function findSucursalByQr(empresaId, qrToken) {
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM sucursales
+      WHERE empresa_id = $1
+        AND qr_token = $2
+      LIMIT 1
+    `,
+    [empresaId, qrToken],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function findEmpleadoForMarcacion({ empresaId, empleadoId, usuarioId, rol }) {
+  const values = [empresaId];
+  let condition = '';
+
+  if (rol === 'EMPLEADO') {
+    values.push(usuarioId);
+    condition = `AND usuario_id = $${values.length}`;
+  } else {
+    if (!empleadoId) {
+      const error = new Error('empleado_id es requerido');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    values.push(empleadoId);
+    condition = `AND id = $${values.length}`;
+  }
+
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM empleados
+      WHERE empresa_id = $1
+        ${condition}
+        AND estado = 'activo'
+      LIMIT 1
+    `,
+    values,
+  );
+
+  return result.rows[0] || null;
+}
+
+async function findActiveHorario({ empresaId, empleadoId, markedAt = new Date() }) {
+  const result = await pool.query(
+    `
+      SELECT h.*
+      FROM empleado_horarios eh
+      INNER JOIN horarios h ON h.id = eh.horario_id
+      WHERE eh.empresa_id = $1
+        AND eh.empleado_id = $2
+        AND eh.activo = TRUE
+        AND h.activo = TRUE
+        AND eh.fecha_inicio <= $3::date
+        AND (eh.fecha_fin IS NULL OR eh.fecha_fin >= $3::date)
+      ORDER BY eh.fecha_inicio DESC, eh.creado_en DESC
+      LIMIT 1
+    `,
+    [empresaId, empleadoId, markedAt],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function insertMarcacion(data) {
+  const result = await pool.query(
+    `
+      INSERT INTO marcaciones (
+        empresa_id,
+        empleado_id,
+        sucursal_id,
+        horario_id,
+        tipo,
+        estado,
+        latitud,
+        longitud,
+        distancia_metros,
+        dentro_geocerca,
+        motivo_novedad,
+        detalle_novedad,
+        mensaje,
+        marcado_en
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14::timestamptz, NOW())
+      )
+      RETURNING *
+    `,
+    [
+      data.empresa_id,
+      data.empleado_id,
+      data.sucursal_id,
+      data.horario_id,
+      data.tipo,
+      data.estado,
+      data.latitud,
+      data.longitud,
+      data.distancia_metros,
+      data.dentro_geocerca,
+      data.motivo_novedad,
+      data.detalle_novedad,
+      data.mensaje,
+      data.marcado_en || null,
+    ],
+  );
+
+  return result.rows[0];
+}
+
+async function registrarMarcacion({ empresaId, auth, payload }) {
+  validateMarcacionPayload(payload);
+
+  const sucursal = await findSucursalByQr(empresaId, payload.qr_token);
+
+  if (!sucursal || sucursal.estado !== 'activa') {
+    const error = new Error('QR invalido o sucursal inactiva');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const empleado = await findEmpleadoForMarcacion({
+    empresaId,
+    empleadoId: payload.empleado_id,
+    usuarioId: auth.usuario_id,
+    rol: auth.rol,
+  });
+
+  if (!empleado) {
+    const error = new Error('Empleado activo no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const distancia = calculateDistanceMeters(
+    { latitud: payload.latitud, longitud: payload.longitud },
+    { latitud: sucursal.latitud, longitud: sucursal.longitud },
+  );
+  const dentroGeocerca = distancia <= Number(sucursal.radio_metros);
+  const sucursalDistinta =
+    empleado.sucursal_habitual_id && empleado.sucursal_habitual_id !== sucursal.id;
+  const horario = await findActiveHorario({
+    empresaId,
+    empleadoId: empleado.id,
+    markedAt: payload.marcado_en || new Date(),
+  });
+
+  let estado = 'aceptada';
+  let mensaje = 'Marcacion aceptada';
+
+  if (!dentroGeocerca) {
+    estado = 'rechazada';
+    mensaje = 'Marcacion rechazada: fuera del radio permitido';
+  } else if (sucursalDistinta) {
+    if (!payload.motivo_novedad) {
+      const error = new Error('motivo_novedad es requerido al marcar en sucursal distinta');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    estado = 'aceptada_con_novedad';
+    mensaje = 'Marcacion aceptada con novedad por sucursal distinta';
+  }
+
+  const marcacion = await insertMarcacion({
+    empresa_id: empresaId,
+    empleado_id: empleado.id,
+    sucursal_id: sucursal.id,
+    horario_id: horario?.id || null,
+    tipo: payload.tipo,
+    estado,
+    latitud: Number(payload.latitud),
+    longitud: Number(payload.longitud),
+    distancia_metros: Number(distancia.toFixed(2)),
+    dentro_geocerca: dentroGeocerca,
+    motivo_novedad: estado === 'aceptada_con_novedad' ? payload.motivo_novedad : null,
+    detalle_novedad: estado === 'aceptada_con_novedad' ? payload.detalle_novedad || null : null,
+    mensaje,
+    marcado_en: payload.marcado_en,
+  });
+
+  return {
+    marcacion,
+    empleado,
+    sucursal,
+    horario,
+  };
+}
+
+async function listMarcaciones({ empresaId, empleadoId, sucursalId, estado, fechaDesde, fechaHasta, limit = 20, offset = 0 }) {
+  const filters = ['m.empresa_id = $1'];
+  const values = [empresaId];
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`m.empleado_id = $${values.length}`);
+  }
+
+  if (sucursalId) {
+    values.push(sucursalId);
+    filters.push(`m.sucursal_id = $${values.length}`);
+  }
+
+  if (estado) {
+    values.push(estado);
+    filters.push(`m.estado = $${values.length}`);
+  }
+
+  if (fechaDesde) {
+    values.push(fechaDesde);
+    filters.push(`m.marcado_en >= $${values.length}::timestamptz`);
+  }
+
+  if (fechaHasta) {
+    values.push(fechaHasta);
+    filters.push(`m.marcado_en <= $${values.length}::timestamptz`);
+  }
+
+  values.push(limit);
+  const limitParam = values.length;
+  values.push(offset);
+  const offsetParam = values.length;
+
+  const result = await pool.query(
+    `
+      SELECT
+        m.*,
+        e.codigo AS empleado_codigo,
+        e.nombres AS empleado_nombres,
+        e.apellidos AS empleado_apellidos,
+        s.nombre AS sucursal_nombre,
+        h.nombre AS horario_nombre,
+        COUNT(*) OVER() AS total
+      FROM marcaciones m
+      INNER JOIN empleados e ON e.id = m.empleado_id
+      INNER JOIN sucursales s ON s.id = m.sucursal_id
+      LEFT JOIN horarios h ON h.id = m.horario_id
+      WHERE ${filters.join(' AND ')}
+      ORDER BY m.marcado_en DESC
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
+    `,
+    values,
+  );
+
+  return {
+    items: result.rows.map(({ total, ...marcacion }) => marcacion),
+    total: Number(result.rows[0]?.total || 0),
+    limit,
+    offset,
+  };
+}
+
+async function findMarcacionById(empresaId, id) {
+  const result = await pool.query(
+    `
+      SELECT
+        m.*,
+        e.codigo AS empleado_codigo,
+        e.nombres AS empleado_nombres,
+        e.apellidos AS empleado_apellidos,
+        s.nombre AS sucursal_nombre,
+        h.nombre AS horario_nombre
+      FROM marcaciones m
+      INNER JOIN empleados e ON e.id = m.empleado_id
+      INNER JOIN sucursales s ON s.id = m.sucursal_id
+      LEFT JOIN horarios h ON h.id = m.horario_id
+      WHERE m.empresa_id = $1
+        AND m.id = $2
+      LIMIT 1
+    `,
+    [empresaId, id],
+  );
+
+  return result.rows[0] || null;
+}
+
+module.exports = {
+  registrarMarcacion,
+  listMarcaciones,
+  findMarcacionById,
+};
