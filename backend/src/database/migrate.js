@@ -10,6 +10,7 @@ const migrations = [
   '003_seed_super_admin.sql',
   '004_auth.sql',
   '005_multi_tenant.sql',
+  '006_billing.sql',
 ];
 
 async function runMigrations() {
