@@ -588,7 +588,7 @@ td {
 
 .toolbar-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(180px, 220px) auto;
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(180px, 220px)) auto;
   gap: 12px;
   align-items: center;
 }
@@ -710,6 +710,33 @@ td {
   font-size: 13px;
 }
 
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-item {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.detail-item span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detail-item strong {
+  color: #172033;
+  overflow-wrap: anywhere;
+}
+
 .settings-grid label {
   display: grid;
   gap: 8px;
@@ -812,7 +839,8 @@ td {
 
   .metrics-grid,
   .settings-grid,
-  .form-grid {
+  .form-grid,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 
