@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Plus, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as planService from '../../services/planService';
@@ -13,6 +14,7 @@ export default function PlanesList() {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingDeactivate, setPendingDeactivate] = useState(null);
 
   async function loadPlanes() {
     setLoading(true);
@@ -73,15 +75,13 @@ export default function PlanesList() {
   }
 
   async function deactivatePlan(plan) {
-    const confirmed = window.confirm(`Desactivar el plan "${plan.nombre}"?`);
-    if (!confirmed) return;
-
     setMessage('');
     setError('');
 
     try {
       await planService.deletePlan(plan.id);
       setMessage('Plan desactivado correctamente');
+      setPendingDeactivate(null);
       await loadPlanes();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo desactivar el plan');
@@ -106,6 +106,16 @@ export default function PlanesList() {
 
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
+
+      <ActionDialog
+        open={Boolean(pendingDeactivate)}
+        danger
+        title="Desactivar plan"
+        message={`Se desactivara "${pendingDeactivate?.nombre || ''}" para nuevas contrataciones.`}
+        confirmLabel="Desactivar"
+        onCancel={() => setPendingDeactivate(null)}
+        onConfirm={() => deactivatePlan(pendingDeactivate)}
+      />
 
       {showForm ? (
         <div className="panel">
@@ -146,7 +156,7 @@ export default function PlanesList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(plan)} aria-label="Editar plan">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => deactivatePlan(plan)} aria-label="Desactivar plan">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(plan)} aria-label="Desactivar plan">
                           <Trash2 size={16} />
                         </button>
                       </div>

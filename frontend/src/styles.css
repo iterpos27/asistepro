@@ -676,6 +676,23 @@ td {
   gap: 14px;
 }
 
+.qr-preview {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.qr-preview img {
+  width: min(100%, 260px);
+  height: auto;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+}
+
 .qr-token {
   display: grid;
   gap: 6px;
@@ -849,6 +866,77 @@ td {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.action-dialog {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.action-dialog h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.action-dialog p {
+  margin: 8px 0 0;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.dialog-icon.danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.dialog-reason,
+.action-dialog .form-actions {
+  grid-column: 1 / -1;
+}
+
+.dialog-reason {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.dialog-reason textarea {
+  width: 100%;
+  min-height: 108px;
+  padding: 12px;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #ffffff;
+  resize: vertical;
+  outline: none;
+}
+
+.dialog-reason textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.danger-button {
+  background: #dc2626;
+  box-shadow: 0 12px 26px rgba(220, 38, 38, 0.18);
+}
+
+.danger-button:hover {
+  box-shadow: 0 18px 32px rgba(220, 38, 38, 0.22);
 }
 
 .settings-grid label {

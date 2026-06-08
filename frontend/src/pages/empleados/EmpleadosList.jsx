@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Eye, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as empleadoService from '../../services/empleadoService';
@@ -27,6 +28,7 @@ export default function EmpleadosList() {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingDeactivate, setPendingDeactivate] = useState(null);
 
   async function loadSucursales() {
     const result = await sucursalService.listSucursales({ limit: 100 });
@@ -104,15 +106,13 @@ export default function EmpleadosList() {
   }
 
   async function deactivateEmpleado(empleado) {
-    const confirmed = window.confirm(`Desactivar al empleado "${empleado.nombres} ${empleado.apellidos}"?`);
-    if (!confirmed) return;
-
     setMessage('');
     setError('');
 
     try {
       await empleadoService.deleteEmpleado(empleado.id);
       setMessage('Empleado desactivado correctamente');
+      setPendingDeactivate(null);
       await loadEmpleados();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo desactivar el empleado');
@@ -166,6 +166,16 @@ export default function EmpleadosList() {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(pendingDeactivate)}
+        danger
+        title="Desactivar empleado"
+        message={`Se desactivara "${pendingDeactivate?.nombres || ''} ${pendingDeactivate?.apellidos || ''}".`}
+        confirmLabel="Desactivar"
+        onCancel={() => setPendingDeactivate(null)}
+        onConfirm={() => deactivateEmpleado(pendingDeactivate)}
+      />
+
       {showForm ? (
         <div className="panel">
           <PanelTitle title={selectedEmpleado ? 'Editar empleado' : 'Nuevo empleado'} subtitle="Datos personales, cargo y sucursal habitual" />
@@ -212,7 +222,7 @@ export default function EmpleadosList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(empleado)} aria-label="Editar empleado">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => deactivateEmpleado(empleado)} aria-label="Desactivar empleado">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(empleado)} aria-label="Desactivar empleado">
                           <Trash2 size={16} />
                         </button>
                       </div>

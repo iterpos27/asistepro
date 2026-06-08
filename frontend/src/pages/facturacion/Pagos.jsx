@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Ban, Check, Plus, RotateCcw } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as facturacionService from '../../services/facturacionService';
 import { ROLES } from '../../utils/roles';
@@ -39,6 +40,8 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   async function loadPagos(nextFacturaId = facturaId) {
     setLoading(true);
@@ -107,15 +110,14 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
   }
 
   async function cancelPago(pago) {
-    const reason = window.prompt(`Motivo de anulacion del pago ${pago.factura_numero || ''}`);
-    if (reason === null) return;
-
     setMessage('');
     setError('');
 
     try {
-      await facturacionService.anularPago(pago.id, reason);
+      await facturacionService.anularPago(pago.id, cancelReason);
       setMessage('Pago anulado correctamente');
+      setCancelTarget(null);
+      setCancelReason('');
       await loadPagos();
       await onChanged?.();
     } catch (requestError) {
@@ -164,6 +166,23 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
 
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
+
+      <ActionDialog
+        open={Boolean(cancelTarget)}
+        danger
+        title="Anular pago"
+        message={`Confirma la anulacion del pago de la factura ${cancelTarget?.factura_numero || ''}.`}
+        confirmLabel="Anular"
+        reason={cancelReason}
+        reasonLabel="Motivo de anulacion"
+        reasonPlaceholder="Ej. Comprobante duplicado o referencia incorrecta"
+        onReasonChange={setCancelReason}
+        onCancel={() => {
+          setCancelTarget(null);
+          setCancelReason('');
+        }}
+        onConfirm={() => cancelPago(cancelTarget)}
+      />
 
       {showForm ? (
         <div className="panel">
@@ -258,7 +277,15 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                                 <Check size={16} />
                               </button>
                             ) : null}
-                            <button className="icon-button danger" type="button" onClick={() => cancelPago(pago)} aria-label="Anular pago">
+                            <button
+                              className="icon-button danger"
+                              type="button"
+                              onClick={() => {
+                                setCancelTarget(pago);
+                                setCancelReason('');
+                              }}
+                              aria-label="Anular pago"
+                            >
                               <Ban size={16} />
                             </button>
                           </>

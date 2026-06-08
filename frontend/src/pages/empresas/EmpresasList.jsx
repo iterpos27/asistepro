@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as empresaService from '../../services/empresaService';
@@ -22,6 +23,7 @@ export default function EmpresasList() {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingCancel, setPendingCancel] = useState(null);
 
   async function loadEmpresas() {
     setLoading(true);
@@ -84,15 +86,13 @@ export default function EmpresasList() {
   }
 
   async function cancelEmpresa(empresa) {
-    const confirmed = window.confirm(`Cancelar la empresa "${empresa.nombre}"?`);
-    if (!confirmed) return;
-
     setError('');
     setMessage('');
 
     try {
       await empresaService.deleteEmpresa(empresa.id);
       setMessage('Empresa cancelada correctamente');
+      setPendingCancel(null);
       await loadEmpresas();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo cancelar la empresa');
@@ -138,6 +138,16 @@ export default function EmpresasList() {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(pendingCancel)}
+        danger
+        title="Cancelar empresa"
+        message={`Se cancelara "${pendingCancel?.nombre || ''}" y quedara fuera de operacion.`}
+        confirmLabel="Cancelar empresa"
+        onCancel={() => setPendingCancel(null)}
+        onConfirm={() => cancelEmpresa(pendingCancel)}
+      />
+
       {showForm ? (
         <div className="panel">
           <PanelTitle title={selectedEmpresa ? 'Editar empresa' : 'Nueva empresa'} subtitle="Datos fiscales y estado operativo" />
@@ -175,7 +185,7 @@ export default function EmpresasList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(empresa)} aria-label="Editar empresa">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => cancelEmpresa(empresa)} aria-label="Cancelar empresa">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(empresa)} aria-label="Cancelar empresa">
                           <Trash2 size={16} />
                         </button>
                       </div>

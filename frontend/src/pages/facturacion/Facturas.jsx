@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ban, CreditCard, Edit, FileText, Plus, Receipt, RotateCcw } from 'lucide-react';
 import MetricCard from '../../components/cards/MetricCard';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import { useAuthContext } from '../../context/AuthContext';
@@ -43,6 +44,8 @@ export default function Facturas({ defaultTab = 'facturas' }) {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const activeSubscription = useMemo(
     () => suscripciones.find((suscripcion) => suscripcion.estado === 'activa') || suscripciones[0],
@@ -140,15 +143,14 @@ export default function Facturas({ defaultTab = 'facturas' }) {
   }
 
   async function cancelFactura(factura) {
-    const reason = window.prompt(`Motivo de anulacion de la factura ${factura.numero}`);
-    if (reason === null) return;
-
     setMessage('');
     setError('');
 
     try {
-      await facturacionService.anularFactura(factura.id, reason);
+      await facturacionService.anularFactura(factura.id, cancelReason);
       setMessage('Factura anulada correctamente');
+      setCancelTarget(null);
+      setCancelReason('');
       await loadFacturas();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo anular la factura');
@@ -251,6 +253,23 @@ export default function Facturas({ defaultTab = 'facturas' }) {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(cancelTarget)}
+        danger
+        title="Anular factura"
+        message={`Confirma la anulacion de la factura ${cancelTarget?.numero || ''}.`}
+        confirmLabel="Anular"
+        reason={cancelReason}
+        reasonLabel="Motivo de anulacion"
+        reasonPlaceholder="Ej. Error en valores o solicitud del cliente"
+        onReasonChange={setCancelReason}
+        onCancel={() => {
+          setCancelTarget(null);
+          setCancelReason('');
+        }}
+        onConfirm={() => cancelFactura(cancelTarget)}
+      />
+
       {showForm && isSuperAdmin ? (
         <div className="panel">
           <PanelTitle title={selectedFactura ? 'Editar factura' : 'Nueva factura'} subtitle="Datos fiscales y estado de cobro" />
@@ -305,7 +324,15 @@ export default function Facturas({ defaultTab = 'facturas' }) {
                               <button className="icon-button" type="button" onClick={() => openEditForm(factura)} aria-label="Editar factura">
                                 <Edit size={16} />
                               </button>
-                              <button className="icon-button danger" type="button" onClick={() => cancelFactura(factura)} aria-label="Anular factura">
+                              <button
+                                className="icon-button danger"
+                                type="button"
+                                onClick={() => {
+                                  setCancelTarget(factura);
+                                  setCancelReason('');
+                                }}
+                                aria-label="Anular factura"
+                              >
                                 <Ban size={16} />
                               </button>
                             </>

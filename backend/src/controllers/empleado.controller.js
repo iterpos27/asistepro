@@ -50,7 +50,7 @@ async function createEmpleado(req, res, next) {
   } catch (error) {
     if (error.code === '23505') {
       error.statusCode = 409;
-      error.message = 'Ya existe un empleado con ese codigo o email para esta empresa';
+      error.message = 'Ya existe un empleado o usuario con ese codigo o email';
     }
 
     return next(error);
@@ -69,7 +69,7 @@ async function updateEmpleado(req, res, next) {
   } catch (error) {
     if (error.code === '23505') {
       error.statusCode = 409;
-      error.message = 'Ya existe un empleado con ese codigo o email para esta empresa';
+      error.message = 'Ya existe un empleado o usuario con ese codigo o email';
     }
 
     return next(error);

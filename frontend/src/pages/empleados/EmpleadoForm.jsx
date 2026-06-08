@@ -14,6 +14,27 @@ const empleadoSchema = z.object({
   sucursal_habitual_id: z.string().optional(),
   fecha_ingreso: z.string().optional(),
   estado: z.enum(['activo', 'inactivo', 'suspendido']),
+  crear_usuario: z.boolean().optional(),
+  rol_acceso: z.enum(['EMPLEADO', 'RRHH']).optional(),
+  password_acceso: z.string().optional(),
+}).superRefine((values, context) => {
+  if (!values.crear_usuario) return;
+
+  if (!values.email) {
+    context.addIssue({
+      code: 'custom',
+      path: ['email'],
+      message: 'Correo requerido para crear usuario',
+    });
+  }
+
+  if (!values.password_acceso || values.password_acceso.length < 8) {
+    context.addIssue({
+      code: 'custom',
+      path: ['password_acceso'],
+      message: 'Minimo 8 caracteres',
+    });
+  }
 });
 
 const defaultValues = {
@@ -27,6 +48,9 @@ const defaultValues = {
   sucursal_habitual_id: '',
   fecha_ingreso: '',
   estado: 'activo',
+  crear_usuario: false,
+  rol_acceso: 'EMPLEADO',
+  password_acceso: '',
 };
 
 function dateOnly(value) {
@@ -39,6 +63,7 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(empleadoSchema),
@@ -59,10 +84,16 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
             sucursal_habitual_id: empleado.sucursal_habitual_id || '',
             fecha_ingreso: dateOnly(empleado.fecha_ingreso),
             estado: empleado.estado || 'activo',
+            crear_usuario: false,
+            rol_acceso: 'EMPLEADO',
+            password_acceso: '',
           }
         : defaultValues,
     );
   }, [empleado, reset]);
+
+  const createAccess = watch('crear_usuario');
+  const hasLinkedUser = Boolean(empleado?.usuario_id || empleado?.usuario_email);
 
   function submit(values) {
     onSubmit({
@@ -74,6 +105,9 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
       departamento: values.departamento || null,
       sucursal_habitual_id: values.sucursal_habitual_id || null,
       fecha_ingreso: values.fecha_ingreso || null,
+      crear_usuario: hasLinkedUser ? false : Boolean(values.crear_usuario),
+      rol_acceso: values.crear_usuario ? values.rol_acceso || 'EMPLEADO' : undefined,
+      password_acceso: values.crear_usuario ? values.password_acceso : undefined,
     });
   }
 
@@ -135,6 +169,35 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
           Fecha ingreso
           <input {...register('fecha_ingreso')} type="date" />
         </label>
+        {hasLinkedUser ? (
+          <label className="wide-field">
+            Usuario vinculado
+            <input value={empleado.usuario_email || 'Usuario activo'} readOnly />
+          </label>
+        ) : (
+          <>
+            <label className="checkbox-field wide-field">
+              <input {...register('crear_usuario')} type="checkbox" />
+              Crear usuario de acceso para este empleado
+            </label>
+            {createAccess ? (
+              <>
+                <label>
+                  Rol de acceso
+                  <select {...register('rol_acceso')}>
+                    <option value="EMPLEADO">Empleado</option>
+                    <option value="RRHH">RRHH</option>
+                  </select>
+                </label>
+                <label>
+                  Password temporal
+                  <input {...register('password_acceso')} type="password" placeholder="Minimo 8 caracteres" />
+                  {errors.password_acceso && <small>{errors.password_acceso.message}</small>}
+                </label>
+              </>
+            ) : null}
+          </>
+        )}
       </div>
       <div className="form-actions">
         <button className="outline-button" type="button" onClick={onCancel}>

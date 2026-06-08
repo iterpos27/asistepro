@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as horarioService from '../../services/horarioService';
@@ -39,6 +40,7 @@ export default function HorariosList() {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingDeactivate, setPendingDeactivate] = useState(null);
 
   async function loadSucursales() {
     const result = await sucursalService.listSucursales({ limit: 100 });
@@ -125,15 +127,13 @@ export default function HorariosList() {
   }
 
   async function deactivateHorario(horario) {
-    const confirmed = window.confirm(`Desactivar el horario "${horario.nombre}"?`);
-    if (!confirmed) return;
-
     setMessage('');
     setError('');
 
     try {
       await horarioService.deleteHorario(horario.id);
       setMessage('Horario desactivado correctamente');
+      setPendingDeactivate(null);
       await loadHorarios();
       await loadAsignaciones();
     } catch (requestError) {
@@ -187,6 +187,16 @@ export default function HorariosList() {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(pendingDeactivate)}
+        danger
+        title="Desactivar horario"
+        message={`Se desactivara "${pendingDeactivate?.nombre || ''}" y no deberia usarse en nuevas asignaciones.`}
+        confirmLabel="Desactivar"
+        onCancel={() => setPendingDeactivate(null)}
+        onConfirm={() => deactivateHorario(pendingDeactivate)}
+      />
+
       {showForm ? (
         <div className="panel">
           <PanelTitle title={selectedHorario ? 'Editar horario' : 'Nuevo horario'} subtitle="Hora entrada, salida, tolerancia y dias laborales" />
@@ -228,7 +238,7 @@ export default function HorariosList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(horario)} aria-label="Editar horario">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => deactivateHorario(horario)} aria-label="Desactivar horario">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(horario)} aria-label="Desactivar horario">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -262,7 +272,7 @@ export default function HorariosList() {
               {asignaciones.length ? (
                 asignaciones.map((asignacion) => (
                   <tr key={asignacion.id}>
-                    <td>{`${asignacion.empleado_codigo} · ${asignacion.empleado_nombres} ${asignacion.empleado_apellidos}`}</td>
+                    <td>{`${asignacion.empleado_codigo} - ${asignacion.empleado_nombres} ${asignacion.empleado_apellidos}`}</td>
                     <td>{asignacion.horario_nombre}</td>
                     <td>{String(asignacion.fecha_inicio || '-').slice(0, 10)}</td>
                     <td>{asignacion.fecha_fin ? String(asignacion.fecha_fin).slice(0, 10) : '-'}</td>

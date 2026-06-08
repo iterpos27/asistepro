@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Plus, QrCode, RotateCcw, Search, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as sucursalService from '../../services/sucursalService';
@@ -25,6 +26,7 @@ export default function SucursalesList() {
   const [qrLoading, setQrLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingDeactivate, setPendingDeactivate] = useState(null);
 
   async function loadSucursales() {
     setLoading(true);
@@ -89,15 +91,13 @@ export default function SucursalesList() {
   }
 
   async function deactivateSucursal(sucursal) {
-    const confirmed = window.confirm(`Desactivar la sucursal "${sucursal.nombre}"?`);
-    if (!confirmed) return;
-
     setMessage('');
     setError('');
 
     try {
       await sucursalService.deleteSucursal(sucursal.id);
       setMessage('Sucursal desactivada correctamente');
+      setPendingDeactivate(null);
       await loadSucursales();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo desactivar la sucursal');
@@ -175,6 +175,16 @@ export default function SucursalesList() {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(pendingDeactivate)}
+        danger
+        title="Desactivar sucursal"
+        message={`Se desactivara "${pendingDeactivate?.nombre || ''}". Las marcaciones futuras no deberian usar esta sede.`}
+        confirmLabel="Desactivar"
+        onCancel={() => setPendingDeactivate(null)}
+        onConfirm={() => deactivateSucursal(pendingDeactivate)}
+      />
+
       {showForm ? (
         <div className="panel">
           <PanelTitle title={selectedSucursal ? 'Editar sucursal' : 'Nueva sucursal'} subtitle="Direccion, coordenadas, radio y estado" />
@@ -217,7 +227,7 @@ export default function SucursalesList() {
                         <button className="icon-button" type="button" onClick={() => showQr(sucursal)} aria-label="Ver QR">
                           <QrCode size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => deactivateSucursal(sucursal)} aria-label="Desactivar sucursal">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(sucursal)} aria-label="Desactivar sucursal">
                           <Trash2 size={16} />
                         </button>
                       </div>

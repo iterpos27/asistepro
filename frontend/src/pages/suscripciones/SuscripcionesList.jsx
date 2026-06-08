@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Edit, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as empresaService from '../../services/empresaService';
@@ -31,6 +32,7 @@ export default function SuscripcionesList() {
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [pendingCancel, setPendingCancel] = useState(null);
 
   async function loadCatalogs() {
     const [empresasResult, planesResult] = await Promise.all([
@@ -105,15 +107,13 @@ export default function SuscripcionesList() {
   }
 
   async function cancelSuscripcion(suscripcion) {
-    const confirmed = window.confirm(`Cancelar la suscripcion de "${suscripcion.empresa_nombre}"?`);
-    if (!confirmed) return;
-
     setMessage('');
     setError('');
 
     try {
       await suscripcionService.deleteSuscripcion(suscripcion.id);
       setMessage('Suscripcion cancelada correctamente');
+      setPendingCancel(null);
       await loadSuscripciones();
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo cancelar la suscripcion');
@@ -164,6 +164,16 @@ export default function SuscripcionesList() {
       {message ? <div className="alert-success">{message}</div> : null}
       {error ? <div className="alert-error">{error}</div> : null}
 
+      <ActionDialog
+        open={Boolean(pendingCancel)}
+        danger
+        title="Cancelar suscripcion"
+        message={`Se cancelara la suscripcion de "${pendingCancel?.empresa_nombre || ''}".`}
+        confirmLabel="Cancelar suscripcion"
+        onCancel={() => setPendingCancel(null)}
+        onConfirm={() => cancelSuscripcion(pendingCancel)}
+      />
+
       {showForm ? (
         <div className="panel">
           <PanelTitle title={selectedSuscripcion ? 'Editar suscripcion' : 'Nueva suscripcion'} subtitle="Empresa, plan, estado y vigencia" />
@@ -210,7 +220,7 @@ export default function SuscripcionesList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(suscripcion)} aria-label="Editar suscripcion">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => cancelSuscripcion(suscripcion)} aria-label="Cancelar suscripcion">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(suscripcion)} aria-label="Cancelar suscripcion">
                           <Trash2 size={16} />
                         </button>
                       </div>
