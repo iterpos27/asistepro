@@ -26,7 +26,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -966,5 +968,146 @@ td {
 
   .page-header h1 {
     font-size: 24px;
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  body {
+    background: #f4f7fb;
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    border: 0;
+    background: rgba(15, 23, 42, 0.48);
+  }
+
+  .topbar {
+    gap: 12px;
+    min-height: 64px;
+    padding: 0 16px;
+  }
+
+  .topbar-title {
+    min-width: 0;
+  }
+
+  .topbar-title strong,
+  .topbar-title span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar .search-box {
+    display: none;
+  }
+
+  .page {
+    padding: 18px 14px 28px;
+  }
+
+  .page-header {
+    gap: 14px;
+  }
+
+  .page-header h1 {
+    font-size: 25px;
+  }
+
+  .panel,
+  .modal-panel {
+    padding: 18px;
+  }
+
+  .login-screen {
+    min-height: 100svh;
+  }
+
+  .login-panel {
+    align-items: start;
+    min-height: 100svh;
+    padding: 28px 18px;
+  }
+
+  .toolbar-grid,
+  .form-grid,
+  .brand-highlights {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-actions .primary-button,
+  .form-actions .outline-button {
+    width: 100%;
+  }
+
+  .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 760px;
+  }
+
+  .qr-reader {
+    width: 100%;
+  }
+
+  .qr-reader.active {
+    min-height: min(70vh, 360px);
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .modal-panel {
+    max-height: calc(100svh - 24px);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar .outline-button {
+    width: 38px;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    gap: 0;
+  }
+
+  .topbar .outline-button svg {
+    color: #334155;
+  }
+
+  .metrics-grid,
+  .dashboard-grid,
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-form h2,
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .primary-button.compact,
+  .outline-button {
+    min-height: 44px;
   }
 }

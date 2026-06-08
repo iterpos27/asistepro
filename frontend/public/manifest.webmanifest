@@ -1,0 +1,19 @@
+{
+  "name": "AsistePro",
+  "short_name": "AsistePro",
+  "description": "Control de asistencia SaaS con QR, GPS y reportes.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0d1b2f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/asistepro-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

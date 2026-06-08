@@ -17,6 +17,7 @@ export default function DashboardLayout({ user, children }) {
   return (
     <div className="app-shell">
       <Sidebar open={open} onNavigate={() => setOpen(false)} user={user} />
+      {open ? <button className="sidebar-backdrop" type="button" aria-label="Cerrar menu" onClick={() => setOpen(false)} /> : null}
       <div className="content-area">
         <Topbar user={user} onOpenMenu={() => setOpen(true)} onLogout={logout} />
         <main className="page">{children}</main>
