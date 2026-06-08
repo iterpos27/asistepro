@@ -2,6 +2,7 @@ import Dashboard from '../pages/dashboard/Dashboard';
 import EmpleadosList from '../pages/empleados/EmpleadosList';
 import EmpresasList from '../pages/empresas/EmpresasList';
 import Facturas from '../pages/facturacion/Facturas';
+import FacturacionPagos from '../pages/facturacion/FacturacionPagos';
 import HorariosList from '../pages/horarios/HorariosList';
 import HistorialMarcaciones from '../pages/marcaciones/HistorialMarcaciones';
 import MarcarAsistencia from '../pages/marcaciones/MarcarAsistencia';
@@ -71,6 +72,11 @@ export const privateRoutes = [
   {
     path: '/facturacion',
     element: Facturas,
+    roles: routeRoles.adminEmpresa,
+  },
+  {
+    path: '/facturacion/pagos',
+    element: FacturacionPagos,
     roles: routeRoles.adminEmpresa,
   },
   {

@@ -103,12 +103,20 @@ async function anularFactura(req, res, next) {
 
 async function registerManualPayment(req, res, next) {
   try {
-    const result = await facturacionService.registerManualPayment(req.body);
+    const factura = await facturacionService.findFacturaById(req.body?.factura_id);
 
-    if (!canAccessEmpresa(req, result.factura.empresa_id)) {
+    if (!factura) {
+      return res.status(404).json({ ok: false, message: 'Factura no encontrada' });
+    }
+
+    if (!canAccessEmpresa(req, factura.empresa_id)) {
       return res.status(403).json({ ok: false, message: 'No puede pagar esta factura' });
     }
 
+    const result = await facturacionService.registerManualPayment({
+      ...req.body,
+      estado: req.auth.rol === 'SUPER_ADMIN' ? 'registrado' : 'pendiente',
+    });
     return res.status(201).json({ ok: true, data: result });
   } catch (error) {
     return next(error);
@@ -149,6 +157,25 @@ async function getPago(req, res, next) {
   }
 }
 
+async function aprobarPago(req, res, next) {
+  try {
+    const pago = await facturacionService.findPagoById(req.params.id);
+
+    if (!pago) {
+      return res.status(404).json({ ok: false, message: 'Pago no encontrado' });
+    }
+
+    if (!canAccessEmpresa(req, pago.empresa_id)) {
+      return res.status(403).json({ ok: false, message: 'No puede aprobar este pago' });
+    }
+
+    const result = await facturacionService.aprobarPago(req.params.id);
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function anularPago(req, res, next) {
   try {
     const pago = await facturacionService.findPagoById(req.params.id);
@@ -177,5 +204,6 @@ module.exports = {
   registerManualPayment,
   listPagos,
   getPago,
+  aprobarPago,
   anularPago,
 };

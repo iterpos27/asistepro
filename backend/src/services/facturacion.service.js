@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
 const PAGO_METODOS = ['manual', 'transferencia', 'efectivo', 'tarjeta', 'otro'];
+const PAGO_ESTADOS = ['pendiente', 'registrado'];
 
 function validateFacturaPayload(payload) {
   const errors = [];
@@ -40,6 +41,7 @@ function validatePagoPayload(payload) {
   if (!payload.factura_id) errors.push('factura_id es requerido');
   if (!payload.monto || Number(payload.monto) <= 0) errors.push('monto debe ser mayor a cero');
   if (payload.metodo !== undefined && !PAGO_METODOS.includes(payload.metodo)) errors.push('metodo invalido');
+  if (payload.estado !== undefined && !PAGO_ESTADOS.includes(payload.estado)) errors.push('estado invalido');
 
   if (errors.length) {
     const error = new Error(errors.join(', '));
@@ -327,8 +329,9 @@ async function registerManualPayment(payload) {
           metodo,
           referencia,
           nota,
+          estado,
           pagado_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, NOW()))
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()))
         RETURNING *
       `,
       [
@@ -338,31 +341,12 @@ async function registerManualPayment(payload) {
         payload.metodo || 'manual',
         payload.referencia || null,
         payload.nota || null,
+        payload.estado || 'registrado',
         payload.pagado_en || null,
       ],
     );
 
-    const totalPagadoResult = await client.query(
-      `
-        SELECT COALESCE(SUM(monto), 0)::numeric AS total_pagado
-        FROM pagos
-        WHERE factura_id = $1
-          AND estado = 'registrado'
-      `,
-      [factura.id],
-    );
-
-    if (Number(totalPagadoResult.rows[0].total_pagado) >= Number(factura.total)) {
-      await client.query(
-        `
-          UPDATE facturas
-          SET estado = 'pagada',
-              actualizado_en = NOW()
-          WHERE id = $1
-        `,
-        [factura.id],
-      );
-    }
+    await recalculateFacturaEstado(client, factura.id);
 
     await client.query('COMMIT');
 
@@ -417,6 +401,45 @@ async function listPagos({ facturaId, empresaId, limit = 20, offset = 0 }) {
     limit,
     offset,
   };
+}
+
+async function aprobarPago(id) {
+  const pago = await findPagoById(id);
+
+  if (!pago) return null;
+
+  if (pago.estado === 'anulado') {
+    const error = new Error('No se puede aprobar un pago anulado');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `
+        UPDATE pagos
+        SET estado = 'registrado'
+        WHERE id = $1
+      `,
+      [id],
+    );
+
+    await recalculateFacturaEstado(client, pago.factura_id);
+    await client.query('COMMIT');
+
+    return {
+      pago: await findPagoById(id),
+      factura: await findFacturaById(pago.factura_id),
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function findPagoById(id) {
@@ -476,6 +499,7 @@ module.exports = {
   updateFactura,
   anulacionFactura,
   registerManualPayment,
+  aprobarPago,
   listPagos,
   findPagoById,
   anulacionPago,
