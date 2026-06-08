@@ -14,7 +14,9 @@ router.use(subscriptionGuard);
 router.get('/asistencia-diaria', reporteController.asistenciaDiaria);
 router.get('/asistencia-mensual', reporteController.asistenciaMensual);
 router.get('/novedades', reporteController.novedades);
+router.get('/atrasos', reporteController.atrasos);
 router.get('/export/asistencia-diaria.csv', reporteController.exportarAsistenciaDiaria);
 router.get('/export/novedades.csv', reporteController.exportarNovedades);
+router.get('/export/atrasos.csv', reporteController.exportarAtrasos);
 
 module.exports = router;

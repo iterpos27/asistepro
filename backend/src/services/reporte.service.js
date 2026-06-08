@@ -9,8 +9,8 @@ function buildDateRange({ fecha, fechaDesde, fechaHasta }) {
   }
 
   return {
-    from: fechaDesde || null,
-    to: fechaHasta || null,
+    from: fechaDesde ? `${fechaDesde} 00:00:00` : null,
+    to: fechaHasta ? `${fechaHasta} 23:59:59` : null,
   };
 }
 
@@ -26,13 +26,18 @@ function applyDateFilters(filters, values, alias, range) {
   }
 }
 
-async function asistenciaDiaria({ empresaId, fecha, sucursalId }) {
+async function asistenciaDiaria({ empresaId, fecha, sucursalId, empleadoId, estado }) {
   const filters = ['e.empresa_id = $1'];
   const values = [empresaId];
 
   if (sucursalId) {
     values.push(sucursalId);
     filters.push(`e.sucursal_habitual_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`e.id = $${values.length}`);
   }
 
   values.push(fecha);
@@ -70,7 +75,7 @@ async function asistenciaDiaria({ empresaId, fecha, sucursalId }) {
     values,
   );
 
-  const rows = result.rows;
+  const rows = estado ? result.rows.filter((row) => row.estado_asistencia === estado) : result.rows;
 
   return {
     fecha,
@@ -85,7 +90,7 @@ async function asistenciaDiaria({ empresaId, fecha, sucursalId }) {
   };
 }
 
-async function asistenciaMensual({ empresaId, mes, sucursalId }) {
+async function asistenciaMensual({ empresaId, mes, sucursalId, empleadoId, estado }) {
   const filters = ['m.empresa_id = $1'];
   const values = [empresaId];
 
@@ -95,6 +100,16 @@ async function asistenciaMensual({ empresaId, mes, sucursalId }) {
   if (sucursalId) {
     values.push(sucursalId);
     filters.push(`m.sucursal_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`m.empleado_id = $${values.length}`);
+  }
+
+  if (estado) {
+    values.push(estado);
+    filters.push(`m.estado = $${values.length}`);
   }
 
   const result = await pool.query(
@@ -128,12 +143,22 @@ async function asistenciaMensual({ empresaId, mes, sucursalId }) {
   };
 }
 
-async function novedades({ empresaId, fechaDesde, fechaHasta, limit = 50, offset = 0 }) {
+async function novedades({ empresaId, fechaDesde, fechaHasta, sucursalId, empleadoId, limit = 50, offset = 0 }) {
   const filters = ['m.empresa_id = $1', "m.estado = 'aceptada_con_novedad'"];
   const values = [empresaId];
   const range = buildDateRange({ fechaDesde, fechaHasta });
 
   applyDateFilters(filters, values, 'm', range);
+
+  if (sucursalId) {
+    values.push(sucursalId);
+    filters.push(`m.sucursal_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`m.empleado_id = $${values.length}`);
+  }
 
   values.push(limit);
   const limitParam = values.length;
@@ -173,8 +198,73 @@ async function novedades({ empresaId, fechaDesde, fechaHasta, limit = 50, offset
   };
 }
 
+async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleadoId, limit = 50, offset = 0 }) {
+  const filters = ['m.empresa_id = $1', "m.tipo = 'entrada'", "m.estado <> 'rechazada'", 'm.horario_id IS NOT NULL'];
+  const values = [empresaId];
+  const range = buildDateRange({ fechaDesde, fechaHasta });
+
+  applyDateFilters(filters, values, 'm', range);
+
+  if (sucursalId) {
+    values.push(sucursalId);
+    filters.push(`m.sucursal_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`m.empleado_id = $${values.length}`);
+  }
+
+  values.push(limit);
+  const limitParam = values.length;
+  values.push(offset);
+  const offsetParam = values.length;
+
+  const result = await pool.query(
+    `
+      SELECT
+        m.id,
+        m.marcado_en,
+        m.distancia_metros,
+        e.codigo AS empleado_codigo,
+        e.nombres AS empleado_nombres,
+        e.apellidos AS empleado_apellidos,
+        s.nombre AS sucursal_nombre,
+        h.nombre AS horario_nombre,
+        h.hora_inicio,
+        h.tolerancia_minutos,
+        FLOOR(
+          EXTRACT(
+            EPOCH FROM (
+              m.marcado_en::time - (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+            )
+          ) / 60
+        )::int AS minutos_atraso,
+        COUNT(*) OVER() AS total
+      FROM marcaciones m
+      INNER JOIN empleados e ON e.id = m.empleado_id
+      INNER JOIN sucursales s ON s.id = m.sucursal_id
+      INNER JOIN horarios h ON h.id = m.horario_id
+      WHERE ${filters.join(' AND ')}
+        AND m.marcado_en::time > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+      ORDER BY m.marcado_en DESC
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
+    `,
+    values,
+  );
+
+  return {
+    items: result.rows.map(({ total, ...row }) => row),
+    total: Number(result.rows[0]?.total || 0),
+    limit,
+    offset,
+  };
+}
+
 module.exports = {
   asistenciaDiaria,
   asistenciaMensual,
   novedades,
+  atrasos,
 };
