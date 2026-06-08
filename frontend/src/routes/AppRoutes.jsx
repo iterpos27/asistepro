@@ -16,7 +16,7 @@ export default function AppRoutes({ auth }) {
             <Navigate to="/dashboard" replace />
           ) : (
             <AuthLayout>
-              <Login onLogin={auth.setUser} />
+              <Login />
             </AuthLayout>
           )
         }

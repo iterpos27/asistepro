@@ -1,12 +1,10 @@
 import axios from 'axios';
 import {
-  ACCESS_TOKEN_KEY,
   EMPRESA_ID_KEY,
-  REFRESH_TOKEN_KEY,
-  USER_KEY,
   getAccessToken,
   getRefreshToken,
-  getStoredUser,
+  clearStoredSession,
+  saveSession,
 } from '../utils/auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -48,7 +46,7 @@ api.interceptors.response.use(
         const response = await authApi.post('/auth/refresh', { refreshToken });
         const { user, tokens } = response.data.data;
 
-        setSession({
+        saveSession({
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           user,
@@ -57,36 +55,17 @@ api.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        clearSession();
+        clearStoredSession();
         window.location.assign('/login');
         return Promise.reject(refreshError);
       }
     }
 
     if (status === 401) {
-      clearSession();
+      clearStoredSession();
       window.location.assign('/login');
     }
 
     return Promise.reject(error);
   },
 );
-
-export function setSession({ accessToken, refreshToken, user }) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-  if (user?.empresa_id) {
-    localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
-  }
-}
-
-export function clearSession() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(EMPRESA_ID_KEY);
-}
-
-export { getStoredUser };

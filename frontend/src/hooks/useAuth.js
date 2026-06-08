@@ -1,12 +1,5 @@
-import { useState } from 'react';
-import { getStoredUser, hasAccessToken } from '../utils/auth';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function useAuth() {
-  const [user, setUser] = useState(() => getStoredUser());
-
-  return {
-    user,
-    setUser,
-    isAuthenticated: hasAccessToken(),
-  };
+  return useAuthContext();
 }

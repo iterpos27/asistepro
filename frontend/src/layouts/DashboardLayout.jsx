@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
-import { clearSession } from '../services/api';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function DashboardLayout({ user, children }) {
   const navigate = useNavigate();
+  const auth = useAuthContext();
   const [open, setOpen] = useState(false);
 
-  function logout() {
-    clearSession();
+  async function logout() {
+    await auth.logout();
     navigate('/login');
   }
 

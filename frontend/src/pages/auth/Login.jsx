@@ -5,15 +5,16 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { BarChart3, MapPin, ScanFace, ShieldCheck } from 'lucide-react';
 import Feature from '../../components/common/Feature';
-import { api, setSession } from '../../services/api';
+import { useAuthContext } from '../../context/AuthContext';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalido'),
   password: z.string().min(1, 'Password requerido'),
 });
 
-export default function Login({ onLogin }) {
+export default function Login() {
   const navigate = useNavigate();
+  const auth = useAuthContext();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
   const {
@@ -30,20 +31,13 @@ export default function Login({ onLogin }) {
 
   async function submit(values) {
     setServerError('');
-    const response = await api.post('/auth/login', values).catch((error) => {
+    const user = await auth.login(values).catch((error) => {
       setServerError(error.response?.data?.message || 'No se pudo iniciar sesion');
       return null;
     });
 
-    if (!response) return;
+    if (!user) return;
 
-    const { user, tokens } = response.data.data;
-    setSession({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      user,
-    });
-    onLogin(user);
     navigate('/dashboard');
   }
 
