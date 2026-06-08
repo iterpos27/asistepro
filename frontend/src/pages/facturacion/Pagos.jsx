@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Ban, Check, Plus, RotateCcw } from 'lucide-react';
+import { Ban, Check, FileText, Paperclip, Plus, RotateCcw } from 'lucide-react';
 import ActionDialog from '../../components/common/ActionDialog';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as facturacionService from '../../services/facturacionService';
@@ -12,6 +12,8 @@ const defaultPayment = {
   referencia: '',
   nota: '',
   pagado_en: '',
+  comprobante: null,
+  comprobante_nombre: '',
 };
 
 function money(value) {
@@ -27,6 +29,15 @@ function statusClass(estado) {
   if (estado === 'registrado') return 'status-pill';
   if (estado === 'pendiente') return 'status-pill warning';
   return 'status-pill muted';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function Pagos({ facturas = [], userRole, selectedFacturaId = '', onChanged }) {
@@ -84,6 +95,54 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
     setPayment((current) => ({ ...current, [key]: value }));
   }
 
+  async function attachReceipt(file) {
+    setError('');
+
+    if (!file) {
+      updatePayment('comprobante', null);
+      updatePayment('comprobante_nombre', '');
+      return;
+    }
+
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('El comprobante debe ser PDF, JPG, PNG o WEBP');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError('El comprobante no puede superar 2MB');
+      return;
+    }
+
+    try {
+      const dataBase64 = await fileToBase64(file);
+      setPayment((current) => ({
+        ...current,
+        comprobante: {
+          nombre: file.name,
+          tipo: file.type,
+          data_base64: dataBase64,
+        },
+        comprobante_nombre: file.name,
+      }));
+    } catch (readError) {
+      setError(readError.message);
+    }
+  }
+
+  async function openReceipt(pago) {
+    setError('');
+
+    try {
+      const blob = await facturacionService.getPagoComprobante(pago.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No se pudo abrir el comprobante');
+    }
+  }
+
   async function savePayment(event) {
     event.preventDefault();
     setFormLoading(true);
@@ -97,6 +156,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
         referencia: payment.referencia || null,
         nota: payment.nota || null,
         pagado_en: payment.pagado_en || null,
+        comprobante: payment.comprobante || undefined,
       });
       setMessage('Pago registrado correctamente');
       closePaymentForm();
@@ -228,6 +288,11 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 Nota
                 <input value={payment.nota} onChange={(event) => updatePayment('nota', event.target.value)} placeholder="Detalle opcional" />
               </label>
+              <label className="wide-field">
+                Archivo comprobante
+                <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(event) => attachReceipt(event.target.files?.[0])} />
+                {payment.comprobante_nombre ? <small className="helper-text">Adjunto: {payment.comprobante_nombre}</small> : null}
+              </label>
             </div>
             <div className="form-actions">
               <button className="outline-button" type="button" onClick={closePaymentForm}>
@@ -251,6 +316,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 <th>Monto</th>
                 <th>Metodo</th>
                 <th>Referencia</th>
+                <th>Comprobante</th>
                 <th>Estado</th>
                 <th>Pagado en</th>
                 <th>Acciones</th>
@@ -264,6 +330,19 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                     <td>{money(pago.monto)}</td>
                     <td>{pago.metodo}</td>
                     <td>{pago.referencia || '-'}</td>
+                    <td>
+                      {pago.tiene_comprobante ? (
+                        <button className="outline-button" type="button" onClick={() => openReceipt(pago)}>
+                          <FileText size={16} />
+                          Abrir
+                        </button>
+                      ) : (
+                        <span className="status-pill muted">
+                          <Paperclip size={12} />
+                          Sin archivo
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <span className={statusClass(pago.estado)}>{pago.estado}</span>
                     </td>
@@ -298,7 +377,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7">Sin pagos para mostrar.</td>
+                  <td colSpan="8">Sin pagos para mostrar.</td>
                 </tr>
               )}
             </tbody>

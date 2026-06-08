@@ -3,6 +3,8 @@ const { pool } = require('../config/database');
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
 const PAGO_METODOS = ['manual', 'transferencia', 'efectivo', 'tarjeta', 'otro'];
 const PAGO_ESTADOS = ['pendiente', 'registrado'];
+const COMPROBANTE_MAX_BYTES = 2 * 1024 * 1024;
+const COMPROBANTE_TIPOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 function validateFacturaPayload(payload) {
   const errors = [];
@@ -43,11 +45,32 @@ function validatePagoPayload(payload) {
   if (payload.metodo !== undefined && !PAGO_METODOS.includes(payload.metodo)) errors.push('metodo invalido');
   if (payload.estado !== undefined && !PAGO_ESTADOS.includes(payload.estado)) errors.push('estado invalido');
 
+  if (payload.comprobante) {
+    const comprobante = normalizeComprobante(payload.comprobante);
+    if (!comprobante.nombre) errors.push('nombre de comprobante es requerido');
+    if (!COMPROBANTE_TIPOS.includes(comprobante.tipo)) errors.push('tipo de comprobante invalido');
+    if (!comprobante.data.length) errors.push('archivo de comprobante vacio');
+    if (comprobante.data.length > COMPROBANTE_MAX_BYTES) errors.push('comprobante no puede superar 2MB');
+  }
+
   if (errors.length) {
     const error = new Error(errors.join(', '));
     error.statusCode = 400;
     throw error;
   }
+}
+
+function normalizeComprobante(comprobante) {
+  if (!comprobante) return null;
+
+  const rawBase64 = String(comprobante.data_base64 || comprobante.data || '');
+  const base64 = rawBase64.includes(',') ? rawBase64.split(',').pop() : rawBase64;
+
+  return {
+    nombre: String(comprobante.nombre || comprobante.name || '').trim().slice(0, 255),
+    tipo: String(comprobante.tipo || comprobante.type || 'application/octet-stream').trim(),
+    data: Buffer.from(base64, 'base64'),
+  };
 }
 
 async function getNextInvoiceNumber(client) {
@@ -271,7 +294,7 @@ async function createFactura(payload) {
           fecha_emision,
           fecha_vencimiento
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10)
-        RETURNING *
+        RETURNING id
       `,
       [
         payload.empresa_id,
@@ -319,6 +342,7 @@ async function registerManualPayment(payload) {
 
   try {
     await client.query('BEGIN');
+    const comprobante = normalizeComprobante(payload.comprobante);
 
     const paymentResult = await client.query(
       `
@@ -330,8 +354,12 @@ async function registerManualPayment(payload) {
           referencia,
           nota,
           estado,
-          pagado_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()))
+          pagado_en,
+          comprobante_nombre,
+          comprobante_tipo,
+          comprobante_data,
+          comprobante_subido_en
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()), $9, $10, $11, CASE WHEN $11::bytea IS NULL THEN NULL ELSE NOW() END)
         RETURNING *
       `,
       [
@@ -343,6 +371,9 @@ async function registerManualPayment(payload) {
         payload.nota || null,
         payload.estado || 'registrado',
         payload.pagado_en || null,
+        comprobante?.nombre || null,
+        comprobante?.tipo || null,
+        comprobante?.data || null,
       ],
     );
 
@@ -351,7 +382,7 @@ async function registerManualPayment(payload) {
     await client.query('COMMIT');
 
     return {
-      pago: paymentResult.rows[0],
+      pago: await findPagoById(paymentResult.rows[0].id),
       factura: await findFacturaById(factura.id),
     };
   } catch (error) {
@@ -384,7 +415,26 @@ async function listPagos({ facturaId, empresaId, limit = 20, offset = 0 }) {
 
   const result = await pool.query(
     `
-      SELECT p.*, f.numero AS factura_numero, COUNT(*) OVER() AS total
+      SELECT
+        p.id,
+        p.empresa_id,
+        p.factura_id,
+        p.monto,
+        p.metodo,
+        p.referencia,
+        p.nota,
+        p.estado,
+        p.pagado_en,
+        p.anulado_en,
+        p.motivo_anulacion,
+        p.comprobante_nombre,
+        p.comprobante_tipo,
+        p.comprobante_subido_en,
+        (p.comprobante_data IS NOT NULL) AS tiene_comprobante,
+        p.creado_en,
+        p.actualizado_en,
+        f.numero AS factura_numero,
+        COUNT(*) OVER() AS total
       FROM pagos p
       INNER JOIN facturas f ON f.id = p.factura_id
       ${where}
@@ -421,7 +471,8 @@ async function aprobarPago(id) {
     await client.query(
       `
         UPDATE pagos
-        SET estado = 'registrado'
+        SET estado = 'registrado',
+            actualizado_en = NOW()
         WHERE id = $1
       `,
       [id],
@@ -445,7 +496,49 @@ async function aprobarPago(id) {
 async function findPagoById(id) {
   const result = await pool.query(
     `
-      SELECT p.*, f.numero AS factura_numero, f.empresa_id AS factura_empresa_id
+      SELECT
+        p.id,
+        p.empresa_id,
+        p.factura_id,
+        p.monto,
+        p.metodo,
+        p.referencia,
+        p.nota,
+        p.estado,
+        p.pagado_en,
+        p.anulado_en,
+        p.motivo_anulacion,
+        p.comprobante_nombre,
+        p.comprobante_tipo,
+        p.comprobante_subido_en,
+        (p.comprobante_data IS NOT NULL) AS tiene_comprobante,
+        p.creado_en,
+        p.actualizado_en,
+        f.numero AS factura_numero,
+        f.empresa_id AS factura_empresa_id
+      FROM pagos p
+      INNER JOIN facturas f ON f.id = p.factura_id
+      WHERE p.id = $1
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function findPagoComprobante(id) {
+  const result = await pool.query(
+    `
+      SELECT
+        p.id,
+        p.empresa_id,
+        p.factura_id,
+        p.comprobante_nombre,
+        p.comprobante_tipo,
+        p.comprobante_data,
+        f.numero AS factura_numero,
+        f.empresa_id AS factura_empresa_id
       FROM pagos p
       INNER JOIN facturas f ON f.id = p.factura_id
       WHERE p.id = $1
@@ -471,7 +564,8 @@ async function anulacionPago(id, motivoAnulacion) {
         UPDATE pagos
         SET estado = 'anulado',
             anulado_en = NOW(),
-            motivo_anulacion = $2
+            motivo_anulacion = $2,
+            actualizado_en = NOW()
         WHERE id = $1
       `,
       [id, motivoAnulacion || null],
@@ -502,5 +596,6 @@ module.exports = {
   aprobarPago,
   listPagos,
   findPagoById,
+  findPagoComprobante,
   anulacionPago,
 };

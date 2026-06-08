@@ -952,6 +952,11 @@ td {
   line-height: 1.5;
 }
 
+.helper-text {
+  color: #64748b;
+  line-height: 1.45;
+}
+
 .mobile-only {
   display: none;
 }

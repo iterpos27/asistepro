@@ -157,6 +157,32 @@ async function getPago(req, res, next) {
   }
 }
 
+async function getPagoComprobante(req, res, next) {
+  try {
+    const comprobante = await facturacionService.findPagoComprobante(req.params.id);
+
+    if (!comprobante) {
+      return res.status(404).json({ ok: false, message: 'Pago no encontrado' });
+    }
+
+    if (!canAccessEmpresa(req, comprobante.empresa_id)) {
+      return res.status(403).json({ ok: false, message: 'No puede acceder a este comprobante' });
+    }
+
+    if (!comprobante.comprobante_data) {
+      return res.status(404).json({ ok: false, message: 'Comprobante no encontrado' });
+    }
+
+    const fileName = comprobante.comprobante_nombre || `comprobante-${comprobante.factura_numero || comprobante.id}`;
+
+    res.setHeader('Content-Type', comprobante.comprobante_tipo || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName.replace(/"/g, '')}"`);
+    return res.send(comprobante.comprobante_data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function aprobarPago(req, res, next) {
   try {
     const pago = await facturacionService.findPagoById(req.params.id);
@@ -204,6 +230,7 @@ module.exports = {
   registerManualPayment,
   listPagos,
   getPago,
+  getPagoComprobante,
   aprobarPago,
   anularPago,
 };

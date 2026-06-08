@@ -13,6 +13,7 @@ router.get('/facturas/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), factura
 router.put('/facturas/:id', roleGuard(['SUPER_ADMIN']), facturacionController.updateFactura);
 router.delete('/facturas/:id', roleGuard(['SUPER_ADMIN']), facturacionController.anularFactura);
 router.get('/pagos', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), facturacionController.listPagos);
+router.get('/pagos/:id/comprobante', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), facturacionController.getPagoComprobante);
 router.get('/pagos/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), facturacionController.getPago);
 router.post('/pagos/manual', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), facturacionController.registerManualPayment);
 router.post('/pagos/:id/aprobar', roleGuard(['SUPER_ADMIN']), facturacionController.aprobarPago);

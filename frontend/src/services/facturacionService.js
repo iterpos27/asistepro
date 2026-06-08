@@ -55,6 +55,13 @@ export async function aprobarPago(id) {
   return response.data.data;
 }
 
+export async function getPagoComprobante(id) {
+  const response = await api.get(`/facturacion/pagos/${id}/comprobante`, {
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
 export async function anularPago(id, motivoAnulacion) {
   const response = await api.delete(`/facturacion/pagos/${id}`, {
     data: { motivo_anulacion: motivoAnulacion || undefined },
