@@ -809,6 +809,25 @@ td {
   overflow-wrap: anywhere;
 }
 
+.qr-reader {
+  display: none;
+  width: min(100%, 420px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.qr-reader.active {
+  display: block;
+  min-height: 280px;
+}
+
+.qr-reader video {
+  border-radius: 8px;
+}
+
 .settings-grid label {
   display: grid;
   gap: 8px;

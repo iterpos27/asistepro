@@ -25,3 +25,40 @@ export function obtenerUbicacion(options = {}) {
     );
   });
 }
+
+export async function validarPermisoGPS() {
+  if (!navigator.geolocation) {
+    return {
+      ok: false,
+      estado: 'unsupported',
+      message: 'Tu navegador no soporta GPS',
+    };
+  }
+
+  if (!navigator.permissions?.query) {
+    return {
+      ok: true,
+      estado: 'unknown',
+      message: 'El navegador pedira permiso GPS al marcar',
+    };
+  }
+
+  try {
+    const permission = await navigator.permissions.query({ name: 'geolocation' });
+
+    return {
+      ok: permission.state !== 'denied',
+      estado: permission.state,
+      message:
+        permission.state === 'denied'
+          ? 'GPS bloqueado. Activa el permiso de ubicacion en el navegador.'
+          : 'Permiso GPS disponible.',
+    };
+  } catch {
+    return {
+      ok: true,
+      estado: 'unknown',
+      message: 'El navegador pedira permiso GPS al marcar',
+    };
+  }
+}
