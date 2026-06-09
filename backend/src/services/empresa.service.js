@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const bcrypt = require('bcryptjs');
 
 const EMPRESA_ESTADOS = ['activa', 'suspendida', 'cancelada'];
 
@@ -51,6 +52,17 @@ async function assertPlanExists(planId) {
     error.statusCode = 400;
     throw error;
   }
+}
+
+async function findRoleId(client, codigo) {
+  const result = await client.query('SELECT id FROM roles WHERE codigo = $1 LIMIT 1', [codigo]);
+  if (!result.rows.length) {
+    const error = new Error(`Rol ${codigo} no existe`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return result.rows[0].id;
 }
 
 async function listEmpresas({ search, estado, limit = 20, offset = 0 }) {
@@ -145,31 +157,76 @@ async function createEmpresa(payload) {
 
   await assertPlanExists(empresa.plan_id);
 
-  const result = await pool.query(
-    `
-      INSERT INTO empresas (
-        plan_id,
-        nombre,
-        identificacion_fiscal,
-        email,
-        telefono,
-        direccion,
-        estado
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-    `,
-    [
-      empresa.plan_id,
-      empresa.nombre,
-      empresa.identificacion_fiscal,
-      empresa.email,
-      empresa.telefono,
-      empresa.direccion,
-      empresa.estado,
-    ],
-  );
+  const client = await pool.connect();
 
-  return findEmpresaById(result.rows[0].id);
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `
+        INSERT INTO empresas (
+          plan_id,
+          nombre,
+          identificacion_fiscal,
+          email,
+          telefono,
+          direccion,
+          estado
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `,
+      [
+        empresa.plan_id,
+        empresa.nombre,
+        empresa.identificacion_fiscal,
+        empresa.email,
+        empresa.telefono,
+        empresa.direccion,
+        empresa.estado,
+      ],
+    );
+
+    const empresaId = result.rows[0].id;
+
+    if (payload.admin_email && payload.admin_password) {
+      const rolId = await findRoleId(client, 'ADMIN_EMPRESA');
+      const passwordHash = await bcrypt.hash(payload.admin_password, 10);
+      const adminNombre = payload.admin_nombre?.trim() || 'Administrador';
+      const adminApellido = payload.admin_apellido?.trim() || empresa.nombre;
+
+      await client.query(
+        `
+          INSERT INTO usuarios (
+            empresa_id,
+            rol_id,
+            nombre,
+            apellido,
+            email,
+            password_hash,
+            telefono,
+            estado
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')
+        `,
+        [
+          empresaId,
+          rolId,
+          adminNombre,
+          adminApellido,
+          payload.admin_email.trim().toLowerCase(),
+          passwordHash,
+          payload.admin_telefono?.trim() || empresa.telefono,
+        ],
+      );
+    }
+
+    await client.query('COMMIT');
+    return findEmpresaById(empresaId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function updateEmpresa(id, payload) {

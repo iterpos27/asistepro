@@ -1,7 +1,9 @@
-require('dotenv').config({ path: 'backend/.env' });
-
 const fs = require('fs');
 const path = require('path');
+const { loadBackendEnv } = require('../utils/env.util');
+
+loadBackendEnv();
+
 const { pool } = require('../config/database');
 
 const migrations = [
@@ -18,18 +20,62 @@ const migrations = [
   '011_facturacion_estado_pagos.sql',
   '012_pagos_aprobacion.sql',
   '013_pagos_comprobantes.sql',
+  '014_indexes_optimization.sql',
+  '015_security_audit_dynamic_qr.sql',
+  '016_dynamic_qr_cleanup_indexes.sql',
 ];
+const EXISTING_SCHEMA_BASELINE_MAX_VERSION = 12;
+
+function getMigrationNumber(migration) {
+  return Number.parseInt(migration.split('_')[0], 10);
+}
 
 async function runMigrations() {
-  for (const migration of migrations) {
-    const filePath = path.join(__dirname, migration);
-    const sql = fs.readFileSync(filePath, 'utf8');
+  const client = await pool.connect();
 
-    console.log(`Running ${migration}`);
-    await pool.query(sql);
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(255) PRIMARY KEY,
+        ejecutado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const existingSchema = await client.query("SELECT to_regclass('public.planes') AS table_name");
+    const appliedResult = await client.query('SELECT version FROM schema_migrations');
+    const appliedVersions = new Set(appliedResult.rows.map((row) => row.version));
+
+    if (existingSchema.rows[0]?.table_name && appliedVersions.size === 0) {
+      const baseline = migrations.filter((migration) => getMigrationNumber(migration) <= EXISTING_SCHEMA_BASELINE_MAX_VERSION);
+
+      for (const migration of baseline) {
+        await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING', [migration]);
+        appliedVersions.add(migration);
+      }
+
+      console.log('Existing schema detected; baseline migrations marked as applied');
+    }
+
+    for (const migration of migrations) {
+      if (appliedVersions.has(migration)) {
+        console.log(`Skipping applied migration: ${migration}`);
+        continue;
+      }
+
+      const filePath = path.join(__dirname, migration);
+      const sql = fs.readFileSync(filePath, 'utf8');
+
+      console.log(`Running pending migration: ${migration}`);
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [migration]);
+    }
+
+    console.log('Database migrations completed');
+  } catch (error) {
+    throw error;
+  } finally {
+    client.release();
   }
-
-  console.log('Database migrations completed');
 }
 
 runMigrations()

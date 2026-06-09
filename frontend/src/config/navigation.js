@@ -11,19 +11,80 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { routeRoles } from '../utils/roles';
+import { ROLES } from '../utils/roles';
 
-export const navItems = [
-  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: routeRoles.empleado },
-  { title: 'Empresas', href: '/empresas', icon: Building2, roles: routeRoles.superAdmin },
-  { title: 'Planes', href: '/planes', icon: CreditCard, roles: routeRoles.superAdmin },
-  { title: 'Suscripciones', href: '/suscripciones', icon: ShieldCheck, roles: routeRoles.superAdmin },
-  { title: 'Sucursales', href: '/sucursales', icon: MapPin, roles: routeRoles.rrhh },
-  { title: 'Empleados', href: '/empleados', icon: Users, roles: routeRoles.rrhh },
-  { title: 'Horarios', href: '/horarios', icon: CalendarClock, roles: routeRoles.rrhh },
-  { title: 'Marcar', href: '/marcaciones', icon: ScanLine, roles: routeRoles.empleado },
-  { title: 'Mis marcaciones', href: '/mis-marcaciones', icon: Activity, roles: routeRoles.empleado },
-  { title: 'Reportes', href: '/reportes', icon: FileBarChart, roles: routeRoles.rrhh },
-  { title: 'Facturacion', href: '/facturacion', icon: CreditCard, roles: routeRoles.adminEmpresa },
-  { title: 'Ajustes', href: '/settings', icon: Settings, roles: routeRoles.empleado },
+export const navSections = [
+  {
+    id: 'platform',
+    label: 'Plataforma',
+    roles: [ROLES.SUPER_ADMIN],
+    items: [
+      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { title: 'Empresas', href: '/empresas', icon: Building2 },
+      { title: 'Planes', href: '/planes', icon: CreditCard },
+      { title: 'Suscripciones', href: '/suscripciones', icon: ShieldCheck },
+      { title: 'Facturacion', href: '/facturacion', icon: CreditCard },
+    ],
+  },
+  {
+    id: 'summary',
+    label: 'Resumen',
+    roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
+    items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    id: 'organization',
+    label: 'Organizacion',
+    roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
+    items: [
+      { title: 'Sucursales', href: '/sucursales', icon: MapPin },
+      { title: 'Empleados', href: '/empleados', icon: Users },
+      { title: 'Horarios', href: '/horarios', icon: CalendarClock },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'Operacion',
+    roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
+    items: [{ title: 'Reportes', href: '/reportes', icon: FileBarChart }],
+  },
+  {
+    id: 'billing',
+    label: 'Suscripcion',
+    roles: [ROLES.ADMIN_EMPRESA],
+    items: [{ title: 'Facturacion', href: '/facturacion', icon: CreditCard }],
+  },
+  {
+    id: 'attendance',
+    label: 'Asistencia',
+    roles: [ROLES.EMPLEADO],
+    items: [
+      { title: 'Marcar', href: '/marcaciones', icon: ScanLine },
+      { title: 'Mis marcaciones', href: '/mis-marcaciones', icon: Activity },
+    ],
+  },
+  {
+    id: 'self-attendance',
+    label: 'Mi asistencia',
+    roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
+    items: [
+      { title: 'Marcar', href: '/marcaciones', icon: ScanLine },
+      { title: 'Mis marcaciones', href: '/mis-marcaciones', icon: Activity },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Cuenta',
+    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
+    items: [{ title: 'Ajustes', href: '/settings', icon: Settings }],
+  },
 ];
+
+export function getNavSectionsForRole(role) {
+  return navSections
+    .filter((section) => section.roles.includes(role))
+    .map((section) => ({
+      ...section,
+      items: section.items,
+    }));
+}

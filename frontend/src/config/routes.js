@@ -1,28 +1,24 @@
-import Dashboard from '../pages/dashboard/Dashboard';
-import EmpleadosList from '../pages/empleados/EmpleadosList';
-import EmpresasList from '../pages/empresas/EmpresasList';
-import Facturas from '../pages/facturacion/Facturas';
-import FacturacionPagos from '../pages/facturacion/FacturacionPagos';
-import HorariosList from '../pages/horarios/HorariosList';
-import HistorialMarcaciones from '../pages/marcaciones/HistorialMarcaciones';
-import MarcarAsistencia from '../pages/marcaciones/MarcarAsistencia';
-import PlanesList from '../pages/planes/PlanesList';
-import Reportes from '../pages/reportes/Reportes';
-import Settings from '../pages/settings/Settings';
-import SuscripcionesList from '../pages/suscripciones/SuscripcionesList';
-import SucursalesList from '../pages/sucursales/SucursalesList';
+import { lazy } from 'react';
 import { routeRoles } from '../utils/roles';
+
+const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
+const EmpleadosList = lazy(() => import('../pages/empleados/EmpleadosList'));
+const EmpresasList = lazy(() => import('../pages/empresas/EmpresasList'));
+const Facturas = lazy(() => import('../pages/facturacion/Facturas'));
+const HorariosList = lazy(() => import('../pages/horarios/HorariosList'));
+const HistorialMarcaciones = lazy(() => import('../pages/marcaciones/HistorialMarcaciones'));
+const MarcarAsistencia = lazy(() => import('../pages/marcaciones/MarcarAsistencia'));
+const PlanesList = lazy(() => import('../pages/planes/PlanesList'));
+const Reportes = lazy(() => import('../pages/reportes/Reportes'));
+const Settings = lazy(() => import('../pages/settings/Settings'));
+const SuscripcionesList = lazy(() => import('../pages/suscripciones/SuscripcionesList'));
+const SucursalesList = lazy(() => import('../pages/sucursales/SucursalesList'));
 
 export const privateRoutes = [
   {
     path: '/dashboard',
     element: Dashboard,
-    roles: routeRoles.empleado,
-  },
-  {
-    path: '/admin',
-    element: Dashboard,
-    roles: routeRoles.empleado,
+    roles: routeRoles.all,
   },
   {
     path: '/empresas',
@@ -57,12 +53,12 @@ export const privateRoutes = [
   {
     path: '/marcaciones',
     element: MarcarAsistencia,
-    roles: routeRoles.empleado,
+    roles: routeRoles.personal,
   },
   {
     path: '/mis-marcaciones',
     element: HistorialMarcaciones,
-    roles: routeRoles.empleado,
+    roles: routeRoles.personal,
   },
   {
     path: '/reportes',
@@ -75,13 +71,8 @@ export const privateRoutes = [
     roles: routeRoles.adminEmpresa,
   },
   {
-    path: '/facturacion/pagos',
-    element: FacturacionPagos,
-    roles: routeRoles.adminEmpresa,
-  },
-  {
     path: '/settings',
     element: Settings,
-    roles: routeRoles.empleado,
+    roles: routeRoles.all,
   },
 ];

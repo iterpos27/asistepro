@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const { pool } = require('../config/database');
 const {
@@ -132,6 +132,65 @@ async function revokeRefreshToken(refreshToken) {
   );
 }
 
+async function revokeUserRefreshTokens(userId) {
+  await pool.query(
+    `
+      UPDATE refresh_tokens
+      SET revocado = TRUE,
+          revocado_en = NOW()
+      WHERE usuario_id = $1
+        AND revocado = FALSE
+    `,
+    [userId],
+  );
+}
+
+async function changePassword(userId, { currentPassword, newPassword }) {
+  const result = await pool.query(
+    `
+      SELECT id, password_hash
+      FROM usuarios
+      WHERE id = $1
+        AND estado = 'activo'
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  const user = result.rows[0];
+  if (!user) {
+    const error = new Error('Usuario no autorizado');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!validPassword) {
+    const error = new Error('Contrasena actual incorrecta');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const samePassword = await bcrypt.compare(newPassword, user.password_hash);
+  if (samePassword) {
+    const error = new Error('La nueva contrasena debe ser diferente');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await pool.query(
+    `
+      UPDATE usuarios
+      SET password_hash = $2,
+          actualizado_en = NOW()
+      WHERE id = $1
+    `,
+    [userId, passwordHash],
+  );
+  await revokeUserRefreshTokens(userId);
+}
+
 async function refresh(refreshToken) {
   const payload = verifyRefreshToken(refreshToken);
   const tokenHash = hashToken(refreshToken);
@@ -174,6 +233,7 @@ module.exports = {
   login,
   refresh,
   revokeRefreshToken,
+  changePassword,
   findUserById,
   sanitizeUser,
 };

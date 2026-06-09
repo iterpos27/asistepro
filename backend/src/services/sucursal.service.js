@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { pool } = require('../config/database');
 
 const SUCURSAL_ESTADOS = ['activa', 'inactiva', 'mantenimiento'];
+const DYNAMIC_QR_TTL_SECONDS = Number(process.env.DYNAMIC_QR_TTL_SECONDS || 30);
 
 function generateQrToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -68,6 +69,16 @@ function buildQrPayload(sucursal) {
     empresa_id: sucursal.empresa_id,
     sucursal_id: sucursal.id,
     qr_token: sucursal.qr_token,
+  };
+}
+
+function buildDynamicQrPayload(sucursal, dynamicToken) {
+  return {
+    type: 'ASISTEPRO_SUCURSAL_DYNAMIC',
+    empresa_id: sucursal.empresa_id,
+    sucursal_id: sucursal.id,
+    qr_token: dynamicToken.token,
+    expira_en: dynamicToken.expira_en,
   };
 }
 
@@ -249,12 +260,51 @@ async function rotateQrToken(empresaId, id) {
   return result.rows[0] || null;
 }
 
+async function generateDynamicQrToken(empresaId, id) {
+  const sucursal = await findSucursalById(empresaId, id);
+
+  if (!sucursal || sucursal.estado !== 'activa') {
+    return null;
+  }
+
+  const token = generateQrToken();
+  const expiraEn = new Date(Date.now() + DYNAMIC_QR_TTL_SECONDS * 1000);
+
+  await pool.query(
+    `
+      DELETE FROM sucursal_tokens_dinamicos
+      WHERE expira_en <= NOW() - INTERVAL '1 day'
+    `,
+  );
+
+  const result = await pool.query(
+    `
+      INSERT INTO sucursal_tokens_dinamicos (sucursal_id, token, expira_en)
+      VALUES ($1, $2, $3)
+      RETURNING token, expira_en
+    `,
+    [id, token, expiraEn],
+  );
+
+  const dynamicToken = result.rows[0];
+
+  return {
+    sucursal,
+    token: dynamicToken.token,
+    expira_en: dynamicToken.expira_en,
+    ttl_seconds: DYNAMIC_QR_TTL_SECONDS,
+    qr_payload: buildDynamicQrPayload(sucursal, dynamicToken),
+  };
+}
+
 module.exports = {
   buildQrPayload,
+  buildDynamicQrPayload,
   listSucursales,
   findSucursalById,
   createSucursal,
   updateSucursal,
   deactivateSucursal,
   rotateQrToken,
+  generateDynamicQrToken,
 };

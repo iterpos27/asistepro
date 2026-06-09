@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { generateTemporaryPassword } from '../../utils/password';
 
 const empleadoSchema = z.object({
   codigo: z.string().min(1, 'Codigo requerido'),
@@ -63,6 +64,7 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
     register,
     handleSubmit,
     reset,
+    setValue,
     watch,
     formState: { errors },
   } = useForm({
@@ -108,6 +110,13 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
       crear_usuario: hasLinkedUser ? false : Boolean(values.crear_usuario),
       rol_acceso: values.crear_usuario ? values.rol_acceso || 'EMPLEADO' : undefined,
       password_acceso: values.crear_usuario ? values.password_acceso : undefined,
+    });
+  }
+
+  function generateAccessPassword() {
+    setValue('password_acceso', generateTemporaryPassword(), {
+      shouldValidate: true,
+      shouldDirty: true,
     });
   }
 
@@ -191,7 +200,12 @@ export default function EmpleadoForm({ empleado, sucursales, loading, onCancel, 
                 </label>
                 <label>
                   Password temporal
-                  <input {...register('password_acceso')} type="password" placeholder="Minimo 8 caracteres" />
+                  <div className="input-action-row">
+                    <input {...register('password_acceso')} type="text" placeholder="Minimo 8 caracteres" />
+                    <button className="outline-button" type="button" onClick={generateAccessPassword}>
+                      Generar
+                    </button>
+                  </div>
                   {errors.password_acceso && <small>{errors.password_acceso.message}</small>}
                 </label>
               </>

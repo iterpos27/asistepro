@@ -8,6 +8,11 @@ import { obtenerUbicacion, validarPermisoGPS } from '../../utils/gps';
 
 const motivos = ['Reemplazo', 'Apoyo temporal', 'Emergencia', 'Autorizacion supervisor', 'Otro'];
 const qrReaderId = 'asistepro-qr-reader';
+const scannerConfig = {
+  fps: 10,
+  qrbox: { width: 240, height: 240 },
+  aspectRatio: 1,
+};
 
 function extractQrToken(decodedText) {
   try {
@@ -30,6 +35,7 @@ export default function MarcarAsistencia() {
   const [ubicacion, setUbicacion] = useState(null);
   const [gpsPermission, setGpsPermission] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [scannerStatus, setScannerStatus] = useState('');
   const [loadingGps, setLoadingGps] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -48,23 +54,36 @@ export default function MarcarAsistencia() {
   async function startScanner() {
     setError('');
     setResult(null);
+    setScannerStatus('Preparando camara...');
+    setScanning(true);
 
     try {
       if (!scannerRef.current) {
         scannerRef.current = new Html5Qrcode(qrReaderId);
       }
 
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const cameras = await Html5Qrcode.getCameras();
+
+      if (!cameras.length) {
+        throw new Error('No se encontro una camara disponible');
+      }
+
+      const backCamera =
+        cameras.find((camera) => /back|rear|environment|trasera|posterior/i.test(camera.label)) || cameras[0];
+
       await scannerRef.current.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        backCamera.id,
+        scannerConfig,
         async (decodedText) => {
           setQrToken(extractQrToken(decodedText));
           await stopScanner();
         },
       );
-      setScanning(true);
-    } catch {
-      setError('No se pudo iniciar la camara. Revisa permisos o ingresa el token manualmente.');
+      setScannerStatus(`Camara activa${backCamera.label ? `: ${backCamera.label}` : ''}`);
+    } catch (scannerError) {
+      setError(scannerError.message || 'No se pudo iniciar la camara. Revisa permisos o ingresa el token manualmente.');
+      setScannerStatus('');
       setScanning(false);
     }
   }
@@ -76,6 +95,8 @@ export default function MarcarAsistencia() {
     }
 
     await scannerRef.current.stop().catch(() => {});
+    await scannerRef.current.clear().catch(() => {});
+    setScannerStatus('');
     setScanning(false);
   }
 
@@ -204,7 +225,10 @@ export default function MarcarAsistencia() {
             </label>
 
             <div className="wide-field">
-              <div id={qrReaderId} className={scanning ? 'qr-reader active' : 'qr-reader'} />
+              <div className={scanning ? 'qr-reader-shell active' : 'qr-reader-shell'}>
+                <div id={qrReaderId} className="qr-reader" />
+                {scannerStatus ? <span className="qr-reader-status">{scannerStatus}</span> : null}
+              </div>
               <div className="form-actions">
                 <button className="outline-button" type="button" onClick={startScanner} disabled={scanning}>
                   <Camera size={16} />

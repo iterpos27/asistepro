@@ -8,10 +8,25 @@ function notFoundHandler(req, res) {
 
 function errorHandler(error, req, res, next) {
   const statusCode = error.statusCode || 500;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const message =
+    statusCode === 500 && isProduction
+      ? 'Ocurrio un error interno en el servidor'
+      : error.message || 'Error interno del servidor';
+
+  if (statusCode >= 500) {
+    console.error('[Error API]', {
+      message: error.message,
+      path: req.originalUrl,
+      method: req.method,
+      stack: isProduction ? undefined : error.stack,
+    });
+  }
 
   res.status(statusCode).json({
     ok: false,
-    message: error.message || 'Error interno del servidor',
+    message,
+    ...(isProduction ? {} : { stack: error.stack }),
   });
 }
 

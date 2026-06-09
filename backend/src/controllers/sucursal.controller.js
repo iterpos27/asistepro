@@ -1,11 +1,5 @@
 const sucursalService = require('../services/sucursal.service');
-
-function parsePagination(query) {
-  const limit = Math.min(Number.parseInt(query.limit, 10) || 20, 100);
-  const offset = Math.max(Number.parseInt(query.offset, 10) || 0, 0);
-
-  return { limit, offset };
-}
+const { parsePagination } = require('../utils/pagination.util');
 
 function getEmpresaId(req) {
   return req.tenant.empresa_id;
@@ -131,6 +125,29 @@ async function rotateQr(req, res, next) {
   }
 }
 
+async function issueDynamicQr(req, res, next) {
+  try {
+    const result = await sucursalService.generateDynamicQrToken(getEmpresaId(req), req.params.id);
+
+    if (!result) {
+      return res.status(404).json({ ok: false, message: 'Sucursal activa no encontrada' });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        sucursal_id: result.sucursal.id,
+        qr_token: result.token,
+        expira_en: result.expira_en,
+        ttl_seconds: result.ttl_seconds,
+        qr_payload: result.qr_payload,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listSucursales,
   getSucursal,
@@ -139,4 +156,5 @@ module.exports = {
   deleteSucursal,
   getQr,
   rotateQr,
+  issueDynamicQr,
 };

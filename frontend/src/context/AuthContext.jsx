@@ -1,12 +1,42 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import * as authService from '../services/authService';
-import { clearStoredSession, getStoredUser, hasAccessToken, saveSession } from '../utils/auth';
+import { clearStoredSession, getStoredUser, saveSession } from '../utils/auth';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getStoredUser());
-  const [isAuthenticated, setIsAuthenticated] = useState(() => hasAccessToken());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    authService
+      .refreshToken()
+      .then((result) => {
+        if (!mounted) return;
+        saveSession({
+          accessToken: result.tokens.accessToken,
+          user: result.user,
+        });
+        setUser(result.user);
+        setIsAuthenticated(true);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        clearStoredSession();
+        setUser(null);
+        setIsAuthenticated(false);
+      })
+      .finally(() => {
+        if (mounted) setBootstrapping(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function login(credentials) {
     const result = await authService.login(credentials);
@@ -43,11 +73,12 @@ export function AuthProvider({ children }) {
       user,
       setUser,
       isAuthenticated,
+      bootstrapping,
       login,
       logout,
       refreshProfile,
     }),
-    [isAuthenticated, user],
+    [bootstrapping, isAuthenticated, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

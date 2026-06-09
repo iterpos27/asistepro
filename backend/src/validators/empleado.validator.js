@@ -1,0 +1,62 @@
+const { z } = require('zod');
+const { emptyBody, emptyParams, idParamSchema, idParams, paginationQuery, updateBodySchema, uuid } = require('./common.validator');
+
+const empleadoBodyBase = z.object({
+  usuario_id: uuid('usuario_id').optional().nullable(),
+  sucursal_habitual_id: uuid('sucursal_habitual_id').optional().nullable(),
+  codigo: z.string().trim().min(1, 'codigo es requerido').max(40),
+  nombres: z.string().trim().min(1, 'nombres es requerido').max(120),
+  apellidos: z.string().trim().min(1, 'apellidos es requerido').max(120),
+  email: z.email('email invalido').optional().nullable(),
+  telefono: z.string().trim().max(40).optional().nullable(),
+  cargo: z.string().trim().max(120).optional().nullable(),
+  departamento: z.string().trim().max(120).optional().nullable(),
+  fecha_ingreso: z.string().trim().optional().nullable(),
+  estado: z.enum(['activo', 'inactivo', 'suspendido']).optional(),
+  crear_usuario: z.coerce.boolean().optional(),
+  password_acceso: z.string().min(8, 'password_acceso debe tener al menos 8 caracteres').optional(),
+  rol_acceso: z.enum(['EMPLEADO', 'RRHH']).optional(),
+});
+
+function withUsuarioAccessRules(schema) {
+  return schema
+  .refine((payload) => !payload.crear_usuario || Boolean(payload.email), {
+    message: 'email es requerido para crear usuario',
+    path: ['email'],
+  })
+  .refine((payload) => !payload.crear_usuario || Boolean(payload.password_acceso), {
+    message: 'password_acceso es requerido para crear usuario',
+    path: ['password_acceso'],
+  });
+}
+
+const empleadoBody = withUsuarioAccessRules(empleadoBodyBase);
+const empleadoUpdateBody = withUsuarioAccessRules(updateBodySchema(empleadoBodyBase));
+
+const listEmpleadosSchema = z.object({
+  body: emptyBody,
+  query: paginationQuery.extend({
+    estado: z.enum(['activo', 'inactivo', 'suspendido']).optional(),
+    sucursal_id: uuid('sucursal_id').optional(),
+  }),
+  params: emptyParams,
+});
+
+const createEmpleadoSchema = z.object({
+  body: empleadoBody,
+  query: z.object({}).passthrough(),
+  params: emptyParams,
+});
+
+const updateEmpleadoSchema = z.object({
+  body: empleadoUpdateBody,
+  query: z.object({}).passthrough(),
+  params: idParams,
+});
+
+module.exports = {
+  createEmpleadoSchema,
+  idParamSchema,
+  listEmpleadosSchema,
+  updateEmpleadoSchema,
+};

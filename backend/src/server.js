@@ -1,4 +1,6 @@
-require('dotenv').config({ path: 'backend/.env' });
+const { loadBackendEnv } = require('./utils/env.util');
+
+loadBackendEnv();
 
 const app = require('./app');
 const { checkDatabaseConnection } = require('./config/database');
