@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import * as empresaService from '../../services/empresaService';
-import { EMPRESA_ID_KEY } from '../../utils/auth';
+import { EMPRESA_ID_KEY, setStoredEmpresaId } from '../../utils/auth';
 
 export default function EmpresaSelector() {
   const [empresas, setEmpresas] = useState([]);
@@ -19,7 +19,7 @@ export default function EmpresaSelector() {
         setEmpresas(items);
 
         const storedId = localStorage.getItem(EMPRESA_ID_KEY);
-        if (storedId) {
+        if (storedId && items.some((empresa) => empresa.id === storedId)) {
           setEmpresaId(storedId);
           return;
         }
@@ -27,7 +27,9 @@ export default function EmpresaSelector() {
         if (items.length) {
           const nextId = items[0].id;
           setEmpresaId(nextId);
-          localStorage.setItem(EMPRESA_ID_KEY, nextId);
+          setStoredEmpresaId(nextId);
+        } else {
+          setStoredEmpresaId('');
         }
       })
       .catch(() => {
@@ -47,9 +49,9 @@ export default function EmpresaSelector() {
     setEmpresaId(nextId);
 
     if (nextId) {
-      localStorage.setItem(EMPRESA_ID_KEY, nextId);
+      setStoredEmpresaId(nextId);
     } else {
-      localStorage.removeItem(EMPRESA_ID_KEY);
+      setStoredEmpresaId('');
     }
   }
 

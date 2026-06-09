@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import { getNavSectionsForRole } from '../../config/navigation';
-import { getRoleLabel } from '../../utils/roles';
 
 export default function Sidebar({ open, onNavigate, user }) {
   const location = useLocation();
@@ -43,14 +42,6 @@ export default function Sidebar({ open, onNavigate, user }) {
           </div>
         ))}
       </nav>
-
-      <div className="sidebar-user">
-        <div className="sidebar-user-avatar">{user?.nombre?.[0] || user?.email?.[0] || 'U'}</div>
-        <div className="sidebar-user-meta">
-          <strong>{user?.nombre ? `${user.nombre} ${user.apellido || ''}`.trim() : user?.email}</strong>
-          <span>{getRoleLabel(user?.rol)}</span>
-        </div>
-      </div>
     </aside>
   );
 }

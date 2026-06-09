@@ -2,6 +2,7 @@ export const ACCESS_TOKEN_KEY = 'asistepro_access_token';
 export const REFRESH_TOKEN_KEY = 'asistepro_refresh_token';
 export const USER_KEY = 'asistepro_user';
 export const EMPRESA_ID_KEY = 'asistepro_empresa_id';
+export const EMPRESA_CHANGED_EVENT = 'asistepro:empresa-change';
 
 let accessTokenMemory = null;
 
@@ -49,6 +50,20 @@ export function getStoredEmpresaId() {
   }
 
   return null;
+}
+
+export function setStoredEmpresaId(empresaId) {
+  if (empresaId) {
+    localStorage.setItem(EMPRESA_ID_KEY, empresaId);
+  } else {
+    localStorage.removeItem(EMPRESA_ID_KEY);
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(EMPRESA_CHANGED_EVENT, {
+      detail: { empresaId: empresaId || null },
+    }),
+  );
 }
 
 export function clearStoredSession() {
