@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BarChart3, MapPin, ScanFace, ShieldCheck } from 'lucide-react';
+import { BarChart3, Eye, EyeOff, MapPin, ScanFace, ShieldCheck } from 'lucide-react';
 import Feature from '../../components/common/Feature';
 import { useAuthContext } from '../../context/AuthContext';
+import { getDefaultRoute } from '../../utils/roles';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalido'),
@@ -24,8 +25,8 @@ export default function Login() {
   } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'superadmin@asistepro.local',
-      password: 'Admin123*',
+      email: '',
+      password: '',
     },
   });
 
@@ -38,19 +39,21 @@ export default function Login() {
 
     if (!user) return;
 
-    navigate('/dashboard');
+    navigate(getDefaultRoute(user.rol));
   }
 
   return (
     <main className="login-screen">
       <section className="login-brand">
-        <div className="brand-mark">
-          <ScanFace size={24} />
-          <span>AsistePro</span>
+        <div className="brand-row">
+          <div className="brand-mark">
+            <ScanFace size={24} />
+          </div>
+          <strong>AsistePro</strong>
         </div>
         <div>
-          <h1>Control de asistencia multi-sucursal con QR + GPS.</h1>
-          <p>Gestiona empresas, sucursales, empleados, horarios, marcaciones y reportes desde una consola SaaS.</p>
+          <h1>Asistencia multi-sucursal con QR y GPS.</h1>
+          <p>Gestiona empresas, empleados, horarios y reportes desde una plataforma SaaS segura.</p>
         </div>
         <div className="brand-highlights">
           <Feature icon={MapPin} title="Geocercas" text="Validacion por radio y ubicacion real." />
@@ -61,30 +64,37 @@ export default function Login() {
       <section className="login-panel">
         <form className="login-form" onSubmit={handleSubmit(submit)}>
           <div className="mobile-brand">
-            <ScanFace size={22} />
-            <span>AsistePro</span>
+            <div className="brand-mark">
+              <ScanFace size={20} />
+            </div>
+            <strong>AsistePro</strong>
           </div>
           <div>
             <h2>Iniciar sesion</h2>
-            <p>Accede a tu panel operativo.</p>
+            <p>Accede con tu cuenta corporativa.</p>
           </div>
           <label>
             Email
-            <input {...register('email')} type="email" autoComplete="email" />
-            {errors.email && <small>{errors.email.message}</small>}
+            <input {...register('email')} type="email" autoComplete="email" placeholder="tu@empresa.com" />
+            {errors.email && <small className="field-error">{errors.email.message}</small>}
           </label>
           <label>
-            Password
+            Contrasena
             <div className="password-row">
-              <input {...register('password')} type={showPassword ? 'text' : 'password'} />
-              <button type="button" onClick={() => setShowPassword((value) => !value)}>
-                {showPassword ? 'Ocultar' : 'Ver'}
+              <input
+                {...register('password')}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="********"
+              />
+              <button className="icon-button" type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Mostrar contrasena">
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            {errors.password && <small>{errors.password.message}</small>}
+            {errors.password && <small className="field-error">{errors.password.message}</small>}
           </label>
           {serverError && <div className="alert-error">{serverError}</div>}
-          <button className="primary-button" disabled={isSubmitting}>
+          <button className="primary-button" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Validando...' : 'Entrar'}
           </button>
         </form>

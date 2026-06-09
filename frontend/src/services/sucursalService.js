@@ -36,3 +36,8 @@ export async function rotateSucursalQr(id) {
   const response = await api.post(`/sucursales/${id}/qr/rotate`);
   return response.data.data;
 }
+
+export async function issueDynamicSucursalQr(id) {
+  const response = await api.post(`/sucursales/${id}/qr/dynamic`);
+  return response.data.data;
+}

@@ -13,12 +13,31 @@ export function getRefreshToken() {
 
 export function saveSession({ accessToken, refreshToken, user }) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 
   if (user?.empresa_id) {
     localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
+  } else {
+    localStorage.removeItem(EMPRESA_ID_KEY);
   }
+}
+
+export function getStoredEmpresaId() {
+  const storedEmpresaId = localStorage.getItem(EMPRESA_ID_KEY);
+  if (storedEmpresaId) return storedEmpresaId;
+
+  const user = getStoredUser();
+  if (user?.empresa_id) {
+    localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
+    return user.empresa_id;
+  }
+
+  return null;
 }
 
 export function clearStoredSession() {

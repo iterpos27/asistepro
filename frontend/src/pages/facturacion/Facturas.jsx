@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ban, CreditCard, Edit, FileText, Plus, Receipt, RotateCcw } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import MetricCard from '../../components/cards/MetricCard';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
@@ -28,6 +29,7 @@ function statusClass(estado) {
 
 export default function Facturas({ defaultTab = 'facturas' }) {
   const { user } = useAuthContext();
+  const [searchParams, setSearchParams] = useSearchParams();
   const userRole = user?.rol;
   const isSuperAdmin = userRole === ROLES.SUPER_ADMIN;
   const [facturas, setFacturas] = useState([]);
@@ -39,7 +41,7 @@ export default function Facturas({ defaultTab = 'facturas' }) {
   const [selectedFactura, setSelectedFactura] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [total, setTotal] = useState(0);
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') === 'pagos' ? 'pagos' : defaultTab);
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -100,6 +102,18 @@ export default function Facturas({ defaultTab = 'facturas' }) {
     loadFacturas();
   }, []);
 
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'pagos' || tab === 'facturas') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  function changeTab(tab) {
+    setActiveTab(tab);
+    setSearchParams(tab === 'pagos' ? { tab: 'pagos' } : {});
+  }
+
   function openCreateForm() {
     setSelectedFactura(null);
     setShowForm(true);
@@ -159,7 +173,7 @@ export default function Facturas({ defaultTab = 'facturas' }) {
 
   function selectFacturaForPayments(factura) {
     setSelectedFacturaId(factura.id);
-    setActiveTab('pagos');
+    changeTab('pagos');
   }
 
   return (
@@ -241,11 +255,11 @@ export default function Facturas({ defaultTab = 'facturas' }) {
         </div>
       </div>
 
-      <div className="form-actions">
-        <button className={activeTab === 'facturas' ? 'primary-button compact' : 'outline-button'} type="button" onClick={() => setActiveTab('facturas')}>
+      <div className="tab-bar">
+        <button className={activeTab === 'facturas' ? 'tab-button active' : 'tab-button'} type="button" onClick={() => changeTab('facturas')}>
           Facturas
         </button>
-        <button className={activeTab === 'pagos' ? 'primary-button compact' : 'outline-button'} type="button" onClick={() => setActiveTab('pagos')}>
+        <button className={activeTab === 'pagos' ? 'tab-button active' : 'tab-button'} type="button" onClick={() => changeTab('pagos')}>
           Pagos
         </button>
       </div>

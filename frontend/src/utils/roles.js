@@ -9,7 +9,8 @@ export const routeRoles = {
   superAdmin: [ROLES.SUPER_ADMIN],
   adminEmpresa: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA],
   rrhh: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH],
-  empleado: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
+  personal: [ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
+  all: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
 };
 
 export function getRoleLabel(role) {
@@ -21,4 +22,13 @@ export function getRoleLabel(role) {
   };
 
   return labels[role] || 'Usuario';
+}
+
+export function getDefaultRoute(role) {
+  if (role === ROLES.EMPLEADO) return '/marcaciones';
+  return '/dashboard';
+}
+
+export function canAccess(allowedRoles, role) {
+  return !allowedRoles?.length || allowedRoles.includes(role);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Edit, Plus, QrCode, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Edit, Plus, RotateCcw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -111,7 +111,7 @@ export default function SucursalesList() {
 
     try {
       setSelectedSucursal(sucursal);
-      setQrData(await sucursalService.getSucursalQr(sucursal.id));
+      setQrData(await sucursalService.issueDynamicSucursalQr(sucursal.id));
       setShowForm(false);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo cargar el QR');
@@ -131,6 +131,21 @@ export default function SucursalesList() {
       setMessage('QR rotado correctamente');
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudo rotar el QR');
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  async function refreshDynamicQr() {
+    if (!selectedSucursal) return;
+
+    setQrLoading(true);
+    setError('');
+
+    try {
+      setQrData(await sucursalService.issueDynamicSucursalQr(selectedSucursal.id));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No se pudo renovar el QR dinamico');
     } finally {
       setQrLoading(false);
     }
@@ -192,7 +207,7 @@ export default function SucursalesList() {
         </div>
       ) : null}
 
-      <SucursalQR qrData={qrData} loading={qrLoading} onRotate={rotateQr} />
+      <SucursalQR qrData={qrData} loading={qrLoading} onRotate={rotateQr} onRefreshDynamic={refreshDynamicQr} />
 
       <div className="panel">
         <PanelTitle title="Sucursales registradas" />
@@ -225,7 +240,7 @@ export default function SucursalesList() {
                           <Edit size={16} />
                         </button>
                         <button className="icon-button" type="button" onClick={() => showQr(sucursal)} aria-label="Ver QR">
-                          <QrCode size={16} />
+                          <ShieldCheck size={16} />
                         </button>
                         <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(sucursal)} aria-label="Desactivar sucursal">
                           <Trash2 size={16} />

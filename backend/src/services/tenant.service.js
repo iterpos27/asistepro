@@ -20,6 +20,26 @@ async function findEmpresaById(empresaId) {
   return result.rows[0] || null;
 }
 
+async function findFirstActiveEmpresa() {
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        plan_id,
+        nombre,
+        identificacion_fiscal,
+        email,
+        estado
+      FROM empresas
+      WHERE estado = 'activa'
+      ORDER BY creado_en DESC
+      LIMIT 1
+    `,
+  );
+
+  return result.rows[0] || null;
+}
+
 async function findActiveSubscription(empresaId) {
   const result = await pool.query(
     `
@@ -51,5 +71,6 @@ async function findActiveSubscription(empresaId) {
 
 module.exports = {
   findEmpresaById,
+  findFirstActiveEmpresa,
   findActiveSubscription,
 };

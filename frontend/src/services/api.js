@@ -3,6 +3,7 @@ import {
   EMPRESA_ID_KEY,
   getAccessToken,
   getRefreshToken,
+  getStoredEmpresaId,
   clearStoredSession,
   saveSession,
 } from '../utils/auth';
@@ -11,15 +12,17 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 export const api = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
 });
 
 const authApi = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
-  const empresaId = localStorage.getItem(EMPRESA_ID_KEY);
+  const empresaId = getStoredEmpresaId() || localStorage.getItem(EMPRESA_ID_KEY);
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -39,11 +42,11 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const refreshToken = getRefreshToken();
 
-    if (status === 401 && refreshToken && !originalRequest?._retry && !originalRequest?.url?.includes('/auth/refresh')) {
+    if (status === 401 && !originalRequest?._retry && !originalRequest?.url?.includes('/auth/refresh')) {
       originalRequest._retry = true;
 
       try {
-        const response = await authApi.post('/auth/refresh', { refreshToken });
+        const response = await authApi.post('/auth/refresh', refreshToken ? { refreshToken } : {});
         const { user, tokens } = response.data.data;
 
         saveSession({

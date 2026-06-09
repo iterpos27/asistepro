@@ -1,11 +1,5 @@
 const horarioService = require('../services/horario.service');
-
-function parsePagination(query) {
-  const limit = Math.min(Number.parseInt(query.limit, 10) || 20, 100);
-  const offset = Math.max(Number.parseInt(query.offset, 10) || 0, 0);
-
-  return { limit, offset };
-}
+const { parsePagination } = require('../utils/pagination.util');
 
 function parseBoolean(value) {
   if (value === undefined) return undefined;

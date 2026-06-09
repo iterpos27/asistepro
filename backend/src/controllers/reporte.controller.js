@@ -1,12 +1,6 @@
 const reporteService = require('../services/reporte.service');
 const { toCsv } = require('../utils/csv.util');
-
-function parsePagination(query) {
-  const limit = Math.min(Number.parseInt(query.limit, 10) || 50, 500);
-  const offset = Math.max(Number.parseInt(query.offset, 10) || 0, 0);
-
-  return { limit, offset };
-}
+const { parsePagination } = require('../utils/pagination.util');
 
 function getEmpresaId(req) {
   return req.tenant.empresa_id;
@@ -54,7 +48,7 @@ async function asistenciaMensual(req, res, next) {
 
 async function novedades(req, res, next) {
   try {
-    const { limit, offset } = parsePagination(req.query);
+    const { limit, offset } = parsePagination(req.query, { maxLimit: 500, defaultLimit: 50 });
     const result = await reporteService.novedades({
       empresaId: getEmpresaId(req),
       fechaDesde: req.query.fecha_desde,
@@ -73,7 +67,7 @@ async function novedades(req, res, next) {
 
 async function atrasos(req, res, next) {
   try {
-    const { limit, offset } = parsePagination(req.query);
+    const { limit, offset } = parsePagination(req.query, { maxLimit: 500, defaultLimit: 50 });
     const result = await reporteService.atrasos({
       empresaId: getEmpresaId(req),
       fechaDesde: req.query.fecha_desde,

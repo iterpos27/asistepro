@@ -1,35 +1,53 @@
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
-import { EMPRESA_ID_KEY, getStoredUser } from '../../utils/auth';
+import { useAuthContext } from '../../context/AuthContext';
+import EmpresaSelector from '../../components/layout/EmpresaSelector';
+import { ROLES, getRoleLabel } from '../../utils/roles';
 
 export default function Settings() {
-  const user = getStoredUser();
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+  const { user } = useAuthContext();
+  const isSuperAdmin = user?.rol === ROLES.SUPER_ADMIN;
 
   return (
     <>
-      <PageHeader title="Ajustes" description="Configuracion local del panel React/Vite." />
+      <PageHeader title="Ajustes" description="Informacion de tu cuenta y contexto de trabajo." />
+
       <div className="panel">
-        <PanelTitle title="Sesion" subtitle="Datos almacenados localmente" />
+        <PanelTitle title="Perfil" subtitle="Datos de la sesion actual" />
         <div className="settings-grid">
           <label>
-            API URL
-            <input readOnly value={apiUrl} />
+            Nombre
+            <input readOnly value={user?.nombre ? `${user.nombre} ${user.apellido || ''}`.trim() : '-'} />
           </label>
           <label>
-            Usuario
+            Email
             <input readOnly value={user?.email || ''} />
           </label>
           <label>
-            Empresa seleccionada
-            <input
-              defaultValue={localStorage.getItem(EMPRESA_ID_KEY) || ''}
-              onBlur={(event) => localStorage.setItem(EMPRESA_ID_KEY, event.target.value)}
-              placeholder="Necesario para SUPER_ADMIN en rutas tenant"
-            />
+            Rol
+            <input readOnly value={getRoleLabel(user?.rol)} />
+          </label>
+          <label>
+            Empresa
+            <input readOnly value={user?.empresa || (isSuperAdmin ? 'Plataforma (sin tenant fijo)' : '-')} />
           </label>
         </div>
       </div>
+
+      {isSuperAdmin ? (
+        <div className="panel">
+          <PanelTitle
+            title="Contexto de empresa"
+            subtitle="Selecciona la empresa con la que operaras en modulos tenant."
+          />
+          <div className="settings-selector">
+            <EmpresaSelector />
+          </div>
+          <p className="helper-text">
+            El super admin necesita una empresa activa para consultar sucursales, empleados y marcaciones de un tenant.
+          </p>
+        </div>
+      ) : null}
     </>
   );
 }

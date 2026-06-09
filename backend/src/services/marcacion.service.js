@@ -2,6 +2,8 @@ const { pool } = require('../config/database');
 const { calculateDistanceMeters } = require('../utils/geo.util');
 
 const MARCACION_TIPOS = ['entrada', 'salida'];
+const GPS_TOLERANCIA_METROS = Number(process.env.GPS_TOLERANCIA_METROS || 10);
+const GPS_PRECISION_MAXIMA_METROS = Number(process.env.GPS_PRECISION_MAXIMA_METROS || 20);
 const MOTIVOS_NOVEDAD = [
   'Reemplazo',
   'Apoyo temporal',
@@ -46,6 +48,31 @@ async function findSucursalByQr(empresaId, qrToken) {
   );
 
   return result.rows[0] || null;
+}
+
+async function findSucursalByDynamicQr(empresaId, qrToken) {
+  const result = await pool.query(
+    `
+      SELECT s.*
+      FROM sucursal_tokens_dinamicos std
+      INNER JOIN sucursales s ON s.id = std.sucursal_id
+      WHERE s.empresa_id = $1
+        AND s.estado = 'activa'
+        AND std.token = $2
+        AND std.expira_en > NOW()
+      LIMIT 1
+    `,
+    [empresaId, qrToken],
+  );
+
+  return result.rows[0] || null;
+}
+
+async function resolveSucursalByQr(empresaId, qrToken) {
+  const dynamicSucursal = await findSucursalByDynamicQr(empresaId, qrToken);
+  if (dynamicSucursal) return dynamicSucursal;
+
+  return findSucursalByQr(empresaId, qrToken);
 }
 
 async function findEmpleadoForMarcacion({ empresaId, empleadoId, usuarioId, rol }) {
@@ -149,7 +176,7 @@ async function insertMarcacion(data) {
 async function registrarMarcacion({ empresaId, auth, payload }) {
   validateMarcacionPayload(payload);
 
-  const sucursal = await findSucursalByQr(empresaId, payload.qr_token);
+  const sucursal = await resolveSucursalByQr(empresaId, payload.qr_token);
 
   if (!sucursal || sucursal.estado !== 'activa') {
     const error = new Error('QR invalido o sucursal inactiva');
@@ -174,7 +201,9 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
     { latitud: payload.latitud, longitud: payload.longitud },
     { latitud: sucursal.latitud, longitud: sucursal.longitud },
   );
-  const dentroGeocerca = distancia <= Number(sucursal.radio_metros);
+  const precisionGps = Number(payload.precision_gps || payload.accuracy || 0);
+  const toleranciaGps = Math.min(Math.max(precisionGps, GPS_TOLERANCIA_METROS), GPS_PRECISION_MAXIMA_METROS);
+  const dentroGeocerca = distancia <= Number(sucursal.radio_metros) + toleranciaGps;
   const sucursalDistinta =
     empleado.sucursal_habitual_id && empleado.sucursal_habitual_id !== sucursal.id;
   const horario = await findActiveHorario({

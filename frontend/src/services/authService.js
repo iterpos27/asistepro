@@ -8,7 +8,7 @@ export async function login(credentials) {
 
 export async function logout() {
   const refreshToken = getRefreshToken();
-  await api.post('/auth/logout', { refreshToken });
+  await api.post('/auth/logout', refreshToken ? { refreshToken } : {});
 }
 
 export async function getProfile() {
@@ -17,6 +17,7 @@ export async function getProfile() {
 }
 
 export async function refreshToken() {
-  const response = await api.post('/auth/refresh', { refreshToken: getRefreshToken() });
+  const storedRefreshToken = getRefreshToken();
+  const response = await api.post('/auth/refresh', storedRefreshToken ? { refreshToken: storedRefreshToken } : {});
   return response.data.data;
 }

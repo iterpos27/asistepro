@@ -4,11 +4,12 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const routes = require('./routes');
+const { auditLogger } = require('./middlewares/audit.middleware');
 const { notFoundHandler, errorHandler } = require('./middlewares/error.middleware');
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
-const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || (isProduction ? 100 : 1000));
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || (isProduction ? 100 : 10000));
 
 app.use(helmet());
 app.use(
@@ -27,6 +28,7 @@ app.use(
     legacyHeaders: false,
   }),
 );
+app.use(auditLogger);
 
 app.use('/api', routes);
 

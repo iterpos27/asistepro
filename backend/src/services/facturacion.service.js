@@ -46,11 +46,18 @@ function validatePagoPayload(payload) {
   if (payload.estado !== undefined && !PAGO_ESTADOS.includes(payload.estado)) errors.push('estado invalido');
 
   if (payload.comprobante) {
-    const comprobante = normalizeComprobante(payload.comprobante);
-    if (!comprobante.nombre) errors.push('nombre de comprobante es requerido');
-    if (!COMPROBANTE_TIPOS.includes(comprobante.tipo)) errors.push('tipo de comprobante invalido');
-    if (!comprobante.data.length) errors.push('archivo de comprobante vacio');
-    if (comprobante.data.length > COMPROBANTE_MAX_BYTES) errors.push('comprobante no puede superar 2MB');
+    const base64 = getComprobanteBase64(payload.comprobante);
+    const estimatedBytes = (base64.length * 3) / 4;
+
+    if (estimatedBytes > COMPROBANTE_MAX_BYTES) {
+      errors.push('comprobante no puede superar 2MB');
+    } else {
+      const comprobante = normalizeComprobante(payload.comprobante);
+      if (!comprobante.nombre) errors.push('nombre de comprobante es requerido');
+      if (!COMPROBANTE_TIPOS.includes(comprobante.tipo)) errors.push('tipo de comprobante invalido');
+      if (!comprobante.data.length) errors.push('archivo de comprobante vacio');
+      if (comprobante.data.length > COMPROBANTE_MAX_BYTES) errors.push('comprobante no puede superar 2MB');
+    }
   }
 
   if (errors.length) {
@@ -60,11 +67,15 @@ function validatePagoPayload(payload) {
   }
 }
 
+function getComprobanteBase64(comprobante) {
+  const rawBase64 = String(comprobante.data_base64 || comprobante.data || '');
+  return rawBase64.includes(',') ? rawBase64.split(',').pop() : rawBase64;
+}
+
 function normalizeComprobante(comprobante) {
   if (!comprobante) return null;
 
-  const rawBase64 = String(comprobante.data_base64 || comprobante.data || '');
-  const base64 = rawBase64.includes(',') ? rawBase64.split(',').pop() : rawBase64;
+  const base64 = getComprobanteBase64(comprobante);
 
   return {
     nombre: String(comprobante.nombre || comprobante.name || '').trim().slice(0, 255),
