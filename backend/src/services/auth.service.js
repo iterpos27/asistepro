@@ -19,6 +19,7 @@ function sanitizeUser(user) {
     estado: user.estado,
     rol: user.rol_codigo,
     empresa: user.empresa_nombre,
+    modulos: user.configuracion_modulos || {},
   };
 }
 
@@ -35,7 +36,8 @@ async function findUserByEmail(email) {
         u.password_hash,
         u.estado,
         r.codigo AS rol_codigo,
-        e.nombre AS empresa_nombre
+        e.nombre AS empresa_nombre,
+        e.configuracion_modulos
       FROM usuarios u
       INNER JOIN roles r ON r.id = u.rol_id
       LEFT JOIN empresas e ON e.id = u.empresa_id
@@ -60,7 +62,8 @@ async function findUserById(id) {
         u.email,
         u.estado,
         r.codigo AS rol_codigo,
-        e.nombre AS empresa_nombre
+        e.nombre AS empresa_nombre,
+        e.configuracion_modulos
       FROM usuarios u
       INNER JOIN roles r ON r.id = u.rol_id
       LEFT JOIN empresas e ON e.id = u.empresa_id

@@ -104,8 +104,36 @@ function planGuard(allowedPlans = []) {
   };
 }
 
+function featureGuard(featureName) {
+  return (req, res, next) => {
+    if (!req.tenant?.empresa_id) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Tenant no resuelto para verificar permisos de modulos',
+      });
+    }
+
+    if (req.auth?.rol === 'SUPER_ADMIN') {
+      return next();
+    }
+
+    const configuracionModulos = req.tenant?.empresa?.configuracion_modulos || {};
+    const isEnabled = configuracionModulos[featureName] === true;
+
+    if (!isEnabled) {
+      return res.status(403).json({
+        ok: false,
+        message: `El modulo '${featureName}' no esta habilitado para su empresa`,
+      });
+    }
+
+    return next();
+  };
+}
+
 module.exports = {
   tenantGuard,
   subscriptionGuard,
   planGuard,
+  featureGuard,
 };

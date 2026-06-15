@@ -64,6 +64,7 @@ export const privateRoutes = [
     path: '/reportes',
     element: Reportes,
     roles: routeRoles.rrhh,
+    feature: 'reportes_avanzados',
   },
   {
     path: '/facturacion',

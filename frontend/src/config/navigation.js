@@ -46,7 +46,7 @@ export const navSections = [
     id: 'operations',
     label: 'Operacion',
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
-    items: [{ title: 'Reportes', href: '/reportes', icon: FileBarChart }],
+    items: [{ title: 'Reportes', href: '/reportes', icon: FileBarChart, feature: 'reportes_avanzados' }],
   },
   {
     id: 'billing',
@@ -80,11 +80,16 @@ export const navSections = [
   },
 ];
 
-export function getNavSectionsForRole(role) {
+export function getNavSectionsForRole(role, userModulos = {}) {
   return navSections
     .filter((section) => section.roles.includes(role))
     .map((section) => ({
       ...section,
-      items: section.items,
-    }));
+      items: section.items.filter((item) => {
+        if (!item.feature) return true;
+        if (role === ROLES.SUPER_ADMIN) return true;
+        return userModulos[item.feature] === true;
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
 }

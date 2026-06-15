@@ -9,7 +9,8 @@ async function findEmpresaById(empresaId) {
         nombre,
         identificacion_fiscal,
         email,
-        estado
+        estado,
+        configuracion_modulos
       FROM empresas
       WHERE id = $1
       LIMIT 1

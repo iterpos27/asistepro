@@ -50,7 +50,7 @@ export default function AppRoutes({ auth }) {
                         key={route.path}
                         path={route.path}
                         element={
-                          <ProtectedRoute auth={auth} allowedRoles={route.roles}>
+                          <ProtectedRoute auth={auth} allowedRoles={route.roles} requiredFeature={route.feature}>
                             <Page />
                           </ProtectedRoute>
                         }

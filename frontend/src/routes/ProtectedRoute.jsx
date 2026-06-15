@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { getDefaultRoute } from '../utils/roles';
 
-export default function ProtectedRoute({ auth, allowedRoles, children }) {
+export default function ProtectedRoute({ auth, allowedRoles, requiredFeature, children }) {
   if (auth.bootstrapping) {
     return (
       <div className="page-loader">
@@ -17,6 +17,13 @@ export default function ProtectedRoute({ auth, allowedRoles, children }) {
 
   if (allowedRoles?.length && auth.user?.rol && !allowedRoles.includes(auth.user.rol)) {
     return <Navigate to={getDefaultRoute(auth.user.rol)} replace />;
+  }
+
+  if (requiredFeature && auth.user?.rol && auth.user.rol !== 'SUPER_ADMIN') {
+    const userModulos = auth.user.modulos || {};
+    if (userModulos[requiredFeature] !== true) {
+      return <Navigate to={getDefaultRoute(auth.user.rol)} replace />;
+    }
   }
 
   return children;
