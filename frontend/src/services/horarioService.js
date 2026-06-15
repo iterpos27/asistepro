@@ -39,3 +39,13 @@ export async function listAsignaciones({ empleadoId = '', activo = '', limit = 1
   });
   return response.data.data;
 }
+
+export async function assignHorario(payload) {
+  const response = await api.post('/horarios/asignaciones', payload);
+  return response.data.data;
+}
+
+export async function deleteAsignacion(id) {
+  const response = await api.delete(`/horarios/asignaciones/${id}`);
+  return response.data.data;
+}

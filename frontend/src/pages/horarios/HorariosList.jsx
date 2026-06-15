@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Edit, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { CalendarPlus, Edit, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as horarioService from '../../services/horarioService';
 import * as sucursalService from '../../services/sucursalService';
+import * as empleadoService from '../../services/empleadoService';
 import HorarioForm from './HorarioForm';
 
 const dayLabels = {
@@ -30,21 +31,35 @@ export default function HorariosList() {
   const [horarios, setHorarios] = useState([]);
   const [asignaciones, setAsignaciones] = useState([]);
   const [sucursales, setSucursales] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [activo, setActivo] = useState('');
   const [sucursalId, setSucursalId] = useState('');
   const [selectedHorario, setSelectedHorario] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showAssignForm, setShowAssignForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [assignLoading, setAssignLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingDeactivate, setPendingDeactivate] = useState(null);
+  const [pendingDeleteAsignacion, setPendingDeleteAsignacion] = useState(null);
+  const [assignment, setAssignment] = useState({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
 
   async function loadSucursales() {
     const result = await sucursalService.listSucursales({ limit: 100 });
     setSucursales(result.items || []);
+  }
+
+  async function loadEmpleados() {
+    try {
+      const result = await empleadoService.listEmpleados({ estado: 'activo', limit: 100 });
+      setEmpleados(result.items || []);
+    } catch {
+      setEmpleados([]);
+    }
   }
 
   async function loadHorarios() {
@@ -76,10 +91,49 @@ export default function HorariosList() {
     }
   }
 
+  async function saveAssignment(event) {
+    event.preventDefault();
+    setAssignLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await horarioService.assignHorario({
+        empleado_id: assignment.empleado_id,
+        horario_id: assignment.horario_id,
+        fecha_inicio: assignment.fecha_inicio || undefined,
+        fecha_fin: assignment.fecha_fin || undefined,
+      });
+      setMessage('Horario asignado correctamente');
+      setShowAssignForm(false);
+      setAssignment({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
+      await loadAsignaciones();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No se pudo asignar el horario');
+    } finally {
+      setAssignLoading(false);
+    }
+  }
+
+  async function removeAssignment(asignacion) {
+    setError('');
+    setMessage('');
+
+    try {
+      await horarioService.deleteAsignacion(asignacion.id);
+      setMessage('Asignacion eliminada correctamente');
+      setPendingDeleteAsignacion(null);
+      await loadAsignaciones();
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No se pudo eliminar la asignacion');
+    }
+  }
+
   useEffect(() => {
     loadSucursales().catch((requestError) => {
       setError(requestError.response?.data?.message || 'No se pudieron cargar las sucursales');
     });
+    loadEmpleados();
     loadHorarios();
     loadAsignaciones();
   }, []);
@@ -101,6 +155,23 @@ export default function HorariosList() {
   function closeForm() {
     setSelectedHorario(null);
     setShowForm(false);
+  }
+
+  function openAssignForm(horario = null) {
+    setAssignment({
+      empleado_id: '',
+      horario_id: horario?.id || horarios.find((item) => item.activo)?.id || '',
+      fecha_inicio: new Date().toISOString().slice(0, 10),
+      fecha_fin: '',
+    });
+    setShowAssignForm(true);
+    setMessage('');
+    setError('');
+  }
+
+  function closeAssignForm() {
+    setShowAssignForm(false);
+    setAssignment({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
   }
 
   async function saveHorario(values) {
@@ -153,6 +224,10 @@ export default function HorariosList() {
               <Plus size={16} />
               Nuevo horario
             </button>
+            <button className="primary-button compact" type="button" onClick={() => openAssignForm()}>
+              <CalendarPlus size={16} />
+              Asignar horario
+            </button>
           </>
         }
       />
@@ -197,11 +272,90 @@ export default function HorariosList() {
         onConfirm={() => deactivateHorario(pendingDeactivate)}
       />
 
+      <ActionDialog
+        open={Boolean(pendingDeleteAsignacion)}
+        danger
+        title="Eliminar asignacion"
+        message={`Se desactivara la asignacion de ${pendingDeleteAsignacion?.empleado_codigo || ''}.`}
+        confirmLabel="Eliminar asignacion"
+        onCancel={() => setPendingDeleteAsignacion(null)}
+        onConfirm={() => removeAssignment(pendingDeleteAsignacion)}
+      />
+
       {showForm ? (
         <div className="modal-backdrop" onClick={closeForm}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
             <PanelTitle title={selectedHorario ? 'Editar horario' : 'Nuevo horario'} subtitle="Hora entrada, salida, tolerancia y dias laborales" />
             <HorarioForm horario={selectedHorario} sucursales={sucursales} loading={formLoading} onCancel={closeForm} onSubmit={saveHorario} />
+          </div>
+        </div>
+      ) : null}
+
+      {showAssignForm ? (
+        <div className="modal-backdrop" onClick={closeAssignForm}>
+          <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
+            <PanelTitle title="Asignar horario" subtitle="Vincula un empleado activo con un turno vigente" />
+            <form className="module-form" onSubmit={saveAssignment}>
+              <div className="form-grid">
+                <label>
+                  Empleado
+                  <select
+                    required
+                    value={assignment.empleado_id}
+                    onChange={(event) => setAssignment((current) => ({ ...current, empleado_id: event.target.value }))}
+                  >
+                    <option value="">Seleccionar empleado</option>
+                    {empleados.map((empleado) => (
+                      <option key={empleado.id} value={empleado.id}>
+                        {empleado.codigo} - {empleado.nombres} {empleado.apellidos}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Horario
+                  <select
+                    required
+                    value={assignment.horario_id}
+                    onChange={(event) => setAssignment((current) => ({ ...current, horario_id: event.target.value }))}
+                  >
+                    <option value="">Seleccionar horario</option>
+                    {horarios
+                      .filter((horario) => horario.activo)
+                      .map((horario) => (
+                        <option key={horario.id} value={horario.id}>
+                          {horario.nombre} ({timeOnly(horario.hora_inicio)} - {timeOnly(horario.hora_fin)})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Fecha inicio
+                  <input
+                    required
+                    type="date"
+                    value={assignment.fecha_inicio}
+                    onChange={(event) => setAssignment((current) => ({ ...current, fecha_inicio: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Fecha fin
+                  <input
+                    type="date"
+                    value={assignment.fecha_fin}
+                    onChange={(event) => setAssignment((current) => ({ ...current, fecha_fin: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button className="outline-button" type="button" onClick={closeAssignForm}>
+                  Cancelar
+                </button>
+                <button className="primary-button compact" disabled={assignLoading || !empleados.length || !horarios.some((horario) => horario.activo)}>
+                  {assignLoading ? 'Asignando...' : 'Asignar horario'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
@@ -240,6 +394,9 @@ export default function HorariosList() {
                         <button className="icon-button" type="button" onClick={() => openEditForm(horario)} aria-label="Editar horario">
                           <Edit size={16} />
                         </button>
+                        <button className="icon-button" type="button" onClick={() => openAssignForm(horario)} aria-label="Asignar horario">
+                          <CalendarPlus size={16} />
+                        </button>
                         <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(horario)} aria-label="Desactivar horario">
                           <Trash2 size={16} />
                         </button>
@@ -268,6 +425,7 @@ export default function HorariosList() {
                 <th>Inicio</th>
                 <th>Fin</th>
                 <th>Estado</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -281,11 +439,21 @@ export default function HorariosList() {
                     <td>
                       <span className={asignacion.activo ? 'status-pill' : 'status-pill muted'}>{asignacion.activo ? 'activo' : 'inactivo'}</span>
                     </td>
+                    <td>
+                      <button
+                        className="icon-button danger"
+                        type="button"
+                        onClick={() => setPendingDeleteAsignacion(asignacion)}
+                        aria-label="Eliminar asignacion"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5">Sin asignaciones para mostrar.</td>
+                  <td colSpan="6">Sin asignaciones para mostrar.</td>
                 </tr>
               )}
             </tbody>
