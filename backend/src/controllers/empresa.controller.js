@@ -142,6 +142,20 @@ async function deleteEmpresa(req, res, next) {
   }
 }
 
+async function resetAdminPassword(req, res, next) {
+  try {
+    const result = await empresaService.resetAdminPassword(req.params.id);
+
+    return res.json({
+      ok: true,
+      message: 'Contraseña de administrador restablecida correctamente',
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listEmpresas,
   getEmpresa,
@@ -150,4 +164,5 @@ module.exports = {
   updateEmpresa,
   updateMiEmpresa,
   deleteEmpresa,
+  resetAdminPassword,
 };

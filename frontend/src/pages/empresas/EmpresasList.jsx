@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Edit, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Edit, KeyRound, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -24,6 +24,22 @@ export default function EmpresasList() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingCancel, setPendingCancel] = useState(null);
+  const [pendingResetPassword, setPendingResetPassword] = useState(null);
+  const [resetResult, setResetResult] = useState(null);
+
+  async function resetPassword(empresa) {
+    setError('');
+    setMessage('');
+    setPendingResetPassword(null);
+
+    try {
+      const result = await empresaService.resetAdminPassword(empresa.id);
+      setResetResult(result);
+      setMessage('Contraseña restablecida con éxito');
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'No se pudo restablecer la contraseña');
+    }
+  }
 
   async function loadEmpresas() {
     setLoading(true);
@@ -148,6 +164,38 @@ export default function EmpresasList() {
         onConfirm={() => cancelEmpresa(pendingCancel)}
       />
 
+      <ActionDialog
+        open={Boolean(pendingResetPassword)}
+        title="Restablecer contraseña"
+        message={`¿Estás seguro de que deseas restablecer la contraseña del administrador de "${pendingResetPassword?.nombre || ''}"? Se generará una nueva contraseña temporal.`}
+        confirmLabel="Restablecer"
+        onCancel={() => setPendingResetPassword(null)}
+        onConfirm={() => resetPassword(pendingResetPassword)}
+      />
+
+      {resetResult ? (
+        <div className="modal-backdrop" onClick={() => setResetResult(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <PanelTitle title="Contraseña Restablecida" subtitle="Copia las nuevas credenciales de acceso" />
+            <div style={{ display: 'grid', gap: '12px', marginTop: '8px' }}>
+              <p>Se ha generado una nueva contraseña temporal para el administrador:</p>
+              <div className="alert-success" style={{ display: 'grid', gap: '6px', padding: '16px' }}>
+                <div><strong>Email:</strong> {resetResult.email}</div>
+                <div><strong>Contraseña Temporal:</strong> <code style={{ fontSize: '15px', background: '#ffffff', padding: '2px 6px', borderRadius: '4px', border: '1px solid #d9e2ef' }}>{resetResult.tempPassword}</code></div>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                Por seguridad, comparte esta contraseña temporal únicamente con el administrador de la empresa.
+              </p>
+            </div>
+            <div className="form-actions" style={{ marginTop: '12px' }}>
+              <button className="primary-button compact" type="button" onClick={() => setResetResult(null)}>
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {showForm ? (
         <div className="modal-backdrop" onClick={closeForm}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
@@ -186,6 +234,9 @@ export default function EmpresasList() {
                       <div className="row-actions">
                         <button className="icon-button" type="button" onClick={() => openEditForm(empresa)} aria-label="Editar empresa">
                           <Edit size={16} />
+                        </button>
+                        <button className="icon-button" type="button" onClick={() => setPendingResetPassword(empresa)} title="Restablecer contraseña del admin" aria-label="Restablecer contraseña">
+                          <KeyRound size={16} />
                         </button>
                         <button className="icon-button danger" type="button" onClick={() => setPendingCancel(empresa)} aria-label="Cancelar empresa">
                           <Trash2 size={16} />

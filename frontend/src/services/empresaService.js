@@ -27,3 +27,8 @@ export async function deleteEmpresa(id) {
   const response = await api.delete(`/empresas/${id}`);
   return response.data.data;
 }
+
+export async function resetAdminPassword(id) {
+  const response = await api.post(`/empresas/${id}/reset-admin-password`);
+  return response.data.data;
+}

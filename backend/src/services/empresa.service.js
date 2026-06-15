@@ -301,10 +301,63 @@ async function deleteEmpresa(id) {
   return findEmpresaById(id);
 }
 
+async function resetAdminPassword(id) {
+  const empresa = await findEmpresaById(id);
+  if (!empresa) {
+    const error = new Error('Empresa no encontrada');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const userResult = await pool.query(
+    `
+      SELECT u.id, u.email, u.nombre, u.apellido
+      FROM usuarios u
+      JOIN roles r ON r.id = u.rol_id
+      WHERE u.empresa_id = $1 AND r.codigo = 'ADMIN_EMPRESA'
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  if (!userResult.rows.length) {
+    const error = new Error('No se encontro un usuario administrador para esta empresa');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const user = userResult.rows[0];
+
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*';
+  let password = '';
+  for (let i = 0; i < 10; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  await pool.query(
+    `
+      UPDATE usuarios
+      SET password_hash = $1, actualizado_en = NOW()
+      WHERE id = $2
+    `,
+    [passwordHash, user.id],
+  );
+
+  return {
+    email: user.email,
+    nombre: user.nombre,
+    apellido: user.apellido,
+    tempPassword: password,
+  };
+}
+
 module.exports = {
   listEmpresas,
   findEmpresaById,
   createEmpresa,
   updateEmpresa,
   deleteEmpresa,
+  resetAdminPassword,
 };

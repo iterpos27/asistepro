@@ -23,5 +23,6 @@ router.post('/', roleGuard(['SUPER_ADMIN']), validateSchema(createEmpresaSchema)
 router.get('/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(idParamSchema), empresaController.getEmpresa);
 router.put('/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(updateEmpresaSchema), empresaController.updateEmpresa);
 router.delete('/:id', roleGuard(['SUPER_ADMIN']), validateSchema(idParamSchema), empresaController.deleteEmpresa);
+router.post('/:id/reset-admin-password', roleGuard(['SUPER_ADMIN']), validateSchema(idParamSchema), empresaController.resetAdminPassword);
 
 module.exports = router;
