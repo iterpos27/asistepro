@@ -4,7 +4,6 @@
   "private": true,
   "description": "ASISTEPRO SaaS multi-tenant attendance platform",
   "scripts": {
-    "build": "npm install --prefix frontend && npm run build --prefix frontend",
     "dev": "node backend/src/server.js",
     "start": "node backend/src/server.js",
     "check": "node --check backend/src/server.js",

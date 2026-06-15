@@ -1,5 +1,4 @@
 const express = require('express');
-const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -46,14 +45,6 @@ app.use(
 app.use(auditLogger);
 
 app.use('/api', routes);
-
-if (isProduction) {
-  const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
-  app.use(express.static(frontendDistPath));
-  app.get(/^\/(?!api).*/, (req, res) => {
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
-  });
-}
 
 app.use(notFoundHandler);
 app.use(errorHandler);
