@@ -16,6 +16,14 @@ async function startServer() {
 }
 
 startServer().catch((error) => {
-  console.error('Failed to start ASISTEPRO API:', error.message);
+  console.error('Failed to start ASISTEPRO API');
+  console.error({
+    name: error?.name,
+    message: error?.message,
+    code: error?.code,
+    detail: error?.detail,
+    hint: error?.hint,
+    stack: error?.stack,
+  });
   process.exit(1);
 });

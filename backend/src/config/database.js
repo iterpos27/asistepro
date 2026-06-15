@@ -3,6 +3,10 @@ const { Pool } = require('pg');
 const useConnectionString = Boolean(process.env.DATABASE_URL);
 const useSsl = process.env.DB_SSL === 'true';
 
+if (process.env.NODE_ENV === 'production' && !useConnectionString) {
+  throw new Error('DATABASE_URL es requerida en produccion');
+}
+
 const pool = new Pool({
   ...(useConnectionString
     ? { connectionString: process.env.DATABASE_URL }

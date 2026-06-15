@@ -39,6 +39,23 @@ COOKIE_SAME_SITE=none
 RATE_LIMIT_MAX=1000
 ```
 
+Para Supabase, usa una de estas opciones:
+
+```env
+# Opcion recomendada en Render: Session pooler, puerto 5432
+DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
+DB_SSL=true
+```
+
+Tambien funciona la conexion directa IPv4/IPv6 si tu plan y red lo permiten:
+
+```env
+DATABASE_URL=postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres
+DB_SSL=true
+```
+
+Evita pegar valores con saltos de linea o comillas.
+
 Despues del primer deploy ejecuta migraciones desde Render Shell:
 
 ```bash
