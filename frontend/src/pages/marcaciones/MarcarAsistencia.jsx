@@ -36,6 +36,7 @@ function withTimeout(promise, milliseconds = 1500) {
 export default function MarcarAsistencia() {
   const scannerRef = useRef(null);
   const scanLockedRef = useRef(false);
+  const [readerKey, setReaderKey] = useState(0);
   const [qrToken, setQrToken] = useState('');
   const [tipo, setTipo] = useState('entrada');
   const [motivoNovedad, setMotivoNovedad] = useState('');
@@ -62,14 +63,31 @@ export default function MarcarAsistencia() {
         scanner.stop().catch(() => {});
       }
       scanner?.clear?.().catch(() => {});
-      clearReaderDom();
+      clearReaderDom({ remount: false });
     };
   }, []);
 
-  function clearReaderDom() {
+  function stopReaderVideoTracks() {
+    const reader = document.getElementById(qrReaderId);
+    const videos = reader?.querySelectorAll('video') || [];
+
+    videos.forEach((video) => {
+      const stream = video.srcObject;
+      if (stream && typeof stream.getTracks === 'function') {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      video.srcObject = null;
+    });
+  }
+
+  function clearReaderDom({ remount = true } = {}) {
+    stopReaderVideoTracks();
     const reader = document.getElementById(qrReaderId);
     if (reader) {
       reader.replaceChildren();
+    }
+    if (remount) {
+      setReaderKey((current) => current + 1);
     }
   }
 
@@ -84,9 +102,7 @@ export default function MarcarAsistencia() {
       clearReaderDom();
       setScanning(true);
       setScannerStatus('Preparando camara...');
-      scannerRef.current = new Html5Qrcode(qrReaderId);
-
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const cameras = await Html5Qrcode.getCameras();
 
       if (!cameras.length) {
@@ -96,6 +112,7 @@ export default function MarcarAsistencia() {
       const backCamera =
         cameras.find((camera) => /back|rear|environment|trasera|posterior/i.test(camera.label)) || cameras[0];
 
+      scannerRef.current = new Html5Qrcode(qrReaderId);
       await scannerRef.current.start(
         backCamera.id,
         scannerConfig,
@@ -116,11 +133,14 @@ export default function MarcarAsistencia() {
     }
   }
 
-  async function stopScanner() {
+  async function stopScanner({ keepStatus = false } = {}) {
     const scanner = scannerRef.current;
 
-    setScannerStatus('');
+    if (!keepStatus) {
+      setScannerStatus('');
+    }
     scannerRef.current = null;
+    scanLockedRef.current = false;
 
     if (!scanner) {
       setScanning(false);
@@ -132,9 +152,19 @@ export default function MarcarAsistencia() {
       await withTimeout(scanner.stop().catch(() => {}));
     }
 
-    await scanner.clear().catch(() => {});
+    await withTimeout(scanner.clear().catch(() => {}), 700);
     clearReaderDom();
     setScanning(false);
+  }
+
+  function clearMarcacionForm() {
+    setQrToken('');
+    setUbicacion(null);
+    setPendingPayload(null);
+    setShowNovedadModal(false);
+    setMotivoNovedad('');
+    setDetalleNovedad('');
+    setNovedadError('');
   }
 
   async function requestGps() {
@@ -176,10 +206,7 @@ export default function MarcarAsistencia() {
       } else {
         toast.success(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada correctamente');
       }
-      setPendingPayload(null);
-      setShowNovedadModal(false);
-      setMotivoNovedad('');
-      setDetalleNovedad('');
+      clearMarcacionForm();
     } catch (requestError) {
       const message = requestError.response?.data?.message || 'No se pudo registrar la marcacion';
 
@@ -280,7 +307,7 @@ export default function MarcarAsistencia() {
 
             <div className="wide-field">
               <div className={scanning ? 'qr-reader-shell active' : 'qr-reader-shell'}>
-                <div id={qrReaderId} className="qr-reader" />
+                <div key={readerKey} id={qrReaderId} className="qr-reader" />
                 {scannerStatus ? <span className="qr-reader-status">{scannerStatus}</span> : null}
               </div>
               <div className="form-actions">
