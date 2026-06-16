@@ -1,5 +1,7 @@
 const { pool } = require('../config/database');
 
+const REPORT_TIME_ZONE = 'America/Guayaquil';
+
 function buildDateRange({ fecha, fechaDesde, fechaHasta }) {
   if (fecha) {
     return {
@@ -17,12 +19,12 @@ function buildDateRange({ fecha, fechaDesde, fechaHasta }) {
 function applyDateFilters(filters, values, alias, range) {
   if (range.from) {
     values.push(range.from);
-    filters.push(`${alias}.marcado_en >= $${values.length}::timestamptz`);
+    filters.push(`(${alias}.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date >= $${values.length}::date`);
   }
 
   if (range.to) {
     values.push(range.to);
-    filters.push(`${alias}.marcado_en <= $${values.length}::timestamptz`);
+    filters.push(`(${alias}.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date <= $${values.length}::date`);
   }
 }
 
@@ -87,8 +89,7 @@ async function asistenciaDiaria({ empresaId, fecha, sucursalId, empleadoId, esta
       LEFT JOIN marcaciones m
         ON m.empleado_id = e.id
        AND m.empresa_id = e.empresa_id
-       AND m.marcado_en >= $${dateParam}::date
-       AND m.marcado_en < $${dateParam}::date + interval '1 day'
+       AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date = $${dateParam}::date
       WHERE ${filters.join(' AND ')}
         AND e.estado = 'activo'
       GROUP BY e.id, e.codigo, e.nombres, e.apellidos, s.nombre
@@ -137,7 +138,7 @@ async function entradasSalidas({ empresaId, fechaDesde, fechaHasta, sucursalId, 
   const result = await pool.query(
     `
       SELECT
-        DATE(m.marcado_en) AS fecha,
+        DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}') AS fecha,
         e.codigo AS empleado_codigo,
         e.nombres AS empleado_nombres,
         e.apellidos AS empleado_apellidos,
@@ -180,7 +181,7 @@ async function entradasSalidas({ empresaId, fechaDesde, fechaHasta, sucursalId, 
       INNER JOIN empleados e ON e.id = m.empleado_id
       LEFT JOIN sucursales s_habitual ON s_habitual.id = e.sucursal_habitual_id
       WHERE ${filters.join(' AND ')}
-      GROUP BY DATE(m.marcado_en), e.id, e.codigo, e.nombres, e.apellidos, s_habitual.nombre
+      GROUP BY DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}'), e.id, e.codigo, e.nombres, e.apellidos, s_habitual.nombre
       ORDER BY fecha DESC, e.apellidos ASC, e.nombres ASC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
@@ -231,7 +232,7 @@ async function asistenciaMensual({ empresaId, mes, sucursalId, empleadoId, estad
   const result = await pool.query(
     `
       SELECT
-        DATE(m.marcado_en) AS fecha,
+        DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}') AS fecha,
         COUNT(DISTINCT m.empleado_id) FILTER (WHERE m.estado <> 'rechazada')::int AS empleados_presentes,
         COUNT(m.id) FILTER (WHERE m.estado = 'aceptada')::int AS aceptadas,
         COUNT(m.id) FILTER (WHERE m.estado = 'aceptada_con_novedad')::int AS novedades,
@@ -239,9 +240,9 @@ async function asistenciaMensual({ empresaId, mes, sucursalId, empleadoId, estad
         COUNT(m.id)::int AS total_marcaciones
       FROM marcaciones m
       WHERE ${filters.join(' AND ')}
-        AND m.marcado_en >= date_trunc('month', $${monthParam}::date)
-        AND m.marcado_en < date_trunc('month', $${monthParam}::date) + interval '1 month'
-      GROUP BY DATE(m.marcado_en)
+        AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date >= date_trunc('month', $${monthParam}::date)::date
+        AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date < (date_trunc('month', $${monthParam}::date) + interval '1 month')::date
+      GROUP BY DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')
       ORDER BY fecha ASC
     `,
     values,
@@ -352,7 +353,8 @@ async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleado
         FLOOR(
           EXTRACT(
             EPOCH FROM (
-              m.marcado_en::time - (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+              (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
+              - (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
             )
           ) / 60
         )::int AS minutos_atraso,
@@ -362,7 +364,8 @@ async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleado
       INNER JOIN sucursales s ON s.id = m.sucursal_id
       INNER JOIN horarios h ON h.id = m.horario_id
       WHERE ${filters.join(' AND ')}
-        AND m.marcado_en::time > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+        AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
+          > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
       ORDER BY m.marcado_en DESC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}

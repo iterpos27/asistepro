@@ -9,10 +9,15 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function resolveColumnValue(row, column) {
+  const value = row[column.key];
+  return typeof column.format === 'function' ? column.format(value, row) : value;
+}
+
 function toExcelHtml(rows, columns, title = 'Reporte') {
   const header = columns.map((column) => `<th>${escapeHtml(column.header)}</th>`).join('');
   const body = rows
-    .map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(row[column.key])}</td>`).join('')}</tr>`)
+    .map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(resolveColumnValue(row, column))}</td>`).join('')}</tr>`)
     .join('');
 
   return `<!doctype html>

@@ -3,6 +3,27 @@ const { toCsv } = require('../utils/csv.util');
 const { toExcelHtml } = require('../utils/excel.util');
 const { parsePagination } = require('../utils/pagination.util');
 
+const REPORT_TIME_ZONE = process.env.REPORT_TIME_ZONE || 'America/Guayaquil';
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: REPORT_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  hourCycle: 'h23',
+});
+const timeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: REPORT_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  hourCycle: 'h23',
+});
+
 function getEmpresaId(req) {
   return req.tenant.empresa_id;
 }
@@ -12,6 +33,44 @@ function todayDate() {
   const guayaquilOffsetMs = 5 * 60 * 60 * 1000;
 
   return new Date(now.getTime() - guayaquilOffsetMs).toISOString().slice(0, 10);
+}
+
+function partsToObject(formatter, value) {
+  return formatter.formatToParts(value).reduce((parts, part) => {
+    if (part.type !== 'literal') parts[part.type] = part.value;
+    return parts;
+  }, {});
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateOnly(value) {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+
+  const date = parseDateValue(value);
+  return date ? date.toISOString().slice(0, 10) : String(value);
+}
+
+function formatDateTime(value) {
+  const date = parseDateValue(value);
+  if (!date) return value || '';
+
+  const parts = partsToObject(dateTimeFormatter, date);
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function formatTimeOnly(value) {
+  const date = parseDateValue(value);
+  if (!date) return value || '';
+
+  const parts = partsToObject(timeFormatter, date);
+  return `${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 async function asistenciaDiaria(req, res, next) {
@@ -119,8 +178,8 @@ async function exportarAsistenciaDiaria(req, res, next) {
       { key: 'empleado_nombres', header: 'Nombres' },
       { key: 'empleado_apellidos', header: 'Apellidos' },
       { key: 'sucursal_habitual_nombre', header: 'Sucursal habitual' },
-      { key: 'primera_entrada', header: 'Primera entrada' },
-      { key: 'ultima_salida', header: 'Ultima salida' },
+      { key: 'primera_entrada', header: 'Primera entrada', format: formatDateTime },
+      { key: 'ultima_salida', header: 'Ultima salida', format: formatDateTime },
       { key: 'horas_trabajadas', header: 'Horas trabajadas' },
       { key: 'minutos_trabajados', header: 'Minutos trabajados' },
       { key: 'marcaciones_validas', header: 'Marcaciones validas' },
@@ -151,13 +210,13 @@ async function exportarEntradasSalidasExcel(req, res, next) {
     const xls = toExcelHtml(
       result.items,
       [
-        { key: 'fecha', header: 'Fecha' },
+        { key: 'fecha', header: 'Fecha', format: formatDateOnly },
         { key: 'empleado_codigo', header: 'Codigo' },
         { key: 'empleado_nombres', header: 'Nombres' },
         { key: 'empleado_apellidos', header: 'Apellidos' },
         { key: 'sucursal_habitual_nombre', header: 'Sucursal habitual' },
-        { key: 'entrada', header: 'Entrada' },
-        { key: 'salida', header: 'Salida' },
+        { key: 'entrada', header: 'Entrada', format: formatTimeOnly },
+        { key: 'salida', header: 'Salida', format: formatTimeOnly },
         { key: 'horas_trabajadas', header: 'Horas trabajadas' },
         { key: 'minutos_trabajados', header: 'Minutos trabajados' },
         { key: 'total_entradas', header: 'Total entradas' },
@@ -187,7 +246,7 @@ async function exportarNovedades(req, res, next) {
       offset: 0,
     });
     const csv = toCsv(result.items, [
-      { key: 'marcado_en', header: 'Fecha' },
+      { key: 'marcado_en', header: 'Fecha', format: formatDateTime },
       { key: 'empleado_codigo', header: 'Codigo' },
       { key: 'empleado_nombres', header: 'Nombres' },
       { key: 'empleado_apellidos', header: 'Apellidos' },
@@ -218,7 +277,7 @@ async function exportarAtrasos(req, res, next) {
       offset: 0,
     });
     const csv = toCsv(result.items, [
-      { key: 'marcado_en', header: 'Fecha' },
+      { key: 'marcado_en', header: 'Fecha', format: formatDateTime },
       { key: 'empleado_codigo', header: 'Codigo' },
       { key: 'empleado_nombres', header: 'Nombres' },
       { key: 'empleado_apellidos', header: 'Apellidos' },

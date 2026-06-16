@@ -4,6 +4,7 @@ const test = require('node:test');
 const { pool } = require('../src/config/database');
 const empleadoService = require('../src/services/empleado.service');
 const horarioService = require('../src/services/horario.service');
+const marcacionService = require('../src/services/marcacion.service');
 const tenantService = require('../src/services/tenant.service');
 
 const originalQuery = pool.query;
@@ -134,6 +135,48 @@ test('assertPlanCapacity permite planes sin limite explicito', async () => {
         limite_sucursales: null,
       },
       includeNew: { empleados: 1, sucursales: 1 },
+    }),
+  );
+});
+
+test('assertDailyTipoLimit bloquea segunda entrada valida del mismo dia', async () => {
+  const calls = [];
+  pool.query = async (sql, values) => {
+    calls.push({ sql, values });
+    return { rows: [{ id: 'marcacion-previa' }] };
+  };
+
+  await assert.rejects(
+    () =>
+      marcacionService.assertDailyTipoLimit({
+        empresaId: 'empresa-a',
+        empleadoId: 'empleado-a',
+        tipo: 'entrada',
+        markedAt: '2026-06-16T14:00:00Z',
+      }),
+    /Ya existe una marcacion de entrada/,
+  );
+
+  assert.match(calls[0].sql, /estado <> 'rechazada'/);
+  assert.match(calls[0].sql, /marcado_en AT TIME ZONE \$5/);
+  assert.deepEqual(calls[0].values, [
+    'empresa-a',
+    'empleado-a',
+    'entrada',
+    '2026-06-16T14:00:00Z',
+    'America/Guayaquil',
+  ]);
+});
+
+test('assertDailyTipoLimit permite salida si no hay salida valida del dia', async () => {
+  pool.query = async () => ({ rows: [] });
+
+  await assert.doesNotReject(() =>
+    marcacionService.assertDailyTipoLimit({
+      empresaId: 'empresa-a',
+      empleadoId: 'empleado-a',
+      tipo: 'salida',
+      markedAt: '2026-06-16T22:00:00Z',
     }),
   );
 });

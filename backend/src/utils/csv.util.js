@@ -10,10 +10,15 @@ function escapeCsvValue(value) {
   return text;
 }
 
+function resolveColumnValue(row, column) {
+  const value = row[column.key];
+  return typeof column.format === 'function' ? column.format(value, row) : value;
+}
+
 function toCsv(rows, columns) {
   const header = columns.map((column) => escapeCsvValue(column.header)).join(',');
   const body = rows.map((row) =>
-    columns.map((column) => escapeCsvValue(row[column.key])).join(','),
+    columns.map((column) => escapeCsvValue(resolveColumnValue(row, column))).join(','),
   );
 
   return [header, ...body].join('\n');

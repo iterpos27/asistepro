@@ -5,6 +5,7 @@ const { calculateDistanceMeters } = require('../utils/geo.util');
 const MARCACION_TIPOS = ['entrada', 'salida'];
 const GPS_TOLERANCIA_METROS = Number(process.env.GPS_TOLERANCIA_METROS || 10);
 const GPS_PRECISION_MAXIMA_METROS = Number(process.env.GPS_PRECISION_MAXIMA_METROS || 20);
+const REPORT_TIME_ZONE = 'America/Guayaquil';
 const MOTIVOS_NOVEDAD = [
   'Reemplazo',
   'Apoyo temporal',
@@ -175,6 +176,28 @@ async function insertMarcacion(data) {
   return result.rows[0];
 }
 
+async function assertDailyTipoLimit({ empresaId, empleadoId, tipo, markedAt = new Date() }) {
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM marcaciones
+      WHERE empresa_id = $1
+        AND empleado_id = $2
+        AND tipo = $3
+        AND estado <> 'rechazada'
+        AND (marcado_en AT TIME ZONE $5)::date = ($4::timestamptz AT TIME ZONE $5)::date
+      LIMIT 1
+    `,
+    [empresaId, empleadoId, tipo, markedAt, REPORT_TIME_ZONE],
+  );
+
+  if (result.rows.length) {
+    const error = new Error(`Ya existe una marcacion de ${tipo} para este empleado en la fecha indicada`);
+    error.statusCode = 409;
+    throw error;
+  }
+}
+
 async function registrarMarcacion({ empresaId, auth, payload }) {
   validateMarcacionPayload(payload);
 
@@ -247,6 +270,15 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
       detalleNovedad = payload.detalle_novedad || null;
       mensaje = 'Marcacion aceptada con novedad por sucursal distinta';
     }
+  }
+
+  if (estado !== 'rechazada') {
+    await assertDailyTipoLimit({
+      empresaId,
+      empleadoId: empleado.id,
+      tipo: payload.tipo,
+      markedAt,
+    });
   }
 
   const marcacion = await insertMarcacion({
@@ -371,4 +403,5 @@ module.exports = {
   registrarMarcacion,
   listMarcaciones,
   findMarcacionById,
+  assertDailyTipoLimit,
 };
