@@ -104,6 +104,36 @@ function planGuard(allowedPlans = []) {
   };
 }
 
+function planLimitGuard(resourceName) {
+  return async (req, res, next) => {
+    try {
+      if (!req.tenant?.empresa_id || !req.tenant?.subscription) {
+        return res.status(400).json({
+          ok: false,
+          message: 'Tenant o plan no resuelto',
+        });
+      }
+
+      const includeNew =
+        resourceName === 'empleados'
+          ? { empleados: 1 }
+          : resourceName === 'sucursales'
+            ? { sucursales: 1 }
+            : {};
+
+      await tenantService.assertPlanCapacity({
+        empresaId: req.tenant.empresa_id,
+        plan: req.tenant.subscription,
+        includeNew,
+      });
+
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };
+}
+
 function featureGuard(featureName) {
   return (req, res, next) => {
     if (!req.tenant?.empresa_id) {
@@ -135,5 +165,6 @@ module.exports = {
   tenantGuard,
   subscriptionGuard,
   planGuard,
+  planLimitGuard,
   featureGuard,
 };

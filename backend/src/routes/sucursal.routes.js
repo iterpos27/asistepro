@@ -2,7 +2,7 @@ const { Router } = require('express');
 
 const sucursalController = require('../controllers/sucursal.controller');
 const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
-const { tenantGuard, subscriptionGuard } = require('../middlewares/tenant.middleware');
+const { tenantGuard, subscriptionGuard, planLimitGuard } = require('../middlewares/tenant.middleware');
 const { validateSchema } = require('../middlewares/validation.middleware');
 const {
   createSucursalSchema,
@@ -19,7 +19,7 @@ router.use(tenantGuard);
 router.use(subscriptionGuard);
 
 router.get('/', validateSchema(listSucursalesSchema), sucursalController.listSucursales);
-router.post('/', validateSchema(createSucursalSchema), sucursalController.createSucursal);
+router.post('/', validateSchema(createSucursalSchema), planLimitGuard('sucursales'), sucursalController.createSucursal);
 router.get('/:id', validateSchema(idParamSchema), sucursalController.getSucursal);
 router.put('/:id', validateSchema(updateSucursalSchema), sucursalController.updateSucursal);
 router.delete('/:id', validateSchema(idParamSchema), sucursalController.deleteSucursal);

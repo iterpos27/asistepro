@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const tenantService = require('./tenant.service');
 
 const SUSCRIPCION_ESTADOS = ['activa', 'vencida', 'cancelada', 'suspendida'];
 
@@ -34,7 +35,9 @@ async function assertEmpresaAndPlan(empresaId, planId) {
       SELECT
         e.id AS empresa_id,
         p.id AS plan_id,
-        p.precio_mensual
+        p.precio_mensual,
+        p.limite_empleados,
+        p.limite_sucursales
       FROM empresas e
       CROSS JOIN planes p
       WHERE e.id = $1
@@ -127,6 +130,12 @@ async function createSuscripcion(payload) {
   validateSuscripcionPayload(payload);
 
   const valid = await assertEmpresaAndPlan(payload.empresa_id, payload.plan_id);
+  if ((payload.estado || 'activa') === 'activa') {
+    await tenantService.assertPlanCapacity({
+      empresaId: payload.empresa_id,
+      plan: valid,
+    });
+  }
   const montoMensual =
     payload.monto_mensual !== undefined ? Number(payload.monto_mensual) : Number(valid.precio_mensual);
 
@@ -205,7 +214,13 @@ async function updateSuscripcion(id, payload) {
       payload.monto_mensual !== undefined ? Number(payload.monto_mensual) : Number(current.monto_mensual),
   };
 
-  await assertEmpresaAndPlan(next.empresa_id, next.plan_id);
+  const valid = await assertEmpresaAndPlan(next.empresa_id, next.plan_id);
+  if (next.estado === 'activa') {
+    await tenantService.assertPlanCapacity({
+      empresaId: next.empresa_id,
+      plan: valid,
+    });
+  }
 
   const client = await pool.connect();
 

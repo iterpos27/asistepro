@@ -2,7 +2,7 @@ const { Router } = require('express');
 
 const empleadoController = require('../controllers/empleado.controller');
 const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
-const { tenantGuard, subscriptionGuard } = require('../middlewares/tenant.middleware');
+const { tenantGuard, subscriptionGuard, planLimitGuard } = require('../middlewares/tenant.middleware');
 const { validateSchema } = require('../middlewares/validation.middleware');
 const {
   createEmpleadoSchema,
@@ -19,7 +19,7 @@ router.use(tenantGuard);
 router.use(subscriptionGuard);
 
 router.get('/', validateSchema(listEmpleadosSchema), empleadoController.listEmpleados);
-router.post('/', validateSchema(createEmpleadoSchema), empleadoController.createEmpleado);
+router.post('/', validateSchema(createEmpleadoSchema), planLimitGuard('empleados'), empleadoController.createEmpleado);
 router.get('/:id', validateSchema(idParamSchema), empleadoController.getEmpleado);
 router.put('/:id', validateSchema(updateEmpleadoSchema), empleadoController.updateEmpleado);
 router.delete('/:id', validateSchema(idParamSchema), empleadoController.deleteEmpleado);

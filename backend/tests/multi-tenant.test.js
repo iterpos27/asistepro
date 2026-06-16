@@ -4,6 +4,7 @@ const test = require('node:test');
 const { pool } = require('../src/config/database');
 const empleadoService = require('../src/services/empleado.service');
 const horarioService = require('../src/services/horario.service');
+const tenantService = require('../src/services/tenant.service');
 
 const originalQuery = pool.query;
 
@@ -89,4 +90,50 @@ test('assignHorario rechaza horario fuera del tenant antes de insertar', async (
 
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1].values, ['empresa-a', 'horario-externo']);
+});
+
+test('assertPlanCapacity bloquea creacion al exceder limite de empleados del plan', async () => {
+  pool.query = async () => ({
+    rows: [
+      {
+        empleados: 10,
+        sucursales: 1,
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () =>
+      tenantService.assertPlanCapacity({
+        empresaId: 'empresa-a',
+        plan: {
+          limite_empleados: 10,
+          limite_sucursales: 1,
+        },
+        includeNew: { empleados: 1 },
+      }),
+    /Limite de empleados del plan alcanzado \(10\)/,
+  );
+});
+
+test('assertPlanCapacity permite planes sin limite explicito', async () => {
+  pool.query = async () => ({
+    rows: [
+      {
+        empleados: 500,
+        sucursales: 80,
+      },
+    ],
+  });
+
+  await assert.doesNotReject(() =>
+    tenantService.assertPlanCapacity({
+      empresaId: 'empresa-enterprise',
+      plan: {
+        limite_empleados: null,
+        limite_sucursales: null,
+      },
+      includeNew: { empleados: 1, sucursales: 1 },
+    }),
+  );
 });
