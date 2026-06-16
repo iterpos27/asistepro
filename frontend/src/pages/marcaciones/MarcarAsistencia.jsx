@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, MapPin, QrCode, Send, Square } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
@@ -34,6 +35,7 @@ function withTimeout(promise, milliseconds = 1500) {
 }
 
 export default function MarcarAsistencia() {
+  const navigate = useNavigate();
   const scannerRef = useRef(null);
   const scanLockedRef = useRef(false);
   const [readerKey, setReaderKey] = useState(0);
@@ -129,6 +131,7 @@ export default function MarcarAsistencia() {
   }
 
   async function stopScanner({ keepStatus = false } = {}) {
+    setScanning(false);
     const scanner = scannerRef.current;
 
     if (!keepStatus) {
@@ -138,7 +141,6 @@ export default function MarcarAsistencia() {
     scanLockedRef.current = false;
 
     if (!scanner) {
-      setScanning(false);
       clearReaderDom();
       return;
     }
@@ -149,7 +151,6 @@ export default function MarcarAsistencia() {
 
     await withTimeout(scanner.clear().catch(() => {}), 700);
     clearReaderDom();
-    setScanning(false);
   }
 
   function clearMarcacionForm() {
@@ -197,6 +198,7 @@ export default function MarcarAsistencia() {
         toast.warning(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada con advertencia');
       } else {
         toast.success(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada correctamente');
+        navigate('/mis-marcaciones');
       }
       clearMarcacionForm();
     } catch (requestError) {
