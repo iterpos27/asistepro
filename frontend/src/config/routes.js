@@ -10,6 +10,7 @@ const HistorialMarcaciones = lazy(() => import('../pages/marcaciones/HistorialMa
 const MarcarAsistencia = lazy(() => import('../pages/marcaciones/MarcarAsistencia'));
 const PlanesList = lazy(() => import('../pages/planes/PlanesList'));
 const Reportes = lazy(() => import('../pages/reportes/Reportes'));
+const ReemplazosList = lazy(() => import('../pages/reemplazos/ReemplazosList'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
 const SuscripcionesList = lazy(() => import('../pages/suscripciones/SuscripcionesList'));
 const SucursalesList = lazy(() => import('../pages/sucursales/SucursalesList'));
@@ -52,6 +53,12 @@ export const privateRoutes = [
     element: HorariosList,
     roles: routeRoles.rrhh,
     feature: 'horarios',
+  },
+  {
+    path: '/reemplazos',
+    element: ReemplazosList,
+    roles: routeRoles.rrhh,
+    feature: 'reemplazos',
   },
   {
     path: '/marcaciones',

@@ -2,6 +2,7 @@ const MODULES = [
   { key: 'sucursales', label: 'Sucursales', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'empleados', label: 'Empleados', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'horarios', label: 'Horarios', roles: ['ADMIN_EMPRESA', 'RRHH'] },
+  { key: 'reemplazos', label: 'Reemplazos', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'marcaciones', label: 'Marcaciones', roles: ['ADMIN_EMPRESA', 'RRHH', 'EMPLEADO'] },
   { key: 'mis_marcaciones', label: 'Mis marcaciones', roles: ['ADMIN_EMPRESA', 'RRHH', 'EMPLEADO'] },
   { key: 'reportes_avanzados', label: 'Reportes', roles: ['ADMIN_EMPRESA', 'RRHH'] },

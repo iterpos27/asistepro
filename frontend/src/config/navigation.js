@@ -2,6 +2,7 @@ import {
   Activity,
   Building2,
   CalendarClock,
+  Repeat2,
   CreditCard,
   FileBarChart,
   LayoutDashboard,
@@ -40,6 +41,7 @@ export const navSections = [
       { title: 'Sucursales', href: '/sucursales', icon: MapPin, feature: 'sucursales' },
       { title: 'Empleados', href: '/empleados', icon: Users, feature: 'empleados' },
       { title: 'Horarios', href: '/horarios', icon: CalendarClock, feature: 'horarios' },
+      { title: 'Reemplazos', href: '/reemplazos', icon: Repeat2, feature: 'reemplazos' },
     ],
   },
   {

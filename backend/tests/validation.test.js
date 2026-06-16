@@ -3,6 +3,7 @@ const test = require('node:test');
 
 const { listMarcacionesSchema, marcacionSchema } = require('../src/validators/marcacion.validator');
 const { asistenciaDiariaSchema, entradasSalidasSchema } = require('../src/validators/reporte.validator');
+const { createReemplazoSchema } = require('../src/validators/reemplazo.validator');
 const { createSucursalSchema } = require('../src/validators/sucursal.validator');
 
 test('validaciones rechazan coordenadas vacias en sucursales y marcaciones', () => {
@@ -68,4 +69,41 @@ test('validaciones aceptan filtros validos de marcaciones', () => {
   assert.equal(result.success, true);
   assert.equal(result.data.query.limit, 50);
   assert.equal(result.data.query.offset, 0);
+});
+
+test('validaciones de reemplazo rechazan rangos de fecha y hora incoherentes', () => {
+  const result = createReemplazoSchema.safeParse({
+    body: {
+      empleado_id: '11111111-1111-4111-8111-111111111111',
+      sucursal_id: '22222222-2222-4222-8222-222222222222',
+      fecha_inicio: '2026-06-16',
+      fecha_fin: '2026-06-15',
+      hora_inicio: '18:00',
+      hora_fin: '08:00',
+      motivo: 'Reemplazo autorizado',
+    },
+    query: {},
+    params: {},
+  });
+
+  assert.equal(result.success, false);
+});
+
+test('validaciones de reemplazo aceptan autorizacion vigente correcta', () => {
+  const result = createReemplazoSchema.safeParse({
+    body: {
+      empleado_id: '11111111-1111-4111-8111-111111111111',
+      sucursal_id: '22222222-2222-4222-8222-222222222222',
+      fecha_inicio: '2026-06-16',
+      fecha_fin: '2026-06-18',
+      hora_inicio: '08:00',
+      hora_fin: '17:00',
+      motivo: 'Reemplazo por ausencia',
+      observacion: '',
+    },
+    query: {},
+    params: {},
+  });
+
+  assert.equal(result.success, true);
 });

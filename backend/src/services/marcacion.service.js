@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const reemplazoService = require('./reemplazo.service');
 const { calculateDistanceMeters } = require('../utils/geo.util');
 
 const MARCACION_TIPOS = ['entrada', 'salida'];
@@ -207,27 +208,45 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
   const dentroGeocerca = distancia <= Number(sucursal.radio_metros) + toleranciaGps;
   const sucursalDistinta =
     empleado.sucursal_habitual_id && empleado.sucursal_habitual_id !== sucursal.id;
+  const markedAt = payload.marcado_en || new Date();
   const horario = await findActiveHorario({
     empresaId,
     empleadoId: empleado.id,
-    markedAt: payload.marcado_en || new Date(),
+    markedAt,
   });
+  const reemplazoAutorizado = sucursalDistinta
+    ? await reemplazoService.findActiveReemplazoForMarcacion({
+        empresaId,
+        empleadoId: empleado.id,
+        sucursalId: sucursal.id,
+        markedAt,
+      })
+    : null;
 
   let estado = 'aceptada';
   let mensaje = 'Marcacion aceptada';
+  let motivoNovedad = null;
+  let detalleNovedad = null;
 
   if (!dentroGeocerca) {
     estado = 'rechazada';
     mensaje = 'Marcacion rechazada: fuera del radio permitido';
   } else if (sucursalDistinta) {
-    if (!payload.motivo_novedad) {
+    if (reemplazoAutorizado) {
+      estado = 'aceptada_con_novedad';
+      motivoNovedad = 'Reemplazo';
+      detalleNovedad = reemplazoAutorizado.motivo;
+      mensaje = 'Marcacion aceptada por reemplazo autorizado';
+    } else if (!payload.motivo_novedad) {
       const error = new Error('motivo_novedad es requerido al marcar en sucursal distinta');
       error.statusCode = 400;
       throw error;
+    } else {
+      estado = 'aceptada_con_novedad';
+      motivoNovedad = payload.motivo_novedad;
+      detalleNovedad = payload.detalle_novedad || null;
+      mensaje = 'Marcacion aceptada con novedad por sucursal distinta';
     }
-
-    estado = 'aceptada_con_novedad';
-    mensaje = 'Marcacion aceptada con novedad por sucursal distinta';
   }
 
   const marcacion = await insertMarcacion({
@@ -241,8 +260,8 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
     longitud: Number(payload.longitud),
     distancia_metros: Number(distancia.toFixed(2)),
     dentro_geocerca: dentroGeocerca,
-    motivo_novedad: estado === 'aceptada_con_novedad' ? payload.motivo_novedad : null,
-    detalle_novedad: estado === 'aceptada_con_novedad' ? payload.detalle_novedad || null : null,
+    motivo_novedad: estado === 'aceptada_con_novedad' ? motivoNovedad : null,
+    detalle_novedad: estado === 'aceptada_con_novedad' ? detalleNovedad : null,
     mensaje,
     marcado_en: payload.marcado_en,
   });
