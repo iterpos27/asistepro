@@ -1,7 +1,7 @@
 const { pool } = require('../config/database');
 
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
-const PAGO_METODOS = ['manual', 'transferencia', 'efectivo', 'tarjeta', 'otro'];
+const PAGO_METODOS = ['manual', 'transferencia', 'deposito', 'efectivo', 'tarjeta', 'otro'];
 const PAGO_ESTADOS = ['pendiente', 'registrado'];
 const COMPROBANTE_MAX_BYTES = 2 * 1024 * 1024;
 const COMPROBANTE_TIPOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -429,6 +429,7 @@ async function registerManualPayment(payload) {
           monto,
           metodo,
           referencia,
+          banco,
           nota,
           estado,
           pagado_en,
@@ -436,7 +437,7 @@ async function registerManualPayment(payload) {
           comprobante_tipo,
           comprobante_data,
           comprobante_subido_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::timestamptz, NOW()), $9, $10, $11, CASE WHEN $11::bytea IS NULL THEN NULL ELSE NOW() END)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, NOW()), $10, $11, $12, CASE WHEN $12::bytea IS NULL THEN NULL ELSE NOW() END)
         RETURNING *
       `,
       [
@@ -445,6 +446,7 @@ async function registerManualPayment(payload) {
         Number(payload.monto),
         payload.metodo || 'manual',
         payload.referencia || null,
+        payload.banco || null,
         payload.nota || null,
         payload.estado || 'registrado',
         payload.pagado_en || null,
@@ -499,6 +501,7 @@ async function listPagos({ facturaId, empresaId, limit = 20, offset = 0 }) {
         p.monto,
         p.metodo,
         p.referencia,
+        p.banco,
         p.nota,
         p.estado,
         p.pagado_en,
@@ -580,6 +583,7 @@ async function findPagoById(id) {
         p.monto,
         p.metodo,
         p.referencia,
+        p.banco,
         p.nota,
         p.estado,
         p.pagado_en,

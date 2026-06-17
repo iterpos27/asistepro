@@ -26,6 +26,7 @@ const migrations = [
   '019_reemplazos_sucursal.sql',
   '020_notifications.sql',
   '021_facturas_pdf.sql',
+  '022_pagos_detalles.sql',
 ];
 
 async function runMigrations() {

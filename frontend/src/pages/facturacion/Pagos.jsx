@@ -11,6 +11,7 @@ const defaultPayment = {
   monto: '',
   metodo: 'transferencia',
   referencia: '',
+  banco: '',
   nota: '',
   pagado_en: '',
   comprobante: null,
@@ -155,6 +156,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
         ...payment,
         monto: Number(payment.monto),
         referencia: payment.referencia || null,
+        banco: payment.banco || null,
         nota: payment.nota || null,
         pagado_en: payment.pagado_en || null,
         comprobante: payment.comprobante || undefined,
@@ -276,11 +278,18 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                   <select value={payment.metodo} onChange={(event) => updatePayment('metodo', event.target.value)}>
                     <option value="manual">Manual</option>
                     <option value="transferencia">Transferencia</option>
+                    <option value="deposito">Depósito</option>
                     <option value="efectivo">Efectivo</option>
                     <option value="tarjeta">Tarjeta</option>
                     <option value="otro">Otro</option>
                   </select>
                 </label>
+                {['transferencia', 'deposito'].includes(payment.metodo) ? (
+                  <label>
+                    Banco / Entidad
+                    <input value={payment.banco} onChange={(event) => updatePayment('banco', event.target.value)} placeholder="Ej. Banco Pichincha" required />
+                  </label>
+                ) : null}
                 <label>
                   Pagado en
                   <input value={payment.pagado_en} onChange={(event) => updatePayment('pagado_en', event.target.value)} type="datetime-local" />
@@ -334,7 +343,9 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                   <tr key={pago.id}>
                     <td>{pago.factura_numero || '-'}</td>
                     <td>{money(pago.monto)}</td>
-                    <td>{pago.metodo}</td>
+                    <td style={{ textTransform: 'capitalize' }}>
+                      {pago.metodo} {pago.banco ? `(${pago.banco})` : ''}
+                    </td>
                     <td>{pago.referencia || '-'}</td>
                     <td>
                       {pago.tiene_comprobante ? (

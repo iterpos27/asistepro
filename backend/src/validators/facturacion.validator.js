@@ -6,6 +6,7 @@ const dateText = (field) => z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, `${fi
 
 const facturaBody = z.object({
   empresa_id: uuid('empresa_id'),
+  numero: z.string().trim().max(40).optional().nullable(),
   concepto: z.string().trim().min(1, 'concepto es requerido').max(180),
   subtotal: money('subtotal'),
   impuesto: money('impuesto').optional(),
@@ -23,8 +24,9 @@ const facturaBody = z.object({
 const pagoManualBody = z.object({
   factura_id: uuid('factura_id'),
   monto: money('monto').refine((value) => value > 0, 'monto debe ser mayor a cero'),
-  metodo: z.enum(['manual', 'transferencia', 'efectivo', 'tarjeta', 'cheque', 'otro']).optional(),
+  metodo: z.enum(['manual', 'transferencia', 'deposito', 'efectivo', 'tarjeta', 'cheque', 'otro']).optional(),
   referencia: z.string().trim().max(120).optional().nullable(),
+  banco: z.string().trim().max(100).optional().nullable(),
   nota: z.string().trim().max(500).optional().nullable(),
   observacion: z.string().trim().max(500).optional().nullable(), // soporte retrocompatible
   pagado_en: z.string().trim().optional().nullable(),
