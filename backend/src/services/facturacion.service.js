@@ -14,6 +14,14 @@ function validateFacturaPayload(payload) {
   if (payload.total !== undefined && Number(payload.total) < 0) errors.push('total no puede ser negativo');
   if (payload.estado !== undefined && !FACTURA_ESTADOS.includes(payload.estado)) errors.push('estado invalido');
 
+  if (payload.pdf) {
+    const base64 = getComprobanteBase64(payload.pdf);
+    const estimatedBytes = (base64.length * 3) / 4;
+    if (estimatedBytes > COMPROBANTE_MAX_BYTES) {
+      errors.push('El archivo PDF de la factura no puede superar 2MB');
+    }
+  }
+
   if (errors.length) {
     const error = new Error(errors.join(', '));
     error.statusCode = 400;
@@ -29,6 +37,14 @@ function validateFacturaUpdatePayload(payload) {
   if (payload.subtotal !== undefined && Number(payload.subtotal) < 0) errors.push('subtotal no puede ser negativo');
   if (payload.impuesto !== undefined && Number(payload.impuesto) < 0) errors.push('impuesto no puede ser negativo');
   if (payload.estado !== undefined && !FACTURA_ESTADOS.includes(payload.estado)) errors.push('estado invalido');
+
+  if (payload.pdf) {
+    const base64 = getComprobanteBase64(payload.pdf);
+    const estimatedBytes = (base64.length * 3) / 4;
+    if (estimatedBytes > COMPROBANTE_MAX_BYTES) {
+      errors.push('El archivo PDF de la factura no puede superar 2MB');
+    }
+  }
 
   if (errors.length) {
     const error = new Error(errors.join(', '));
@@ -113,7 +129,23 @@ async function listFacturas({ empresaId, estado, limit = 20, offset = 0 }) {
   const result = await pool.query(
     `
       SELECT
-        f.*,
+        f.id,
+        f.empresa_id,
+        f.suscripcion_id,
+        f.numero,
+        f.concepto,
+        f.subtotal,
+        f.impuesto,
+        f.total,
+        f.estado,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.creado_en,
+        f.actualizado_en,
+        f.pdf_nombre,
+        f.pdf_tipo,
+        f.pdf_subido_en,
+        (f.pdf_data IS NOT NULL) AS tiene_pdf,
         e.nombre AS empresa_nombre,
         COALESCE(SUM(p.monto) FILTER (WHERE p.estado = 'registrado'), 0)::numeric(10, 2) AS total_pagado,
         COUNT(*) OVER() AS total_registros
@@ -141,7 +173,23 @@ async function findFacturaById(id) {
   const result = await pool.query(
     `
       SELECT
-        f.*,
+        f.id,
+        f.empresa_id,
+        f.suscripcion_id,
+        f.numero,
+        f.concepto,
+        f.subtotal,
+        f.impuesto,
+        f.total,
+        f.estado,
+        f.fecha_emision,
+        f.fecha_vencimiento,
+        f.creado_en,
+        f.actualizado_en,
+        f.pdf_nombre,
+        f.pdf_tipo,
+        f.pdf_subido_en,
+        (f.pdf_data IS NOT NULL) AS tiene_pdf,
         e.nombre AS empresa_nombre,
         COALESCE(SUM(p.monto) FILTER (WHERE p.estado = 'registrado'), 0)::numeric(10, 2) AS total_pagado
       FROM facturas f
@@ -217,6 +265,8 @@ async function updateFactura(id, payload) {
       payload.fecha_vencimiento !== undefined ? payload.fecha_vencimiento || null : current.fecha_vencimiento,
   };
 
+  const pdf = payload.pdf !== undefined ? normalizeComprobante(payload.pdf) : undefined;
+
   await pool.query(
     `
       UPDATE facturas
@@ -228,6 +278,10 @@ async function updateFactura(id, payload) {
           estado = $7,
           fecha_emision = $8,
           fecha_vencimiento = $9,
+          pdf_nombre = CASE WHEN $10::boolean THEN $11::varchar ELSE pdf_nombre END,
+          pdf_tipo = CASE WHEN $10::boolean THEN $12::varchar ELSE pdf_tipo END,
+          pdf_data = CASE WHEN $10::boolean THEN $13::bytea ELSE pdf_data END,
+          pdf_subido_en = CASE WHEN $10::boolean THEN (CASE WHEN $13::bytea IS NULL THEN NULL ELSE NOW() END) ELSE pdf_subido_en END,
           actualizado_en = NOW()
       WHERE id = $1
     `,
@@ -241,6 +295,10 @@ async function updateFactura(id, payload) {
       next.estado,
       next.fecha_emision,
       next.fecha_vencimiento,
+      payload.pdf !== undefined,
+      pdf?.nombre || null,
+      pdf?.tipo || null,
+      pdf?.data || null,
     ],
   );
 
@@ -290,6 +348,7 @@ async function createFactura(payload) {
     await client.query('BEGIN');
 
     const numero = payload.numero || (await getNextInvoiceNumber(client));
+    const pdf = normalizeComprobante(payload.pdf);
 
     const result = await client.query(
       `
@@ -303,8 +362,12 @@ async function createFactura(payload) {
           total,
           estado,
           fecha_emision,
-          fecha_vencimiento
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10)
+          fecha_vencimiento,
+          pdf_nombre,
+          pdf_tipo,
+          pdf_data,
+          pdf_subido_en
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10, $11, $12, $13, CASE WHEN $13::bytea IS NULL THEN NULL ELSE NOW() END)
         RETURNING id
       `,
       [
@@ -318,6 +381,9 @@ async function createFactura(payload) {
         payload.estado || 'pendiente',
         payload.fecha_emision || null,
         payload.fecha_vencimiento || null,
+        pdf?.nombre || null,
+        pdf?.tipo || null,
+        pdf?.data || null,
       ],
     );
 
@@ -597,12 +663,27 @@ async function anulacionPago(id, motivoAnulacion) {
   }
 }
 
+async function findFacturaPdf(id) {
+  const result = await pool.query(
+    `
+      SELECT id, empresa_id, pdf_nombre, pdf_tipo, pdf_data, numero
+      FROM facturas
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  return result.rows[0] || null;
+}
+
 module.exports = {
   listFacturas,
   findFacturaById,
   createFactura,
   updateFactura,
   anulacionFactura,
+  findFacturaPdf,
   registerManualPayment,
   aprobarPago,
   listPagos,

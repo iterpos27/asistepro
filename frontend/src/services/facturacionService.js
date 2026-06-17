@@ -68,3 +68,10 @@ export async function anularPago(id, motivoAnulacion) {
   });
   return response.data.data;
 }
+
+export async function getFacturaPdf(id) {
+  const response = await api.get(`/facturacion/facturas/${id}/pdf`, {
+    responseType: 'blob',
+  });
+  return response.data;
+}

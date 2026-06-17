@@ -25,6 +25,7 @@ const migrations = [
   '018_user_module_permissions.sql',
   '019_reemplazos_sucursal.sql',
   '020_notifications.sql',
+  '021_facturas_pdf.sql',
 ];
 
 async function runMigrations() {

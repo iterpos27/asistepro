@@ -19,6 +19,7 @@ router.use(authGuard);
 router.get('/facturas', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(listFacturasSchema), facturacionController.listFacturas);
 router.post('/facturas', roleGuard(['SUPER_ADMIN']), validateSchema(createFacturaSchema), facturacionController.createFactura);
 router.get('/facturas/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(idParamSchema), facturacionController.getFactura);
+router.get('/facturas/:id/pdf', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(idParamSchema), facturacionController.getFacturaPdf);
 router.put('/facturas/:id', roleGuard(['SUPER_ADMIN']), validateSchema(updateFacturaSchema), facturacionController.updateFactura);
 router.delete('/facturas/:id', roleGuard(['SUPER_ADMIN']), validateSchema(idParamSchema), facturacionController.anularFactura);
 router.get('/pagos', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(listPagosSchema), facturacionController.listPagos);

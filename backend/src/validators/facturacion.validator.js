@@ -12,23 +12,34 @@ const facturaBody = z.object({
   descuento: money('descuento').optional(),
   fecha_emision: dateText('fecha_emision').optional(),
   fecha_vencimiento: dateText('fecha_vencimiento').optional().nullable(),
-  estado: z.enum(['borrador', 'emitida', 'pagada', 'vencida', 'anulada']).optional(),
+  estado: z.enum(['pendiente', 'pagada', 'vencida', 'anulada']).optional(),
+  pdf: z.object({
+    nombre: z.string(),
+    tipo: z.string(),
+    data_base64: z.string(),
+  }).optional().nullable(),
 });
 
 const pagoManualBody = z.object({
   factura_id: uuid('factura_id'),
   monto: money('monto').refine((value) => value > 0, 'monto debe ser mayor a cero'),
-  metodo: z.enum(['transferencia', 'efectivo', 'tarjeta', 'cheque', 'otro']).optional(),
+  metodo: z.enum(['manual', 'transferencia', 'efectivo', 'tarjeta', 'cheque', 'otro']).optional(),
   referencia: z.string().trim().max(120).optional().nullable(),
-  observacion: z.string().trim().max(500).optional().nullable(),
-  comprobante_url: z.string().trim().max(500).optional().nullable(),
+  nota: z.string().trim().max(500).optional().nullable(),
+  observacion: z.string().trim().max(500).optional().nullable(), // soporte retrocompatible
+  pagado_en: z.string().trim().optional().nullable(),
+  comprobante: z.object({
+    nombre: z.string(),
+    tipo: z.string(),
+    data_base64: z.string(),
+  }).optional().nullable(),
 });
 
 const listFacturasSchema = z.object({
   body: emptyBody,
   query: paginationQuery.extend({
     empresa_id: uuid('empresa_id').optional(),
-    estado: z.enum(['borrador', 'emitida', 'pagada', 'vencida', 'anulada']).optional(),
+    estado: z.enum(['pendiente', 'pagada', 'vencida', 'anulada']).optional(),
   }),
   params: emptyParams,
 });

@@ -180,6 +180,19 @@ export default function Facturas({ defaultTab = 'facturas' }) {
     changeTab('pagos');
   }
 
+  async function downloadPdf(factura) {
+    setError('');
+    try {
+      const blob = await facturacionService.getFacturaPdf(factura.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'No se pudo cargar el PDF de la factura');
+      setError(requestError.response?.data?.message || 'No se pudo cargar el PDF de la factura');
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -336,6 +349,11 @@ export default function Facturas({ defaultTab = 'facturas' }) {
                       <td>{dateOnly(factura.fecha_vencimiento)}</td>
                       <td>
                         <div className="row-actions">
+                          {factura.tiene_pdf ? (
+                            <button className="icon-button" type="button" onClick={() => downloadPdf(factura)} title="Ver Factura SRI" aria-label="Ver Factura SRI">
+                              <FileText size={16} />
+                            </button>
+                          ) : null}
                           <button className="icon-button" type="button" onClick={() => selectFacturaForPayments(factura)} aria-label="Ver pagos">
                             <CreditCard size={16} />
                           </button>

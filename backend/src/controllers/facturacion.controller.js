@@ -215,12 +215,39 @@ async function anularPago(req, res, next) {
   }
 }
 
+async function getFacturaPdf(req, res, next) {
+  try {
+    const factura = await facturacionService.findFacturaPdf(req.params.id);
+
+    if (!factura) {
+      return res.status(404).json({ ok: false, message: 'Factura no encontrada' });
+    }
+
+    if (!canAccessEmpresa(req, factura.empresa_id)) {
+      return res.status(403).json({ ok: false, message: 'No puede acceder a esta factura' });
+    }
+
+    if (!factura.pdf_data) {
+      return res.status(404).json({ ok: false, message: 'Archivo PDF no encontrado' });
+    }
+
+    const fileName = factura.pdf_nombre || `factura-${factura.numero || factura.id}.pdf`;
+
+    res.setHeader('Content-Type', factura.pdf_tipo || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName.replace(/"/g, '')}"`);
+    return res.send(factura.pdf_data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listFacturas,
   getFactura,
   createFactura,
   updateFactura,
   anularFactura,
+  getFacturaPdf,
   registerManualPayment,
   listPagos,
   getPago,

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,6 +33,15 @@ function dateOnly(value) {
   return value ? String(value).slice(0, 10) : '';
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function FacturaForm({ factura, empresas, suscripciones, loading, onCancel, onSubmit }) {
   const {
     register,
@@ -45,6 +54,9 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
     resolver: zodResolver(facturaSchema),
     defaultValues,
   });
+
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfName, setPdfName] = useState('');
 
   const subtotal = watch('subtotal');
   const impuesto = watch('impuesto');
@@ -68,6 +80,8 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
           }
         : defaultValues,
     );
+    setPdfName(factura?.pdf_nombre || '');
+    setPdfFile(null);
   }, [factura, reset]);
 
   useEffect(() => {
@@ -75,12 +89,46 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
     setValue('total', Number(nextTotal.toFixed(2)), { shouldValidate: true });
   }, [subtotal, impuesto, setValue]);
 
+  async function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setPdfFile(null);
+      setPdfName('');
+      return;
+    }
+
+    if (file.type !== 'application/pdf') {
+      alert('El archivo debe ser un PDF');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('El archivo no puede superar los 2MB');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      const dataBase64 = await fileToBase64(file);
+      setPdfFile({
+        nombre: file.name,
+        tipo: file.type,
+        data_base64: dataBase64,
+      });
+      setPdfName(file.name);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   function submit(values) {
     onSubmit({
       ...values,
       suscripcion_id: values.suscripcion_id || null,
       numero: values.numero || undefined,
       fecha_vencimiento: values.fecha_vencimiento || null,
+      pdf: pdfFile !== null ? pdfFile : undefined,
     });
   }
 
@@ -147,6 +195,11 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
         <label>
           Vencimiento
           <input {...register('fecha_vencimiento')} type="date" />
+        </label>
+        <label className="wide-field">
+          Factura PDF (SRI)
+          <input type="file" accept="application/pdf" onChange={handleFileChange} />
+          {pdfName ? <small style={{ color: 'var(--text-muted, #6b7280)' }}>Archivo: {pdfName}</small> : null}
         </label>
       </div>
       <div className="form-actions">

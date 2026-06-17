@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const tenantService = require('./tenant.service');
+const notificacionService = require('./notificacion.service');
 
 const SUSCRIPCION_ESTADOS = ['activa', 'vencida', 'cancelada', 'suspendida'];
 
@@ -293,10 +294,71 @@ async function cancelSuscripcion(id) {
   return findSuscripcionById(id);
 }
 
+async function checkSubscriptionExpirations() {
+  const expiringSuscripciones = await pool.query(
+    `
+      SELECT
+        s.id AS suscripcion_id,
+        s.empresa_id,
+        s.fecha_fin,
+        e.nombre AS empresa_nombre,
+        p.nombre AS plan_nombre
+      FROM suscripciones s
+      INNER JOIN empresas e ON e.id = s.empresa_id
+      INNER JOIN planes p ON p.id = s.plan_id
+      WHERE s.estado = 'activa'
+        AND s.fecha_fin IS NOT NULL
+        AND s.fecha_fin >= CURRENT_DATE
+        AND s.fecha_fin <= CURRENT_DATE + INTERVAL '5 days'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM notificaciones n
+          WHERE n.empresa_id = s.empresa_id
+            AND n.tipo = 'factura'
+            AND n.creado_en > NOW() - INTERVAL '5 days'
+            AND (n.titulo LIKE '%vence%' OR n.titulo LIKE '%vencer%')
+        )
+    `
+  );
+
+  let count = 0;
+  for (const row of expiringSuscripciones.rows) {
+    const admins = await pool.query(
+      `
+        SELECT u.id
+        FROM usuarios u
+        INNER JOIN roles r ON r.id = u.rol_id
+        WHERE u.empresa_id = $1
+          AND r.codigo IN ('ADMIN_EMPRESA', 'RRHH')
+          AND u.estado = 'activo'
+      `,
+      [row.empresa_id]
+    );
+
+    const formattedDate = row.fecha_fin ? new Date(row.fecha_fin).toISOString().slice(0, 10) : '';
+    const titulo = 'Tu suscripción vence pronto';
+    const mensaje = `Su suscripción al plan "${row.plan_nombre}" de la empresa "${row.empresa_nombre}" vencerá el ${formattedDate}. Por favor, registre su pago para evitar interrupciones.`;
+
+    for (const admin of admins.rows) {
+      await notificacionService.createNotificacion({
+        empresaId: row.empresa_id,
+        usuarioId: admin.id,
+        titulo,
+        mensaje,
+        tipo: 'factura',
+      });
+      count++;
+    }
+  }
+
+  return count;
+}
+
 module.exports = {
   listSuscripciones,
   findSuscripcionById,
   createSuscripcion,
   updateSuscripcion,
   cancelSuscripcion,
+  checkSubscriptionExpirations,
 };
