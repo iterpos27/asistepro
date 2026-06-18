@@ -14,6 +14,8 @@ const {
 
 const router = Router();
 
+router.get('/cron-check', facturacionController.triggerCronCheck);
+
 router.use(authGuard);
 
 router.get('/facturas', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(listFacturasSchema), facturacionController.listFacturas);

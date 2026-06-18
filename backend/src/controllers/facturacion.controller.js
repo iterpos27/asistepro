@@ -1,4 +1,5 @@
 const facturacionService = require('../services/facturacion.service');
+const suscripcionService = require('../services/suscripcion.service');
 const { parsePagination } = require('../utils/pagination.util');
 
 function resolveEmpresaId(req) {
@@ -241,6 +242,22 @@ async function getFacturaPdf(req, res, next) {
   }
 }
 
+async function triggerCronCheck(req, res, next) {
+  try {
+    const secret = req.query.secret || req.headers['x-cron-secret'];
+    const expectedSecret = process.env.CRON_SECRET || 'asistepro-secret-default-cron-key-123';
+
+    if (secret !== expectedSecret) {
+      return res.status(401).json({ ok: false, message: 'No autorizado' });
+    }
+
+    const count = await suscripcionService.checkSubscriptionExpirations();
+    return res.json({ ok: true, message: `Verificacion completada. Notificaciones enviadas: ${count}` });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listFacturas,
   getFactura,
@@ -254,4 +271,5 @@ module.exports = {
   getPagoComprobante,
   aprobarPago,
   anularPago,
+  triggerCronCheck,
 };
