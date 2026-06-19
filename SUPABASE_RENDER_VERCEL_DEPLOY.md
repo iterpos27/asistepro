@@ -42,6 +42,28 @@ AUTH_REGISTER_RATE_LIMIT_MAX=5
 CRON_SECRET=coloca_un_secreto_largo
 ```
 
+Storage externo opcional:
+
+```env
+# Opcion 1: S3 compatible
+STORAGE_DRIVER=s3
+STORAGE_BUCKET=asistepro-files
+STORAGE_REGION=us-east-1
+STORAGE_ENDPOINT=https://s3.amazonaws.com
+STORAGE_FORCE_PATH_STYLE=false
+STORAGE_ACCESS_KEY_ID=...
+STORAGE_SECRET_ACCESS_KEY=...
+STORAGE_PUBLIC_BASE_URL=https://cdn.tudominio.com
+```
+
+```env
+# Opcion 2: Supabase Storage
+STORAGE_DRIVER=supabase
+STORAGE_BUCKET=asistepro-files
+SUPABASE_URL=https://TU_PROYECTO.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+```
+
 Variable opcional para alertas de errores `5xx`:
 
 ```env
@@ -88,6 +110,7 @@ Variable requerida en Vercel:
 
 ```env
 VITE_API_URL=https://TU_BACKEND.onrender.com/api
+VITE_VAPID_PUBLIC_KEY=clave_publica_push
 ```
 
 Despues de crear el dominio de Vercel, vuelve a Render y actualiza:
@@ -107,6 +130,9 @@ CORS_ORIGIN=https://TU_FRONTEND.vercel.app
 7. Probar empresas, empleados, horarios y marcaciones.
 8. Probar GPS/camara desde celular con HTTPS.
 9. Registrar una transferencia con comprobante y aprobarla como superadmin.
+10. Validar `/integraciones` y descargar una nomina `csv` o `xlsx`.
+11. Validar `/organizacion` con una importacion de prueba.
+12. Validar `/app-movil` y el alta de notificaciones.
 
 ## 5. Backup verificado
 

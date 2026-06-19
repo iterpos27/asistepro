@@ -7,7 +7,7 @@
     "dev": "node backend/src/server.js",
     "start": "node backend/src/database/migrate.js && node backend/src/server.js",
     "check": "node --check backend/src/server.js",
-    "test": "node --test \"backend/tests/*.test.js\"",
+    "test": "node backend/src/database/migrate.js && node --test \"backend/tests/*.test.js\"",
     "migrate": "node backend/src/database/migrate.js",
     "check-expirations": "node backend/src/scripts/check-expirations.js",
     "backup:verify": "node backend/src/scripts/verify-backup.js"

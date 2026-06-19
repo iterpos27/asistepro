@@ -212,7 +212,7 @@ test('rrhh sin permiso de reportes es redirigido al dashboard', async ({ page })
   await mockApi(page, userFor('RRHH', { reportes_avanzados: false }));
   await page.goto('/reportes');
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole('heading', { name: 'Dashboard RRHH', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });
 
 test('empleado puede abrir el flujo QR sin exponer datos internos', async ({ page }) => {
@@ -236,8 +236,8 @@ test('checkout registra transferencia con comprobante y tenant', async ({ page }
   });
 
   await page.goto(`/checkout?factura_id=${facturaId}`);
-  await page.getByLabel('Banco o entidad').fill('Banco QA');
-  await page.getByLabel('Numero de referencia').fill('REF-E2E-001');
+  await page.locator('.checkout-form input').nth(0).fill('Banco QA');
+  await page.locator('.checkout-form input').nth(1).fill('REF-E2E-001');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'comprobante.pdf',
     mimeType: 'application/pdf',

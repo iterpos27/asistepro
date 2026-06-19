@@ -2,6 +2,16 @@ const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = re
 const { Readable } = require('stream');
 
 const DRIVER = (process.env.STORAGE_DRIVER || 'database').toLowerCase();
+const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/$/, '') || null;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || null;
+
+function ensureSupabaseConfig() {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !process.env.STORAGE_BUCKET) {
+    const error = new Error('Configuracion de Supabase Storage incompleta');
+    error.statusCode = 500;
+    throw error;
+  }
+}
 
 function createS3Client() {
   return new S3Client({
@@ -32,6 +42,9 @@ async function streamToBuffer(stream) {
 }
 
 function buildPublicUrl(bucket, key) {
+  if (DRIVER === 'supabase' && SUPABASE_URL) {
+    return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`;
+  }
   const baseUrl = process.env.STORAGE_PUBLIC_BASE_URL?.replace(/\/$/, '');
   if (!baseUrl) return null;
   return `${baseUrl}/${bucket}/${encodeURIComponent(key)}`;
@@ -39,6 +52,35 @@ function buildPublicUrl(bucket, key) {
 
 async function putObject({ bucket = process.env.STORAGE_BUCKET, key, body, contentType }) {
   if (DRIVER !== 's3') {
+    if (DRIVER === 'supabase') {
+      ensureSupabaseConfig();
+      const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: SUPABASE_KEY,
+          'x-upsert': 'true',
+          'content-type': contentType || 'application/octet-stream',
+        },
+        body,
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        const error = new Error(`No se pudo subir archivo a Supabase Storage: ${detail}`);
+        error.statusCode = 500;
+        throw error;
+      }
+
+      return {
+        provider: 'supabase',
+        bucket,
+        key,
+        url: buildPublicUrl(bucket, key),
+        body: null,
+        contentType,
+      };
+    }
+
     return {
       provider: 'database',
       bucket: null,
@@ -74,6 +116,22 @@ async function putObject({ bucket = process.env.STORAGE_BUCKET, key, body, conte
 }
 
 async function getObject({ bucket = process.env.STORAGE_BUCKET, key, fallbackBody }) {
+  if (DRIVER === 'supabase' && key) {
+    ensureSupabaseConfig();
+    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`, {
+      headers: {
+        authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: SUPABASE_KEY,
+      },
+    });
+    if (!response.ok) {
+      const error = new Error('No se pudo descargar archivo desde Supabase Storage');
+      error.statusCode = 500;
+      throw error;
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   if (DRIVER !== 's3' || !key) return fallbackBody || null;
 
   const client = createS3Client();
@@ -82,6 +140,18 @@ async function getObject({ bucket = process.env.STORAGE_BUCKET, key, fallbackBod
 }
 
 async function deleteObject({ bucket = process.env.STORAGE_BUCKET, key }) {
+  if (DRIVER === 'supabase' && key) {
+    ensureSupabaseConfig();
+    await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`, {
+      method: 'DELETE',
+      headers: {
+        authorization: `Bearer ${SUPABASE_KEY}`,
+        apikey: SUPABASE_KEY,
+      },
+    });
+    return;
+  }
+
   if (DRIVER !== 's3' || !key) return;
   const client = createS3Client();
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
@@ -93,6 +163,7 @@ function getStorageStatus() {
     bucket: process.env.STORAGE_BUCKET || null,
     endpoint: process.env.STORAGE_ENDPOINT || null,
     publicBaseUrl: process.env.STORAGE_PUBLIC_BASE_URL || null,
+    supabaseUrl: DRIVER === 'supabase' ? SUPABASE_URL : null,
   };
 }
 

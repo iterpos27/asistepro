@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Play, PlugZap, Save, Trash2 } from 'lucide-react';
+import { Download, Play, PlugZap, Save, Trash2 } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import { toast } from '../../services/toastService';
@@ -26,7 +26,7 @@ export default function Integraciones() {
   const [data, setData] = useState({ items: [], ejecuciones: [], storage: null });
   const [form, setForm] = useState(initialForm);
   const [selectedId, setSelectedId] = useState('');
-  const [runPayload, setRunPayload] = useState('{\n  "mes": "2026-06"\n}');
+  const [runPayload, setRunPayload] = useState('{\n  "mes": "2026-06",\n  "plantilla": "detalle_diario",\n  "tipo_archivo": "csv"\n}');
   const [saving, setSaving] = useState(false);
 
   async function loadData() {
@@ -87,6 +87,17 @@ export default function Integraciones() {
     await loadData();
   }
 
+  async function downloadIntegration(id) {
+    const { blob, fileName } = await integracionService.downloadIntegracion(id, parseJson(runPayload));
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Archivo descargado');
+  }
+
   return (
     <>
       <PageHeader
@@ -128,6 +139,10 @@ export default function Integraciones() {
         <div className="panel">
           <PanelTitle title="Ejecucion manual" subtitle="Prueba exportes de nomina, lotes biometricos o validacion del storage configurado." />
           <textarea rows="14" value={runPayload} onChange={(event) => setRunPayload(event.target.value)} />
+          <div className="inline-hint">
+            <span>Nomina: usa `plantilla` = `detalle_diario`, `resumen_mensual` o `cliente`.</span>
+            <span>Archivo: `tipo_archivo` = `csv` o `xlsx`.</span>
+          </div>
         </div>
       </div>
 
@@ -155,13 +170,18 @@ export default function Integraciones() {
                   <td>{item.ultima_ejecucion_estado || '-'}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="icon-button" type="button" onClick={() => editItem(item)} aria-label="Editar">
+                      <button className="icon-button" type="button" onClick={() => editItem(item)} title="Editar" aria-label="Editar">
                         <PlugZap size={16} />
                       </button>
-                      <button className="icon-button" type="button" onClick={() => runIntegration(item.id)} aria-label="Ejecutar">
+                      <button className="icon-button" type="button" onClick={() => runIntegration(item.id)} title="Ejecutar" aria-label="Ejecutar">
                         <Play size={16} />
                       </button>
-                      <button className="icon-button danger" type="button" onClick={() => removeIntegration(item.id)} aria-label="Desactivar">
+                      {item.tipo === 'nomina' ? (
+                        <button className="icon-button" type="button" onClick={() => downloadIntegration(item.id)} title="Descargar" aria-label="Descargar">
+                          <Download size={16} />
+                        </button>
+                      ) : null}
+                      <button className="icon-button danger" type="button" onClick={() => removeIntegration(item.id)} title="Desactivar" aria-label="Desactivar">
                         <Trash2 size={16} />
                       </button>
                     </div>

@@ -71,8 +71,25 @@ async function run(req, res, next) {
   }
 }
 
+async function download(req, res, next) {
+  try {
+    const file = await integracionService.downloadIntegrationFile({
+      empresaId: getEmpresaId(req),
+      usuarioId: req.auth.usuario_id,
+      id: req.params.id,
+      payload: req.body,
+    });
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.fileName.replace(/"/g, '')}"`);
+    return res.send(file.buffer);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   create,
+  download,
   list,
   remove,
   run,

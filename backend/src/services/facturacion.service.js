@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { deleteObject, getObject, putObject } = require('./storage.service');
 
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
 const PAGO_METODOS = ['transferencia', 'deposito'];
@@ -100,6 +101,34 @@ function normalizeComprobante(comprobante) {
   };
 }
 
+function buildStorageKey({ empresaId, scope, entityId, fileName }) {
+  return `tenants/${empresaId}/${scope}/${entityId}/${Date.now()}-${String(fileName || 'archivo').replace(/[^a-zA-Z0-9._-]+/g, '_')}`;
+}
+
+async function uploadStoredFile({ empresaId, scope, entityId, file }) {
+  if (!file?.data?.length) {
+    return { provider: null, bucket: null, key: null, url: null };
+  }
+
+  const stored = await putObject({
+    key: buildStorageKey({ empresaId, scope, entityId, fileName: file.nombre }),
+    body: file.data,
+    contentType: file.tipo,
+  });
+
+  return {
+    provider: stored.provider,
+    bucket: stored.bucket,
+    key: stored.key,
+    url: stored.url,
+  };
+}
+
+async function deleteStoredFileIfNeeded({ bucket, key }) {
+  if (!key) return;
+  await deleteObject({ bucket, key });
+}
+
 async function getNextInvoiceNumber(client) {
   const result = await client.query("SELECT COUNT(*)::int + 1 AS next FROM facturas");
   return `FAC-${String(result.rows[0].next).padStart(6, '0')}`;
@@ -145,7 +174,11 @@ async function listFacturas({ empresaId, estado, limit = 20, offset = 0 }) {
         f.pdf_nombre,
         f.pdf_tipo,
         f.pdf_subido_en,
-        (f.pdf_data IS NOT NULL) AS tiene_pdf,
+        f.pdf_storage_provider,
+        f.pdf_storage_bucket,
+        f.pdf_storage_key,
+        f.pdf_storage_url,
+        (f.pdf_data IS NOT NULL OR f.pdf_storage_key IS NOT NULL) AS tiene_pdf,
         e.nombre AS empresa_nombre,
         COALESCE(SUM(p.monto) FILTER (WHERE p.estado = 'registrado'), 0)::numeric(10, 2) AS total_pagado,
         COUNT(*) OVER() AS total_registros
@@ -189,7 +222,11 @@ async function findFacturaById(id) {
         f.pdf_nombre,
         f.pdf_tipo,
         f.pdf_subido_en,
-        (f.pdf_data IS NOT NULL) AS tiene_pdf,
+        f.pdf_storage_provider,
+        f.pdf_storage_bucket,
+        f.pdf_storage_key,
+        f.pdf_storage_url,
+        (f.pdf_data IS NOT NULL OR f.pdf_storage_key IS NOT NULL) AS tiene_pdf,
         e.nombre AS empresa_nombre,
         COALESCE(SUM(p.monto) FILTER (WHERE p.estado = 'registrado'), 0)::numeric(10, 2) AS total_pagado
       FROM facturas f
@@ -266,6 +303,10 @@ async function updateFactura(id, payload) {
   };
 
   const pdf = payload.pdf !== undefined ? normalizeComprobante(payload.pdf) : undefined;
+  const storageMeta =
+    payload.pdf !== undefined && pdf?.data?.length
+      ? await uploadStoredFile({ empresaId: current.empresa_id, scope: 'facturas', entityId: id, file: pdf })
+      : null;
 
   await pool.query(
     `
@@ -281,7 +322,11 @@ async function updateFactura(id, payload) {
           pdf_nombre = CASE WHEN $10::boolean THEN $11::varchar ELSE pdf_nombre END,
           pdf_tipo = CASE WHEN $10::boolean THEN $12::varchar ELSE pdf_tipo END,
           pdf_data = CASE WHEN $10::boolean THEN $13::bytea ELSE pdf_data END,
-          pdf_subido_en = CASE WHEN $10::boolean THEN (CASE WHEN $13::bytea IS NULL THEN NULL ELSE NOW() END) ELSE pdf_subido_en END,
+          pdf_storage_provider = CASE WHEN $10::boolean THEN $14::varchar ELSE pdf_storage_provider END,
+          pdf_storage_bucket = CASE WHEN $10::boolean THEN $15::varchar ELSE pdf_storage_bucket END,
+          pdf_storage_key = CASE WHEN $10::boolean THEN $16::text ELSE pdf_storage_key END,
+          pdf_storage_url = CASE WHEN $10::boolean THEN $17::text ELSE pdf_storage_url END,
+          pdf_subido_en = CASE WHEN $10::boolean THEN (CASE WHEN $13::bytea IS NULL AND $16::text IS NULL THEN NULL ELSE NOW() END) ELSE pdf_subido_en END,
           actualizado_en = NOW()
       WHERE id = $1
     `,
@@ -298,9 +343,17 @@ async function updateFactura(id, payload) {
       payload.pdf !== undefined,
       pdf?.nombre || null,
       pdf?.tipo || null,
-      pdf?.data || null,
+      storageMeta?.provider ? null : pdf?.data || null,
+      storageMeta?.provider || null,
+      storageMeta?.bucket || null,
+      storageMeta?.key || null,
+      storageMeta?.url || null,
     ],
   );
+
+  if (payload.pdf !== undefined && current.pdf_storage_key && current.pdf_storage_key !== storageMeta?.key) {
+    await deleteStoredFileIfNeeded({ bucket: current.pdf_storage_bucket, key: current.pdf_storage_key });
+  }
 
   return findFacturaById(id);
 }
@@ -366,8 +419,12 @@ async function createFactura(payload) {
           pdf_nombre,
           pdf_tipo,
           pdf_data,
+          pdf_storage_provider,
+          pdf_storage_bucket,
+          pdf_storage_key,
+          pdf_storage_url,
           pdf_subido_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10, $11, $12, $13, CASE WHEN $13::bytea IS NULL THEN NULL ELSE NOW() END)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::date, CURRENT_DATE), $10, $11, $12, $13, $14, $15, $16, $17, CASE WHEN $13::bytea IS NULL AND $16::text IS NULL THEN NULL ELSE NOW() END)
         RETURNING id
       `,
       [
@@ -384,8 +441,37 @@ async function createFactura(payload) {
         pdf?.nombre || null,
         pdf?.tipo || null,
         pdf?.data || null,
+        null,
+        null,
+        null,
+        null,
       ],
     );
+
+    if (pdf?.data?.length) {
+      const storageMeta = await uploadStoredFile({
+        empresaId: payload.empresa_id,
+        scope: 'facturas',
+        entityId: result.rows[0].id,
+        file: pdf,
+      });
+
+      if (storageMeta.provider && storageMeta.key) {
+        await client.query(
+          `
+            UPDATE facturas
+            SET pdf_data = NULL,
+                pdf_storage_provider = $2,
+                pdf_storage_bucket = $3,
+                pdf_storage_key = $4,
+                pdf_storage_url = $5,
+                pdf_subido_en = NOW()
+            WHERE id = $1
+          `,
+          [result.rows[0].id, storageMeta.provider, storageMeta.bucket, storageMeta.key, storageMeta.url],
+        );
+      }
+    }
 
     await client.query('COMMIT');
 
@@ -449,8 +535,12 @@ async function registerManualPayment(payload) {
           comprobante_nombre,
           comprobante_tipo,
           comprobante_data,
+          comprobante_storage_provider,
+          comprobante_storage_bucket,
+          comprobante_storage_key,
+          comprobante_storage_url,
           comprobante_subido_en
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, NOW()), $10, $11, $12, CASE WHEN $12::bytea IS NULL THEN NULL ELSE NOW() END)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, NOW()), $10, $11, $12, $13, $14, $15, $16, CASE WHEN $12::bytea IS NULL AND $15::text IS NULL THEN NULL ELSE NOW() END)
         RETURNING *
       `,
       [
@@ -466,8 +556,37 @@ async function registerManualPayment(payload) {
         comprobante?.nombre || null,
         comprobante?.tipo || null,
         comprobante?.data || null,
+        null,
+        null,
+        null,
+        null,
       ],
     );
+
+    if (comprobante?.data?.length) {
+      const storageMeta = await uploadStoredFile({
+        empresaId: factura.empresa_id,
+        scope: 'pagos',
+        entityId: paymentResult.rows[0].id,
+        file: comprobante,
+      });
+
+      if (storageMeta.provider && storageMeta.key) {
+        await client.query(
+          `
+            UPDATE pagos
+            SET comprobante_data = NULL,
+                comprobante_storage_provider = $2,
+                comprobante_storage_bucket = $3,
+                comprobante_storage_key = $4,
+                comprobante_storage_url = $5,
+                comprobante_subido_en = NOW()
+            WHERE id = $1
+          `,
+          [paymentResult.rows[0].id, storageMeta.provider, storageMeta.bucket, storageMeta.key, storageMeta.url],
+        );
+      }
+    }
 
     await recalculateFacturaEstado(client, factura.id);
 
@@ -523,7 +642,11 @@ async function listPagos({ facturaId, empresaId, limit = 20, offset = 0 }) {
         p.comprobante_nombre,
         p.comprobante_tipo,
         p.comprobante_subido_en,
-        (p.comprobante_data IS NOT NULL) AS tiene_comprobante,
+        p.comprobante_storage_provider,
+        p.comprobante_storage_bucket,
+        p.comprobante_storage_key,
+        p.comprobante_storage_url,
+        (p.comprobante_data IS NOT NULL OR p.comprobante_storage_key IS NOT NULL) AS tiene_comprobante,
         p.creado_en,
         p.actualizado_en,
         f.numero AS factura_numero,
@@ -605,7 +728,11 @@ async function findPagoById(id) {
         p.comprobante_nombre,
         p.comprobante_tipo,
         p.comprobante_subido_en,
-        (p.comprobante_data IS NOT NULL) AS tiene_comprobante,
+        p.comprobante_storage_provider,
+        p.comprobante_storage_bucket,
+        p.comprobante_storage_key,
+        p.comprobante_storage_url,
+        (p.comprobante_data IS NOT NULL OR p.comprobante_storage_key IS NOT NULL) AS tiene_comprobante,
         p.creado_en,
         p.actualizado_en,
         f.numero AS factura_numero,
@@ -631,6 +758,10 @@ async function findPagoComprobante(id) {
         p.comprobante_nombre,
         p.comprobante_tipo,
         p.comprobante_data,
+        p.comprobante_storage_provider,
+        p.comprobante_storage_bucket,
+        p.comprobante_storage_key,
+        p.comprobante_storage_url,
         f.numero AS factura_numero,
         f.empresa_id AS factura_empresa_id
       FROM pagos p
@@ -683,7 +814,7 @@ async function anulacionPago(id, motivoAnulacion) {
 async function findFacturaPdf(id) {
   const result = await pool.query(
     `
-      SELECT id, empresa_id, pdf_nombre, pdf_tipo, pdf_data, numero
+      SELECT id, empresa_id, pdf_nombre, pdf_tipo, pdf_data, pdf_storage_provider, pdf_storage_bucket, pdf_storage_key, pdf_storage_url, numero
       FROM facturas
       WHERE id = $1
       LIMIT 1
@@ -694,6 +825,34 @@ async function findFacturaPdf(id) {
   return result.rows[0] || null;
 }
 
+async function readFacturaPdf(id) {
+  const factura = await findFacturaPdf(id);
+  if (!factura) return null;
+
+  return {
+    ...factura,
+    pdf_data: await getObject({
+      bucket: factura.pdf_storage_bucket,
+      key: factura.pdf_storage_key,
+      fallbackBody: factura.pdf_data,
+    }),
+  };
+}
+
+async function readPagoComprobante(id) {
+  const pago = await findPagoComprobante(id);
+  if (!pago) return null;
+
+  return {
+    ...pago,
+    comprobante_data: await getObject({
+      bucket: pago.comprobante_storage_bucket,
+      key: pago.comprobante_storage_key,
+      fallbackBody: pago.comprobante_data,
+    }),
+  };
+}
+
 module.exports = {
   listFacturas,
   findFacturaById,
@@ -701,10 +860,12 @@ module.exports = {
   updateFactura,
   anulacionFactura,
   findFacturaPdf,
+  readFacturaPdf,
   registerManualPayment,
   aprobarPago,
   listPagos,
   findPagoById,
   findPagoComprobante,
+  readPagoComprobante,
   anulacionPago,
 };

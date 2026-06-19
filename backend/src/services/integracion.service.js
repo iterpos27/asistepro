@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const ExcelJS = require('exceljs');
 
 const { pool } = require('../config/database');
 const laboralService = require('./laboral.service');
@@ -7,6 +8,7 @@ const { getStorageStatus } = require('./storage.service');
 const INTEGRATION_TYPES = ['nomina', 'biometrico', 'storage'];
 const INTEGRATION_STATES = ['activa', 'inactiva', 'error'];
 const MARK_TYPES = ['entrada', 'salida'];
+const NOMINA_PLANTILLAS = ['detalle_diario', 'resumen_mensual', 'cliente'];
 
 function hashApiKey(value) {
   if (!value) return null;
@@ -274,19 +276,180 @@ async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
 async function exportNomina({ empresaId, usuarioId, integracion, payload }) {
   const mes = payload?.mes || new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
   const calculo = await laboralService.getCalculo({ empresaId, mes });
-  const rows = calculo.items.map((item) => ({
+  const rows = buildNominaRows({ calculo, integracion, payload, mes });
+  const resumen = { mes, filas: rows.length };
+  await logExecution({ integracionId: integracion.id, empresaId, usuarioId, accion: 'exportar_nomina', estado: 'ok', resumen });
+  return { resumen, items: rows };
+}
+
+function groupMonthlyRows(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = item.empleado_codigo;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        codigo: item.empleado_codigo,
+        nombre: item.empleado_nombre,
+        jornadas: 0,
+        minutos_ordinarios: 0,
+        minutos_extra: 0,
+        minutos_atraso: 0,
+        ausencias: 0,
+        justificaciones: 0,
+      });
+    }
+    const current = groups.get(key);
+    current.jornadas += 1;
+    current.minutos_ordinarios += Number(item.minutos_ordinarios || 0);
+    current.minutos_extra += Number(item.minutos_extra || 0);
+    current.minutos_atraso += Number(item.minutos_atraso || 0);
+    if (item.estado === 'ausente') current.ausencias += 1;
+    if (item.estado === 'justificada') current.justificaciones += 1;
+  }
+  return [...groups.values()];
+}
+
+function getNominaColumns({ integracion, payload, sampleRows }) {
+  const configuracion = integracion.configuracion || {};
+  const plantilla = payload?.plantilla || configuracion.nomina_plantilla || 'detalle_diario';
+
+  if (!NOMINA_PLANTILLAS.includes(plantilla)) {
+    const error = new Error('Plantilla de nomina invalida');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (plantilla === 'resumen_mensual') {
+    return {
+      plantilla,
+      columns: [
+        { key: 'codigo', label: 'Codigo' },
+        { key: 'nombre', label: 'Nombre' },
+        { key: 'jornadas', label: 'Jornadas' },
+        { key: 'minutos_ordinarios', label: 'Minutos ordinarios' },
+        { key: 'minutos_extra', label: 'Minutos extra' },
+        { key: 'minutos_atraso', label: 'Minutos atraso' },
+        { key: 'ausencias', label: 'Ausencias' },
+        { key: 'justificaciones', label: 'Justificaciones' },
+      ],
+    };
+  }
+
+  if (plantilla === 'cliente') {
+    const configuredColumns = Array.isArray(configuracion.nomina_columnas)
+      ? configuracion.nomina_columnas
+      : [];
+    const availableKeys = new Set(sampleRows.flatMap((row) => Object.keys(row)));
+    const columns = configuredColumns
+      .filter((column) => column?.key && availableKeys.has(column.key))
+      .map((column) => ({ key: column.key, label: column.label || column.key }));
+    if (!columns.length) {
+      const error = new Error('La integracion no tiene columnas configuradas para la plantilla del cliente');
+      error.statusCode = 400;
+      throw error;
+    }
+    return { plantilla, columns };
+  }
+
+  return {
+    plantilla,
+    columns: [
+      { key: 'codigo', label: 'Codigo' },
+      { key: 'nombre', label: 'Nombre' },
+      { key: 'fecha', label: 'Fecha' },
+      { key: 'entrada', label: 'Entrada' },
+      { key: 'salida', label: 'Salida' },
+      { key: 'minutos_ordinarios', label: 'Minutos ordinarios' },
+      { key: 'minutos_extra', label: 'Minutos extra' },
+      { key: 'minutos_atraso', label: 'Minutos atraso' },
+      { key: 'estado', label: 'Estado' },
+      { key: 'justificacion', label: 'Justificacion' },
+    ],
+  };
+}
+
+function buildNominaRows({ calculo, integracion, payload, mes }) {
+  const detalleRows = calculo.items.map((item) => ({
     codigo: item.empleado_codigo,
     nombre: item.empleado_nombre,
     fecha: item.fecha,
+    entrada: item.entrada,
+    salida: item.salida,
     minutos_ordinarios: item.minutos_ordinarios,
     minutos_extra: item.minutos_extra,
     minutos_atraso: item.minutos_atraso,
     estado: item.estado,
+    justificacion: item.justificacion,
+    mes,
     proveedor: integracion.proveedor,
   }));
-  const resumen = { mes, filas: rows.length };
-  await logExecution({ integracionId: integracion.id, empresaId, usuarioId, accion: 'exportar_nomina', estado: 'ok', resumen });
-  return { resumen, items: rows };
+
+  const monthlyRows = groupMonthlyRows(calculo.items).map((item) => ({
+    ...item,
+    mes,
+    proveedor: integracion.proveedor,
+  }));
+
+  const { plantilla } = getNominaColumns({
+    integracion,
+    payload,
+    sampleRows: monthlyRows.length ? monthlyRows : detalleRows,
+  });
+
+  return plantilla === 'resumen_mensual' ? monthlyRows : detalleRows;
+}
+
+function formatCell(value) {
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+function toCsv({ rows, columns, delimiter = ',' }) {
+  const escapeCell = (value) => `"${formatCell(value).replace(/"/g, '""')}"`;
+  return [columns.map((column) => escapeCell(column.label)).join(delimiter)]
+    .concat(rows.map((row) => columns.map((column) => escapeCell(row[column.key])).join(delimiter)))
+    .join('\n');
+}
+
+async function toXlsxBuffer({ rows, columns, sheetName = 'Nomina' }) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(sheetName);
+  sheet.columns = columns.map((column) => ({ header: column.label, key: column.key, width: Math.max(14, column.label.length + 2) }));
+  rows.forEach((row) => sheet.addRow(row));
+  return workbook.xlsx.writeBuffer();
+}
+
+async function exportNominaFile({ empresaId, usuarioId, integracion, payload }) {
+  const mes = payload?.mes || new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
+  const calculo = await laboralService.getCalculo({ empresaId, mes });
+  const rows = buildNominaRows({ calculo, integracion, payload, mes });
+  const { plantilla, columns } = getNominaColumns({
+    integracion,
+    payload,
+    sampleRows: rows,
+  });
+  const fileType = payload?.tipo_archivo === 'xlsx' ? 'xlsx' : 'csv';
+  const fileName = `nomina-${integracion.proveedor}-${plantilla}-${mes}.${fileType}`;
+  const resumen = { mes, filas: rows.length, plantilla, tipo_archivo: fileType };
+  await logExecution({ integracionId: integracion.id, empresaId, usuarioId, accion: 'descargar_nomina', estado: 'ok', resumen });
+
+  if (fileType === 'xlsx') {
+    return {
+      fileName,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from(await toXlsxBuffer({ rows, columns, sheetName: `Nomina ${mes}` })),
+    };
+  }
+
+  return {
+    fileName,
+    contentType: 'text/csv; charset=utf-8',
+    buffer: Buffer.from(toCsv({
+      rows,
+      columns,
+      delimiter: integracion.configuracion?.nomina_delimitador || ',',
+    }), 'utf8'),
+  };
 }
 
 async function testStorage({ empresaId, usuarioId, integracion }) {
@@ -312,8 +475,26 @@ async function runIntegration({ empresaId, usuarioId, id, payload }) {
   return testStorage({ empresaId, usuarioId, integracion, payload });
 }
 
+async function downloadIntegrationFile({ empresaId, usuarioId, id, payload }) {
+  const integracion = await findIntegracion(empresaId, id);
+  if (!integracion) {
+    const error = new Error('Integracion no encontrada');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (integracion.tipo === 'nomina') {
+    return exportNominaFile({ empresaId, usuarioId, integracion, payload });
+  }
+
+  const error = new Error('La integracion no soporta exportacion de archivo');
+  error.statusCode = 400;
+  throw error;
+}
+
 module.exports = {
   deactivateIntegracion,
+  downloadIntegrationFile,
   findIntegracion,
   listIntegraciones,
   runIntegration,

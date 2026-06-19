@@ -154,7 +154,7 @@ async function getPago(req, res, next) {
 
 async function getPagoComprobante(req, res, next) {
   try {
-    const comprobante = await facturacionService.findPagoComprobante(req.params.id);
+    const comprobante = await facturacionService.readPagoComprobante(req.params.id);
 
     if (!comprobante) {
       return res.status(404).json({ ok: false, message: 'Pago no encontrado' });
@@ -218,7 +218,7 @@ async function anularPago(req, res, next) {
 
 async function getFacturaPdf(req, res, next) {
   try {
-    const factura = await facturacionService.findFacturaPdf(req.params.id);
+    const factura = await facturacionService.readFacturaPdf(req.params.id);
 
     if (!factura) {
       return res.status(404).json({ ok: false, message: 'Factura no encontrada' });

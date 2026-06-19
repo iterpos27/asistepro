@@ -30,6 +30,7 @@ const migrations = [
   '023_limpieza_placeholders.sql',
   '024_workflows_closures_granular_roles.sql',
   '025_platform_expansion.sql',
+  '026_external_storage_files.sql',
 ];
 
 async function runMigrations() {

@@ -12,6 +12,8 @@ const integrationBodyBase = z.object({
 
 const runIntegrationBody = z.object({
   mes: z.string().trim().optional(),
+  plantilla: z.enum(['detalle_diario', 'resumen_mensual', 'cliente']).optional(),
+  tipo_archivo: z.enum(['csv', 'xlsx']).optional(),
   marcaciones: z.array(z.object({
     empleado_codigo: z.string().trim().min(1).max(50),
     tipo: z.enum(['entrada', 'salida']),

@@ -25,5 +25,6 @@ router.post('/', permissionGuard('integraciones', 'crear'), validateSchema(creat
 router.put('/:id', permissionGuard('integraciones', 'editar'), validateSchema(updateIntegrationSchema), integracionController.update);
 router.delete('/:id', permissionGuard('integraciones', 'editar'), validateSchema(idParamSchema), integracionController.remove);
 router.post('/:id/run', permissionGuard('integraciones', 'exportar'), validateSchema(runIntegrationSchema), integracionController.run);
+router.post('/:id/download', permissionGuard('integraciones', 'exportar'), validateSchema(runIntegrationSchema), integracionController.download);
 
 module.exports = router;
