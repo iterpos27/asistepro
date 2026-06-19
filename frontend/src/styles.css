@@ -1050,13 +1050,15 @@ td {
 
 .search-box svg {
   position: absolute;
-  left: 12px;
+  top: 50%;
+  left: 14px;
   color: #94a3b8;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
 .search-box input {
-  padding-left: 36px !important;
+  padding-left: 40px !important;
 }
 
 .header-actions select,
