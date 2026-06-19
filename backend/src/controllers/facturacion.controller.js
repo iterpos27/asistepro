@@ -258,6 +258,35 @@ async function triggerCronCheck(req, res, next) {
   }
 }
 
+async function checkoutSimulado(req, res, next) {
+  try {
+    const factura = await facturacionService.findFacturaById(req.body?.factura_id);
+
+    if (!factura) {
+      return res.status(404).json({ ok: false, message: 'Factura no encontrada' });
+    }
+
+    if (!canAccessEmpresa(req, factura.empresa_id)) {
+      return res.status(403).json({ ok: false, message: 'No puede pagar esta factura' });
+    }
+
+    if (factura.estado === 'pagada') {
+      return res.status(400).json({ ok: false, message: 'La factura ya esta pagada' });
+    }
+
+    const result = await facturacionService.checkoutSimulado({
+      factura_id: factura.id,
+      empresa_id: factura.empresa_id,
+      banco: req.body?.banco || 'Stripe (Simulado)',
+      monto: Number(factura.total),
+    });
+
+    return res.status(201).json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listFacturas,
   getFactura,
@@ -272,4 +301,5 @@ module.exports = {
   aprobarPago,
   anularPago,
   triggerCronCheck,
+  checkoutSimulado,
 };

@@ -241,6 +241,171 @@ async function refresh(refreshToken) {
   };
 }
 
+async function registerTenant(payload) {
+  // 1. Check if email is already in use
+  const existingUser = await pool.query(
+    'SELECT id FROM usuarios WHERE LOWER(email) = LOWER($1) LIMIT 1',
+    [payload.admin_email.trim().toLowerCase()]
+  );
+  if (existingUser.rows.length) {
+    const error = new Error('El email de administrador ya se encuentra registrado');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 2. Fetch the plan
+  const planResult = await pool.query(
+    'SELECT * FROM planes WHERE id = $1 AND activo = TRUE LIMIT 1',
+    [payload.plan_id]
+  );
+  if (!planResult.rows.length) {
+    const error = new Error('El plan seleccionado no existe o no esta activo');
+    error.statusCode = 400;
+    throw error;
+  }
+  const plan = planResult.rows[0];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 3. Insert Empresa
+    const empresaRes = await client.query(
+      `
+        INSERT INTO empresas (
+          plan_id,
+          nombre,
+          identificacion_fiscal,
+          email,
+          telefono,
+          direccion,
+          estado
+        ) VALUES ($1, $2, $3, $4, $5, $6, 'activa')
+        RETURNING *
+      `,
+      [
+        plan.id,
+        payload.nombre.trim(),
+        payload.identificacion_fiscal.trim(),
+        payload.email.trim().toLowerCase(),
+        payload.telefono?.trim() || null,
+        payload.direccion?.trim() || null,
+      ]
+    );
+    const empresa = empresaRes.rows[0];
+
+    // 4. Retrieve ADMIN_EMPRESA role ID
+    const rolRes = await client.query("SELECT id FROM roles WHERE codigo = 'ADMIN_EMPRESA' LIMIT 1");
+    if (!rolRes.rows.length) {
+      const error = new Error('No se encontro el rol ADMIN_EMPRESA en el sistema');
+      error.statusCode = 500;
+      throw error;
+    }
+    const rolId = rolRes.rows[0].id;
+
+    // 5. Hash password and insert Admin User
+    const passwordHash = await bcrypt.hash(payload.admin_password, 10);
+    const userRes = await client.query(
+      `
+        INSERT INTO usuarios (
+          empresa_id,
+          rol_id,
+          nombre,
+          apellido,
+          email,
+          password_hash,
+          telefono,
+          estado
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')
+        RETURNING *
+      `,
+      [
+        empresa.id,
+        rolId,
+        payload.admin_nombre.trim(),
+        payload.admin_apellido.trim(),
+        payload.admin_email.trim().toLowerCase(),
+        passwordHash,
+        payload.admin_telefono?.trim() || payload.telefono || null,
+      ]
+    );
+    const user = userRes.rows[0];
+
+    // 6. Create Suscripcion (active, start date today, end date today + 30 days)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const offset = end.getTimezoneOffset();
+    const localEnd = new Date(end.getTime() - offset * 60 * 1000);
+    const endStr = localEnd.toISOString().slice(0, 10);
+
+    const subRes = await client.query(
+      `
+        INSERT INTO suscripciones (
+          empresa_id,
+          plan_id,
+          estado,
+          fecha_inicio,
+          fecha_fin,
+          monto_mensual
+        ) VALUES ($1, $2, 'activa', $3, $4, $5)
+        RETURNING *
+      `,
+      [
+        empresa.id,
+        plan.id,
+        todayStr,
+        endStr,
+        plan.precio_mensual,
+      ]
+    );
+    const subscription = subRes.rows[0];
+
+    // 7. Create Invoice (pendiente, total = plan amount, number = FAC-REG-...)
+    const invoiceNum = 'FAC-REG-' + Date.now();
+    const invoiceRes = await client.query(
+      `
+        INSERT INTO facturas (
+          empresa_id,
+          suscripcion_id,
+          numero,
+          concepto,
+          subtotal,
+          impuesto,
+          total,
+          estado,
+          fecha_emision,
+          fecha_vencimiento
+        ) VALUES ($1, $2, $3, $4, $5, 0, $5, 'pendiente', $6, $7)
+        RETURNING *
+      `,
+      [
+        empresa.id,
+        subscription.id,
+        invoiceNum,
+        `Suscripcion mensual - Plan ${plan.nombre}`,
+        plan.precio_mensual,
+        todayStr,
+        endStr,
+      ]
+    );
+    const invoice = invoiceRes.rows[0];
+
+    await client.query('COMMIT');
+
+    const fullUser = await findUserById(user.id);
+    return {
+      user: sanitizeUser(fullUser),
+      tokens: await issueTokens(fullUser),
+      factura_id: invoice.id,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   login,
   refresh,
@@ -248,4 +413,5 @@ module.exports = {
   changePassword,
   findUserById,
   sanitizeUser,
+  registerTenant,
 };

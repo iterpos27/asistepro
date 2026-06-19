@@ -681,6 +681,66 @@ async function findFacturaPdf(id) {
   return result.rows[0] || null;
 }
 
+async function checkoutSimulado({ factura_id, empresa_id, banco, monto }) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const referencia = 'CARD-SIM-' + Date.now();
+    const nota = 'Pago simulado con tarjeta (SaaS checkout)';
+    const resultPago = await client.query(
+      `
+        INSERT INTO pagos (
+          empresa_id,
+          factura_id,
+          monto,
+          metodo,
+          referencia,
+          nota,
+          pagado_en,
+          estado,
+          banco
+        ) VALUES ($1, $2, $3, 'tarjeta', $4, $5, NOW(), 'registrado', $6)
+        RETURNING *
+      `,
+      [empresa_id, factura_id, monto, referencia, nota, banco]
+    );
+    const pagoId = resultPago.rows[0].id;
+
+    await recalculateFacturaEstado(client, factura_id);
+
+    const facturaRes = await client.query(
+      'SELECT suscripcion_id FROM facturas WHERE id = $1 LIMIT 1',
+      [factura_id]
+    );
+    const suscripcionId = facturaRes.rows[0]?.suscripcion_id;
+    if (suscripcionId) {
+      await client.query(
+        `
+          UPDATE suscripciones
+          SET estado = 'activa',
+              actualizado_en = NOW()
+          WHERE id = $1
+        `,
+        [suscripcionId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      pago: await findPagoById(pagoId),
+      factura: await findFacturaById(factura_id),
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listFacturas,
   findFacturaById,
@@ -694,4 +754,5 @@ module.exports = {
   findPagoById,
   findPagoComprobante,
   anulacionPago,
+  checkoutSimulado,
 };

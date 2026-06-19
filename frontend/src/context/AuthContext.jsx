@@ -83,6 +83,20 @@ export function AuthProvider({ children }) {
     return profile;
   }
 
+  async function registerTenant(payload) {
+    const result = await authService.registerTenant(payload);
+    saveSession({
+      accessToken: result.tokens.accessToken,
+      refreshToken: result.tokens.refreshToken,
+      csrfToken: result.session?.csrfToken,
+      expiresInMs: result.session?.expiresInMs,
+      user: result.user,
+    });
+    setUser(result.user);
+    setIsAuthenticated(true);
+    return result;
+  }
+
   const value = useMemo(
     () => ({
       user,
@@ -92,6 +106,7 @@ export function AuthProvider({ children }) {
       login,
       logout,
       refreshProfile,
+      registerTenant,
     }),
     [bootstrapping, isAuthenticated, user],
   );

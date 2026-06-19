@@ -75,3 +75,13 @@ export async function getFacturaPdf(id) {
   });
   return response.data;
 }
+
+export async function getFactura(id) {
+  const response = await api.get(`/facturacion/facturas/${id}`);
+  return response.data.data;
+}
+
+export async function checkoutSimulado(payload) {
+  const response = await api.post('/facturacion/checkout-simulado', payload);
+  return response.data.data;
+}

@@ -23,3 +23,8 @@ export async function changePassword(payload) {
   const response = await api.put('/auth/password', payload);
   return response.data;
 }
+
+export async function registerTenant(payload) {
+  const response = await api.post('/auth/register-tenant', payload);
+  return response.data.data;
+}

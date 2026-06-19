@@ -4,6 +4,8 @@ import { privateRoutes } from '../config/routes';
 import AuthLayout from '../layouts/AuthLayout';
 import DashboardLayout from '../layouts/DashboardLayout';
 import Login from '../pages/auth/Login';
+import Register from '../pages/auth/Register';
+import Checkout from '../pages/auth/Checkout';
 import { getDefaultRoute } from '../utils/roles';
 import ProtectedRoute from './ProtectedRoute';
 
@@ -34,6 +36,28 @@ export default function AppRoutes({ auth }) {
               <Login />
             </AuthLayout>
           )
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          auth.bootstrapping || auth.isAuthenticated ? (
+            <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
+          ) : (
+            <AuthLayout>
+              <Register />
+            </AuthLayout>
+          )
+        }
+      />
+      <Route
+        path="/checkout"
+        element={
+          <ProtectedRoute auth={auth}>
+            <AuthLayout>
+              <Checkout />
+            </AuthLayout>
+          </ProtectedRoute>
         }
       />
       <Route

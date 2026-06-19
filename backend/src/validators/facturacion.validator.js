@@ -74,6 +74,15 @@ const pagoManualSchema = z.object({
   params: emptyParams,
 });
 
+const checkoutSimuladoSchema = z.object({
+  body: z.object({
+    factura_id: uuid('factura_id'),
+    banco: z.string().trim().max(100).optional().nullable(),
+  }),
+  query: z.object({}).passthrough(),
+  params: emptyParams,
+});
+
 module.exports = {
   createFacturaSchema,
   idParamSchema,
@@ -81,4 +90,5 @@ module.exports = {
   listPagosSchema,
   pagoManualSchema,
   updateFacturaSchema,
+  checkoutSimuladoSchema,
 };

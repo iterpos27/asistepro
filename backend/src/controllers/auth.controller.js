@@ -176,10 +176,35 @@ async function changePassword(req, res, next) {
   }
 }
 
+async function registerTenant(req, res, next) {
+  try {
+    const result = await authService.registerTenant(req.body);
+    const csrfToken = setRefreshCookie(res, result.tokens.refreshToken);
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        user: result.user,
+        session: {
+          csrfToken,
+          expiresInMs: REFRESH_COOKIE_MAX_AGE,
+        },
+        tokens: {
+          accessToken: result.tokens.accessToken,
+        },
+        factura_id: result.factura_id,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   login,
   refresh,
   logout,
   me,
   changePassword,
+  registerTenant,
 };

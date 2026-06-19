@@ -21,3 +21,8 @@ export async function deletePlan(id) {
   const response = await api.delete(`/planes/${id}`);
   return response.data.data;
 }
+
+export async function listPublicPlanes() {
+  const response = await api.get('/planes/public');
+  return response.data.data;
+}

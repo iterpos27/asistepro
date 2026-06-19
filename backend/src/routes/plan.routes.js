@@ -6,6 +6,7 @@ const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
 const router = Router();
 
 router.get('/', authGuard, planController.listPlanes);
+router.get('/public', planController.listPlanes);
 router.get('/:id', authGuard, planController.getPlan);
 router.post('/', authGuard, roleGuard(['SUPER_ADMIN']), planController.createPlan);
 router.put('/:id', authGuard, roleGuard(['SUPER_ADMIN']), planController.updatePlan);
