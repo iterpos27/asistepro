@@ -61,6 +61,26 @@ function buildBranchActivity(rows) {
   return Object.entries(grouped).map(([name, value]) => ({ name, value }));
 }
 
+function buildSubscriptionsByPlan(rows) {
+  const grouped = rows.reduce((summary, row) => {
+    const name = row.plan_nombre || 'Sin plan';
+    summary[name] = (summary[name] || 0) + 1;
+    return summary;
+  }, {});
+
+  return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+}
+
+function buildPaymentsByMethod(rows) {
+  const grouped = rows.reduce((summary, row) => {
+    const name = row.metodo || 'Otro';
+    summary[name] = (summary[name] || 0) + Number(row.monto || 0);
+    return summary;
+  }, {});
+
+  return Object.entries(grouped).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
+}
+
 export default function Dashboard() {
   const { user } = useAuthContext();
   const role = user?.rol || ROLES.EMPLEADO;
@@ -89,6 +109,8 @@ export default function Dashboard() {
   const pagosTotal = getRows(pagos.data).reduce((total, item) => total + Number(item.monto || 0), 0);
   const monthlyAttendance = buildMonthlyAttendance(mensual.data.items || []);
   const branchActivity = buildBranchActivity(getRows(marcaciones.data));
+  const subscriptionsByPlan = buildSubscriptionsByPlan(getRows(suscripciones.data));
+  const paymentsByMethod = buildPaymentsByMethod(getRows(pagos.data));
 
   return (
     <>
@@ -105,6 +127,20 @@ export default function Dashboard() {
             <MetricCard label="Planes activos" value={Array.isArray(planes.data) ? planes.data.filter((plan) => plan.activo).length : 0} icon={CreditCard} tone="success" />
             <MetricCard label="Suscripciones" value={getTotal(suscripciones.data)} icon={UserCheck} tone="accent" />
             <MetricCard label="Pagos" value={money(pagosTotal || invoiceTotal)} icon={BarChart3} tone="warning" />
+          </section>
+          <section className="charts-grid">
+            <div className="panel">
+              <PanelTitle title="Suscripciones por Plan" subtitle="Distribución actual de planes" />
+              <Suspense fallback={<ChartFallback height={240} />}>
+                <DashboardChart type="pie" data={subscriptionsByPlan} />
+              </Suspense>
+            </div>
+            <div className="panel">
+              <PanelTitle title="Ingresos por Método" subtitle="Total recaudado por medio de pago" />
+              <Suspense fallback={<ChartFallback height={240} />}>
+                <DashboardChart type="bar" data={paymentsByMethod} />
+              </Suspense>
+            </div>
           </section>
           <section className="dashboard-grid">
             <DataPanel title="Empresas recientes" rows={getRows(empresas.data)} columns={['nombre', 'estado', 'email']} />
@@ -145,6 +181,12 @@ export default function Dashboard() {
             <MetricCard label="Rechazadas mes" value={mensual.data.resumen?.rechazadas || 0} icon={Users} tone="accent" />
           </section>
           <section className="dashboard-grid">
+            <div className="panel wide">
+              <PanelTitle title="Asistencia mensual" subtitle="Resumen operativo de marcaciones y novedades" />
+              <Suspense fallback={<ChartFallback height={280} />}>
+                <DashboardChart type="monthly" data={monthlyAttendance} />
+              </Suspense>
+            </div>
             <DataPanel title="Marcaciones recientes" rows={getRows(marcaciones.data)} columns={['empleado_codigo', 'sucursal_nombre', 'tipo', 'estado', 'marcado_en']} />
             <DataPanel title="Novedades recientes" rows={getRows(novedades.data)} columns={['empleado_codigo', 'motivo_novedad', 'sucursal_nombre']} />
           </section>
