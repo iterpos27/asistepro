@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ban, CreditCard, Edit, FileText, Plus, Receipt, RotateCcw } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import MetricCard from '../../components/cards/MetricCard';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
@@ -354,9 +354,14 @@ export default function Facturas({ defaultTab = 'facturas' }) {
                               <FileText size={16} />
                             </button>
                           ) : null}
-                          <button className="icon-button" type="button" onClick={() => selectFacturaForPayments(factura)} aria-label="Ver pagos">
+                          <button className="icon-button" type="button" onClick={() => selectFacturaForPayments(factura)} title="Historial de Pagos" aria-label="Ver pagos">
                             <CreditCard size={16} />
                           </button>
+                          {factura.estado === 'pendiente' ? (
+                            <Link to={`/checkout?factura_id=${factura.id}`} className="icon-button text-success" title="Pagar Factura (Checkout)" aria-label="Pagar factura">
+                              <Receipt size={16} />
+                            </Link>
+                          ) : null}
                           {isSuperAdmin && factura.estado !== 'anulada' ? (
                             <>
                               <button className="icon-button" type="button" onClick={() => openEditForm(factura)} aria-label="Editar factura">

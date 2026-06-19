@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -96,6 +96,10 @@ export default function Login() {
           <button className="primary-button" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Validando...' : 'Entrar'}
           </button>
+          
+          <div className="login-footer-text" style={{ marginTop: '20px', textAlign: 'center', fontSize: '13.5px', color: '#64748b' }}>
+            ¿No tienes cuenta? <Link to="/register" style={{ color: '#16a34a', fontWeight: '700', textDecoration: 'none' }}>Regístrate aquí</Link>
+          </div>
         </form>
       </section>
     </main>

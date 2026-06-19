@@ -36,7 +36,7 @@ export default function Checkout() {
     name: '',
     expiry: '',
     cvc: '',
-    banco: 'Stripe (Simulado)'
+    banco: 'Stripe (Internacional)'
   });
 
   // Transfer Form State
@@ -430,7 +430,7 @@ export default function Checkout() {
                       value={cardData.banco} 
                       onChange={handleCardInputChange}
                     >
-                      <option value="Stripe (Simulado)">Stripe Gateway</option>
+                      <option value="Stripe (Internacional)">Stripe (Internacional)</option>
                       <option value="PayPhone (Simulado)">PayPhone Ecuador</option>
                       <option value="Banco Guayaquil (Simulado)">Banco Guayaquil</option>
                       <option value="Banco Pichincha (Simulado)">Banco Pichincha</option>
