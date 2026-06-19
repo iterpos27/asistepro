@@ -32,7 +32,16 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: '4mb' }));
+app.use(
+  express.json({
+    limit: '4mb',
+    verify: (req, res, buf) => {
+      if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+        req.rawBody = buf;
+      }
+    }
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 app.use(
   rateLimit({

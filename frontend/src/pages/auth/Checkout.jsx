@@ -13,7 +13,7 @@ import {
   ChevronRight,
   AlertTriangle
 } from 'lucide-react';
-import { getFactura, checkoutSimulado, registerManualPayment } from '../../services/facturacionService';
+import { getFactura, checkoutSimulado, registerManualPayment, createStripeSession } from '../../services/facturacionService';
 import { toast } from '../../services/toastService';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -47,13 +47,30 @@ export default function Checkout() {
   });
   const [comprobanteFile, setComprobanteFile] = useState(null);
 
+  const statusParam = searchParams.get('status');
+ 
   useEffect(() => {
     if (!facturaId) {
       toast.error('Factura no especificada.');
       navigate('/login');
       return;
     }
-
+ 
+    if (statusParam === 'success') {
+      toast.success('¡Pago completado con Stripe! Procesando activación...');
+      refreshProfile().then(() => {
+        setSuccessType('card');
+        setPaymentSuccess(true);
+      });
+      getFactura(facturaId).then(data => setFactura(data));
+      setLoading(false);
+      return;
+    }
+ 
+    if (statusParam === 'cancel') {
+      toast.warning('Pago cancelado en Stripe.');
+    }
+ 
     getFactura(facturaId)
       .then((data) => {
         setFactura(data);
@@ -69,7 +86,7 @@ export default function Checkout() {
       .finally(() => {
         setLoading(false);
       });
-  }, [facturaId, navigate]);
+  }, [facturaId, statusParam, navigate]);
 
   const handleCardInputChange = (e) => {
     let { name, value } = e.target;
@@ -112,11 +129,30 @@ export default function Checkout() {
 
   const handleCardSubmit = async (e) => {
     e.preventDefault();
+ 
+    if (cardData.banco === 'Stripe (Internacional)') {
+      setIsSubmitting(true);
+      try {
+        const session = await createStripeSession(factura.id);
+        if (session && session.url) {
+          window.location.href = session.url;
+        } else {
+          toast.error('No se recibió la URL del checkout de Stripe.');
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.message || 'Error al conectar con Stripe.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+ 
     if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvc) {
       toast.warning('Por favor llene todos los campos de la tarjeta.');
       return;
     }
-
+ 
     setIsSubmitting(true);
     try {
       await checkoutSimulado({
@@ -343,88 +379,106 @@ export default function Checkout() {
             {activeTab === 'card' && (
               <form onSubmit={handleCardSubmit} className="checkout-form">
                 <div className="payment-method-desc">
-                  <h3>Pago Simulado con Tarjeta</h3>
-                  <p>Ingrese cualquier número de tarjeta para simular una pasarela de pago (Stripe/PayPhone) aprobada automáticamente.</p>
+                  <h3>{cardData.banco === 'Stripe (Internacional)' ? 'Pago con Stripe Internacional' : 'Pago Simulado con Tarjeta'}</h3>
+                  <p>
+                    {cardData.banco === 'Stripe (Internacional)'
+                      ? 'Procese su pago con tarjetas internacionales de crédito/débito de forma 100% segura.'
+                      : 'Ingrese cualquier número de tarjeta para simular una pasarela de pago (Stripe/PayPhone) aprobada automáticamente.'}
+                  </p>
                 </div>
-
-                {/* Simulated Credit Card Visual */}
-                <div className="visual-card-mockup">
-                  <div className="card-mockup-chip" />
-                  <div className="card-mockup-number">
-                    {cardData.number || '•••• •••• •••• ••••'}
-                  </div>
-                  <div className="card-mockup-footer">
-                    <div className="card-holder">
-                      <span className="card-label">TITULAR</span>
-                      <span className="card-value">{cardData.name.toUpperCase() || 'NOMBRE APELLIDO'}</span>
-                    </div>
-                    <div className="card-expiry">
-                      <span className="card-label">VENCE</span>
-                      <span className="card-value">{cardData.expiry || 'MM/YY'}</span>
+ 
+                {cardData.banco === 'Stripe (Internacional)' ? (
+                  <div className="info-banner" style={{ margin: '24px 0', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <ShieldCheck className="text-success" size={24} style={{ flexShrink: 0 }} />
+                    <div>
+                      <h4 style={{ margin: '0 0 4px', fontWeight: '700', color: '#0f172a' }}>Seguridad Garantizada</h4>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: '1.4' }}>
+                        Al continuar, te redirigiremos de forma segura al checkout oficial de Stripe. No almacenamos los datos de tu tarjeta en nuestros servidores.
+                      </p>
                     </div>
                   </div>
-                </div>
-
+                ) : (
+                  <>
+                    {/* Simulated Credit Card Visual */}
+                    <div className="visual-card-mockup">
+                      <div className="card-mockup-chip" />
+                      <div className="card-mockup-number">
+                        {cardData.number || '•••• •••• •••• ••••'}
+                      </div>
+                      <div className="card-mockup-footer">
+                        <div className="card-holder">
+                          <span className="card-label">TITULAR</span>
+                          <span className="card-value">{cardData.name.toUpperCase() || 'NOMBRE APELLIDO'}</span>
+                        </div>
+                        <div className="card-expiry">
+                          <span className="card-label">VENCE</span>
+                          <span className="card-value">{cardData.expiry || 'MM/YY'}</span>
+                        </div>
+                      </div>
+                    </div>
+ 
+                    <div className="form-group">
+                      <label>
+                        <span>Nombre en la Tarjeta</span>
+                        <input 
+                          type="text" 
+                          name="name" 
+                          placeholder="Ej. Juan Pérez" 
+                          value={cardData.name}
+                          onChange={handleCardInputChange}
+                          required 
+                        />
+                      </label>
+                    </div>
+ 
+                    <div className="form-group">
+                      <label>
+                        <span>Número de Tarjeta</span>
+                        <input 
+                          type="text" 
+                          name="number" 
+                          placeholder="4000 1234 5678 9010" 
+                          value={cardData.number}
+                          onChange={handleCardInputChange}
+                          required 
+                        />
+                      </label>
+                    </div>
+ 
+                    <div className="form-row-2col">
+                      <div className="form-group">
+                        <label>
+                          <span>Vencimiento</span>
+                          <input 
+                            type="text" 
+                            name="expiry" 
+                            placeholder="MM/YY" 
+                            value={cardData.expiry}
+                            onChange={handleCardInputChange}
+                            required 
+                          />
+                        </label>
+                      </div>
+                      <div className="form-group">
+                        <label>
+                          <span>CVC / CVV</span>
+                          <input 
+                            type="password" 
+                            name="cvc" 
+                            placeholder="123" 
+                            value={cardData.cvc}
+                            onChange={handleCardInputChange}
+                            required 
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+ 
                 <div className="form-group">
                   <label>
-                    <span>Nombre en la Tarjeta</span>
-                    <input 
-                      type="text" 
-                      name="name" 
-                      placeholder="Ej. Juan Pérez" 
-                      value={cardData.name}
-                      onChange={handleCardInputChange}
-                      required 
-                    />
-                  </label>
-                </div>
-
-                <div className="form-group">
-                  <label>
-                    <span>Número de Tarjeta</span>
-                    <input 
-                      type="text" 
-                      name="number" 
-                      placeholder="4000 1234 5678 9010" 
-                      value={cardData.number}
-                      onChange={handleCardInputChange}
-                      required 
-                    />
-                  </label>
-                </div>
-
-                <div className="form-row-2col">
-                  <div className="form-group">
-                    <label>
-                      <span>Vencimiento</span>
-                      <input 
-                        type="text" 
-                        name="expiry" 
-                        placeholder="MM/YY" 
-                        value={cardData.expiry}
-                        onChange={handleCardInputChange}
-                        required 
-                      />
-                    </label>
-                  </div>
-                  <div className="form-group">
-                    <label>
-                      <span>CVC / CVV</span>
-                      <input 
-                        type="password" 
-                        name="cvc" 
-                        placeholder="123" 
-                        value={cardData.cvc}
-                        onChange={handleCardInputChange}
-                        required 
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>
-                    <span>Banco Emisor (Simulado)</span>
+                    <span>Método de Cobro</span>
                     <select 
                       name="banco" 
                       value={cardData.banco} 
@@ -437,7 +491,7 @@ export default function Checkout() {
                     </select>
                   </label>
                 </div>
-
+ 
                 <div className="form-actions mt-6">
                   <button 
                     type="button"
@@ -452,7 +506,11 @@ export default function Checkout() {
                     className="primary-button"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? 'Procesando Pago Seguro...' : `Pagar $${Number(factura?.total).toFixed(2)}`}
+                    {isSubmitting 
+                      ? 'Procesando Pago Seguro...' 
+                      : cardData.banco === 'Stripe (Internacional)' 
+                        ? `Pagar con Stripe $${Number(factura?.total).toFixed(2)}` 
+                        : `Pagar $${Number(factura?.total).toFixed(2)}`}
                   </button>
                 </div>
               </form>

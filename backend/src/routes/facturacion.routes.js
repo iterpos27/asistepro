@@ -1,6 +1,7 @@
 const { Router } = require('express');
 
 const facturacionController = require('../controllers/facturacion.controller');
+const stripeController = require('../controllers/stripe.controller');
 const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
 const { validateSchema } = require('../middlewares/validation.middleware');
 const {
@@ -16,6 +17,7 @@ const {
 const router = Router();
 
 router.get('/cron-check', facturacionController.triggerCronCheck);
+router.post('/stripe/webhook', stripeController.handleWebhook);
 
 router.use(authGuard);
 
@@ -30,6 +32,7 @@ router.get('/pagos/:id/comprobante', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA'])
 router.get('/pagos/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(idParamSchema), facturacionController.getPago);
 router.post('/pagos/manual', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(pagoManualSchema), facturacionController.registerManualPayment);
 router.post('/checkout-simulado', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(checkoutSimuladoSchema), facturacionController.checkoutSimulado);
+router.post('/stripe/create-checkout-session', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), stripeController.createCheckoutSession);
 router.post('/pagos/:id/aprobar', roleGuard(['SUPER_ADMIN']), validateSchema(idParamSchema), facturacionController.aprobarPago);
 router.delete('/pagos/:id', roleGuard(['SUPER_ADMIN']), validateSchema(idParamSchema), facturacionController.anularPago);
 
