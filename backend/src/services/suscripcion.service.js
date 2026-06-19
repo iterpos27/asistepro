@@ -23,6 +23,32 @@ function validateSuscripcionPayload(payload, { partial = false } = {}) {
     errors.push('monto_mensual no puede ser negativo');
   }
 
+  if (!partial) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startStr = payload.fecha_inicio || new Date().toISOString().slice(0, 10);
+    const start = new Date(startStr + 'T00:00:00');
+
+    if (start < today) {
+      errors.push('La fecha de inicio no puede ser anterior a la actual');
+    }
+
+    if (payload.fecha_fin) {
+      const end = new Date(payload.fecha_fin + 'T00:00:00');
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays !== 30) {
+        errors.push('El periodo de la suscripcion debe ser de exactamente 30 dias');
+      }
+    } else {
+      const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const offset = end.getTimezoneOffset();
+      const localEnd = new Date(end.getTime() - offset * 60 * 1000);
+      payload.fecha_fin = localEnd.toISOString().slice(0, 10);
+    }
+  }
+
   if (errors.length) {
     const error = new Error(errors.join(', '));
     error.statusCode = 400;
@@ -361,4 +387,5 @@ module.exports = {
   updateSuscripcion,
   cancelSuscripcion,
   checkSubscriptionExpirations,
+  validateSuscripcionPayload,
 };
