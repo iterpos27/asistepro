@@ -438,13 +438,23 @@ export default function Checkout() {
                   </label>
                 </div>
 
-                <button 
-                  type="submit" 
-                  className="primary-button w-full mt-6 flex items-center justify-center gap-2"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Procesando Pago Seguro...' : `Pagar $${Number(factura?.total).toFixed(2)}`}
-                </button>
+                <div className="form-actions mt-6">
+                  <button 
+                    type="button"
+                    onClick={() => navigate('/dashboard')}
+                    className="outline-button"
+                    disabled={isSubmitting}
+                  >
+                    Regresar
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="primary-button"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Procesando Pago Seguro...' : `Pagar $${Number(factura?.total).toFixed(2)}`}
+                  </button>
+                </div>
               </form>
             )}
 
@@ -532,13 +542,23 @@ export default function Checkout() {
                   </label>
                 </div>
 
-                <button 
-                  type="submit" 
-                  className="primary-button w-full mt-6 flex items-center justify-center gap-2"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Registrando Comprobante...' : 'Registrar Comprobante'}
-                </button>
+                <div className="form-actions mt-6">
+                  <button 
+                    type="button"
+                    onClick={() => navigate('/dashboard')}
+                    className="outline-button"
+                    disabled={isSubmitting}
+                  >
+                    Regresar
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="primary-button"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Registrando Comprobante...' : 'Registrar Comprobante'}
+                  </button>
+                </div>
               </form>
             )}
           </div>

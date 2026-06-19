@@ -152,17 +152,26 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
     setMessage('');
 
     try {
-      await facturacionService.registerManualPayment({
-        ...payment,
-        monto: Number(payment.monto),
-        referencia: payment.referencia || null,
-        banco: payment.banco || null,
-        nota: payment.nota || null,
-        pagado_en: payment.pagado_en || null,
-        comprobante: payment.comprobante || undefined,
-      });
-      setMessage('Pago registrado correctamente');
-      toast.success('Pago registrado correctamente');
+      if (payment.metodo === 'tarjeta') {
+        await facturacionService.checkoutSimulado({
+          factura_id: payment.factura_id,
+          banco: payment.banco || 'Stripe (Internacional)',
+        });
+        setMessage('Pago con tarjeta (Stripe Internacional) procesado con éxito');
+        toast.success('Pago con tarjeta (Stripe Internacional) procesado con éxito');
+      } else {
+        await facturacionService.registerManualPayment({
+          ...payment,
+          monto: Number(payment.monto),
+          referencia: payment.referencia || null,
+          banco: payment.banco || null,
+          nota: payment.nota || null,
+          pagado_en: payment.pagado_en || null,
+          comprobante: payment.comprobante || undefined,
+        });
+        setMessage('Pago registrado correctamente');
+        toast.success('Pago registrado correctamente');
+      }
       closePaymentForm();
       await loadPagos(payment.factura_id);
       await onChanged?.();
