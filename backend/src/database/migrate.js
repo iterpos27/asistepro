@@ -27,6 +27,7 @@ const migrations = [
   '020_notifications.sql',
   '021_facturas_pdf.sql',
   '022_pagos_detalles.sql',
+  '023_limpieza_placeholders.sql',
 ];
 
 async function runMigrations() {
