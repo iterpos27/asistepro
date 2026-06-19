@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import {
   Activity,
   BarChart3,
@@ -9,7 +10,6 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import MetricCard from '../../components/cards/MetricCard';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -17,6 +17,12 @@ import DataPanel from '../../components/tables/DataPanel';
 import { useAuthContext } from '../../context/AuthContext';
 import useResource from '../../hooks/useResource';
 import { ROLES, getRoleLabel } from '../../utils/roles';
+
+const DashboardChart = lazy(() => import('./DashboardChart'));
+
+function ChartFallback({ height }) {
+  return <div className="chart-loading" style={{ height }} aria-label="Cargando grafico" />;
+}
 
 function getTotal(data) {
   if (Array.isArray(data)) return data.length;
@@ -119,17 +125,9 @@ export default function Dashboard() {
           <section className="dashboard-grid">
             <div className="panel wide">
               <PanelTitle title="Asistencia mensual" subtitle="Resumen operativo por empresa" />
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={monthlyAttendance}>
-                  <CartesianGrid vertical={false} stroke="#e5e7eb" strokeDasharray="3 3" />
-                  <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Bar dataKey="presentes" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="novedades" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="rechazadas" fill="#64748b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={280} />}>
+                <DashboardChart type="monthly" data={monthlyAttendance} />
+              </Suspense>
             </div>
             <DataPanel title="Sucursales" rows={getRows(sucursales.data)} columns={['nombre', 'codigo', 'ciudad', 'estado']} />
             <DataPanel title="Empleados recientes" rows={getRows(empleados.data)} columns={['codigo', 'nombres', 'apellidos', 'cargo']} />
@@ -164,16 +162,9 @@ export default function Dashboard() {
           <section className="dashboard-grid">
             <div className="panel">
               <PanelTitle title="Actividad por sucursal" subtitle="Historial visual" />
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={branchActivity} dataKey="value" nameKey="name" innerRadius={54} outerRadius={86} paddingAngle={3}>
-                    {branchActivity.map((_, index) => (
-                      <Cell key={index} fill={['#4f46e5', '#10b981', '#06b6d4', '#f59e0b'][index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={240} />}>
+                <DashboardChart type="branch" data={branchActivity} />
+              </Suspense>
             </div>
             <DataPanel title="Historial personal" rows={getRows(marcaciones.data)} columns={['sucursal_nombre', 'tipo', 'estado', 'marcado_en']} />
           </section>

@@ -24,9 +24,9 @@ const facturaBody = z.object({
 const pagoManualBody = z.object({
   factura_id: uuid('factura_id'),
   monto: money('monto').refine((value) => value > 0, 'monto debe ser mayor a cero'),
-  metodo: z.enum(['manual', 'transferencia', 'deposito', 'efectivo', 'tarjeta', 'cheque', 'otro']).optional(),
-  referencia: z.string().trim().max(120).optional().nullable(),
-  banco: z.string().trim().max(100).optional().nullable(),
+  metodo: z.enum(['transferencia', 'deposito']),
+  referencia: z.string().trim().min(1, 'referencia es requerida').max(120),
+  banco: z.string().trim().min(1, 'banco es requerido').max(100),
   nota: z.string().trim().max(500).optional().nullable(),
   observacion: z.string().trim().max(500).optional().nullable(), // soporte retrocompatible
   pagado_en: z.string().trim().optional().nullable(),
@@ -34,7 +34,7 @@ const pagoManualBody = z.object({
     nombre: z.string(),
     tipo: z.string(),
     data_base64: z.string(),
-  }).optional().nullable(),
+  }),
 });
 
 const listFacturasSchema = z.object({
@@ -74,15 +74,6 @@ const pagoManualSchema = z.object({
   params: emptyParams,
 });
 
-const checkoutSimuladoSchema = z.object({
-  body: z.object({
-    factura_id: uuid('factura_id'),
-    banco: z.string().trim().max(100).optional().nullable(),
-  }),
-  query: z.object({}).passthrough(),
-  params: emptyParams,
-});
-
 module.exports = {
   createFacturaSchema,
   idParamSchema,
@@ -90,5 +81,4 @@ module.exports = {
   listPagosSchema,
   pagoManualSchema,
   updateFacturaSchema,
-  checkoutSimuladoSchema,
 };

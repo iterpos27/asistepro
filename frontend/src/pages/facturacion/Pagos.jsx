@@ -152,26 +152,17 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
     setMessage('');
 
     try {
-      if (payment.metodo === 'tarjeta') {
-        await facturacionService.checkoutSimulado({
-          factura_id: payment.factura_id,
-          banco: payment.banco || 'Stripe (Internacional)',
-        });
-        setMessage('Pago con tarjeta (Stripe Internacional) procesado con éxito');
-        toast.success('Pago con tarjeta (Stripe Internacional) procesado con éxito');
-      } else {
-        await facturacionService.registerManualPayment({
-          ...payment,
-          monto: Number(payment.monto),
-          referencia: payment.referencia || null,
-          banco: payment.banco || null,
-          nota: payment.nota || null,
-          pagado_en: payment.pagado_en || null,
-          comprobante: payment.comprobante || undefined,
-        });
-        setMessage('Pago registrado correctamente');
-        toast.success('Pago registrado correctamente');
-      }
+      await facturacionService.registerManualPayment({
+        ...payment,
+        monto: Number(payment.monto),
+        referencia: payment.referencia,
+        banco: payment.banco,
+        nota: payment.nota || null,
+        pagado_en: payment.pagado_en || null,
+        comprobante: payment.comprobante,
+      });
+      setMessage('Comprobante registrado correctamente');
+      toast.success('Comprobante registrado correctamente');
       closePaymentForm();
       await loadPagos(payment.factura_id);
       await onChanged?.();
@@ -285,12 +276,8 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 <label>
                   Metodo
                   <select value={payment.metodo} onChange={(event) => updatePayment('metodo', event.target.value)}>
-                    <option value="manual">Manual</option>
                     <option value="transferencia">Transferencia</option>
                     <option value="deposito">Depósito</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="tarjeta">Tarjeta</option>
-                    <option value="otro">Otro</option>
                   </select>
                 </label>
                 {['transferencia', 'deposito'].includes(payment.metodo) ? (
@@ -305,7 +292,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 </label>
                 <label>
                   Referencia
-                  <input value={payment.referencia} onChange={(event) => updatePayment('referencia', event.target.value)} placeholder="Numero de comprobante" />
+                  <input value={payment.referencia} onChange={(event) => updatePayment('referencia', event.target.value)} placeholder="Numero de comprobante" required />
                 </label>
                 <label className="wide-field">
                   Nota
@@ -313,7 +300,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                 </label>
                 <label className="wide-field">
                   Archivo comprobante
-                  <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(event) => attachReceipt(event.target.files?.[0])} />
+                  <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(event) => attachReceipt(event.target.files?.[0])} required />
                   {payment.comprobante_nombre ? <small className="helper-text">Adjunto: {payment.comprobante_nombre}</small> : null}
                 </label>
               </div>

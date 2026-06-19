@@ -1,7 +1,7 @@
 const { pool } = require('../config/database');
 
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
-const PAGO_METODOS = ['manual', 'transferencia', 'deposito', 'efectivo', 'tarjeta', 'otro'];
+const PAGO_METODOS = ['transferencia', 'deposito'];
 const PAGO_ESTADOS = ['pendiente', 'registrado'];
 const COMPROBANTE_MAX_BYTES = 2 * 1024 * 1024;
 const COMPROBANTE_TIPOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -415,6 +415,19 @@ async function registerManualPayment(payload) {
     throw error;
   }
 
+  if (factura.estado === 'pagada') {
+    const error = new Error('La factura ya se encuentra pagada');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const saldoPendiente = Number(factura.total) - Number(factura.total_pagado || 0);
+  if (Number(payload.monto) > saldoPendiente) {
+    const error = new Error(`El monto supera el saldo pendiente de ${saldoPendiente.toFixed(2)}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
   const client = await pool.connect();
 
   try {
@@ -444,7 +457,7 @@ async function registerManualPayment(payload) {
         factura.empresa_id,
         factura.id,
         Number(payload.monto),
-        payload.metodo || 'manual',
+        payload.metodo,
         payload.referencia || null,
         payload.banco || null,
         payload.nota || null,
@@ -681,66 +694,6 @@ async function findFacturaPdf(id) {
   return result.rows[0] || null;
 }
 
-async function checkoutSimulado({ factura_id, empresa_id, banco, monto }) {
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const referencia = 'CARD-SIM-' + Date.now();
-    const nota = 'Pago simulado con tarjeta (SaaS checkout)';
-    const resultPago = await client.query(
-      `
-        INSERT INTO pagos (
-          empresa_id,
-          factura_id,
-          monto,
-          metodo,
-          referencia,
-          nota,
-          pagado_en,
-          estado,
-          banco
-        ) VALUES ($1, $2, $3, 'tarjeta', $4, $5, NOW(), 'registrado', $6)
-        RETURNING *
-      `,
-      [empresa_id, factura_id, monto, referencia, nota, banco]
-    );
-    const pagoId = resultPago.rows[0].id;
-
-    await recalculateFacturaEstado(client, factura_id);
-
-    const facturaRes = await client.query(
-      'SELECT suscripcion_id FROM facturas WHERE id = $1 LIMIT 1',
-      [factura_id]
-    );
-    const suscripcionId = facturaRes.rows[0]?.suscripcion_id;
-    if (suscripcionId) {
-      await client.query(
-        `
-          UPDATE suscripciones
-          SET estado = 'activa',
-              actualizado_en = NOW()
-          WHERE id = $1
-        `,
-        [suscripcionId]
-      );
-    }
-
-    await client.query('COMMIT');
-
-    return {
-      pago: await findPagoById(pagoId),
-      factura: await findFacturaById(factura_id),
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 module.exports = {
   listFacturas,
   findFacturaById,
@@ -754,5 +707,4 @@ module.exports = {
   findPagoById,
   findPagoComprobante,
   anulacionPago,
-  checkoutSimulado,
 };

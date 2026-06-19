@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Html5Qrcode } from 'html5-qrcode';
 import { Camera, MapPin, QrCode, Send, Square } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -100,6 +99,7 @@ export default function MarcarAsistencia() {
       setScanning(true);
       setScannerStatus('Preparando camara...');
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const { Html5Qrcode } = await import('html5-qrcode');
       const cameras = await Html5Qrcode.getCameras();
 
       if (!cameras.length) {

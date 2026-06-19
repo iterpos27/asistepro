@@ -1,4 +1,6 @@
 node_modules/
+frontend/playwright-report/
+frontend/test-results/
 
 .env
 backend/.env

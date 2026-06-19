@@ -11,7 +11,7 @@ test.after(async () => {
   await pool.end();
 });
 
-test('registerTenant y checkoutSimulado - Flujo completo de registro y pago', async () => {
+test('registerTenant crea tenant, admin y factura pendiente', async () => {
   const planRes = await pool.query("SELECT id FROM planes WHERE codigo = 'growth' LIMIT 1");
   const planId = planRes.rows[0]?.id;
 
@@ -42,15 +42,8 @@ test('registerTenant y checkoutSimulado - Flujo completo de registro y pago', as
   assert.ok(result.tokens.accessToken);
   assert.ok(result.factura_id);
 
-  const checkoutResult = await facturacionService.checkoutSimulado({
-    factura_id: result.factura_id,
-    empresa_id: result.user.empresa_id,
-    banco: 'Stripe (Simulado)',
-    monto: 49.00,
-  });
-
-  assert.ok(checkoutResult.pago);
-  assert.equal(checkoutResult.pago.estado, 'registrado');
-  assert.equal(checkoutResult.pago.metodo, 'tarjeta');
-  assert.equal(checkoutResult.factura.estado, 'pagada');
+  const factura = await facturacionService.findFacturaById(result.factura_id);
+  assert.ok(factura);
+  assert.equal(factura.estado, 'pendiente');
+  assert.equal(Number(factura.total_pagado), 0);
 });

@@ -1,6 +1,7 @@
-const { loadBackendEnv } = require('./utils/env.util');
+const { loadBackendEnv, validateProductionEnv } = require('./utils/env.util');
 
 loadBackendEnv();
+validateProductionEnv();
 
 const app = require('./app');
 const { checkDatabaseConnection } = require('./config/database');

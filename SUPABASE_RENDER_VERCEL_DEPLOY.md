@@ -22,7 +22,7 @@ Render puede leer `render.yaml`, pero si configuras manualmente:
 ```text
 Build Command: npm ci
 Start Command: npm run start
-Health Check Path: /api/health
+Health Check Path: /api/health/ready
 ```
 
 Variables requeridas:
@@ -37,6 +37,15 @@ CORS_ORIGIN=https://TU_FRONTEND.vercel.app
 COOKIE_SECURE=true
 COOKIE_SAME_SITE=none
 RATE_LIMIT_MAX=1000
+AUTH_LOGIN_RATE_LIMIT_MAX=10
+AUTH_REGISTER_RATE_LIMIT_MAX=5
+CRON_SECRET=coloca_un_secreto_largo
+```
+
+Variable opcional para alertas de errores `5xx`:
+
+```env
+ALERT_WEBHOOK_URL=https://webhook-de-tu-monitor
 ```
 
 Para Supabase, usa una de estas opciones:
@@ -56,16 +65,12 @@ DB_SSL=true
 
 Evita pegar valores con saltos de linea o comillas.
 
-Despues del primer deploy ejecuta migraciones desde Render Shell:
-
-```bash
-npm run migrate
-```
+El comando de inicio ejecuta automaticamente las migraciones pendientes antes de levantar la API.
 
 Valida:
 
 ```text
-https://TU_BACKEND.onrender.com/api/health
+https://TU_BACKEND.onrender.com/api/health/ready
 ```
 
 ## 3. Vercel Frontend
@@ -93,13 +98,25 @@ CORS_ORIGIN=https://TU_FRONTEND.vercel.app
 
 ## 4. Checklist de validacion
 
-1. Abrir `/api/health` del backend Render.
-2. Abrir el frontend Vercel.
-3. Iniciar sesion.
-4. Validar que no haya errores CORS en consola.
-5. Probar perfil/cambio de contrasena.
-6. Probar empresas, empleados, horarios y marcaciones.
-7. Probar GPS/camara desde celular con HTTPS.
+1. Abrir `/api/health` y confirmar `environment: production` y el commit en `version`.
+2. Abrir `/api/health/ready` y confirmar `database: ready`.
+3. Abrir el frontend Vercel.
+4. Iniciar sesion.
+5. Validar que no haya errores CORS en consola.
+6. Probar perfil/cambio de contrasena.
+7. Probar empresas, empleados, horarios y marcaciones.
+8. Probar GPS/camara desde celular con HTTPS.
+9. Registrar una transferencia con comprobante y aprobarla como superadmin.
+
+## 5. Backup verificado
+
+Desde una maquina con PostgreSQL Client Tools ejecuta:
+
+```bash
+npm run backup:verify
+```
+
+El comando crea un dump temporal, valida su catalogo con `pg_restore` y elimina el archivo al terminar. Para conservar respaldos operativos configura tambien las copias administradas de Supabase y realiza pruebas periodicas de restauracion en un proyecto separado.
 
 ## Notas
 

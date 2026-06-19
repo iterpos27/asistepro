@@ -245,7 +245,11 @@ async function getFacturaPdf(req, res, next) {
 async function triggerCronCheck(req, res, next) {
   try {
     const secret = req.query.secret || req.headers['x-cron-secret'];
-    const expectedSecret = process.env.CRON_SECRET || 'asistepro-secret-default-cron-key-123';
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret) {
+      return res.status(503).json({ ok: false, message: 'Cron no configurado' });
+    }
 
     if (secret !== expectedSecret) {
       return res.status(401).json({ ok: false, message: 'No autorizado' });
@@ -253,35 +257,6 @@ async function triggerCronCheck(req, res, next) {
 
     const count = await suscripcionService.checkSubscriptionExpirations();
     return res.json({ ok: true, message: `Verificacion completada. Notificaciones enviadas: ${count}` });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-async function checkoutSimulado(req, res, next) {
-  try {
-    const factura = await facturacionService.findFacturaById(req.body?.factura_id);
-
-    if (!factura) {
-      return res.status(404).json({ ok: false, message: 'Factura no encontrada' });
-    }
-
-    if (!canAccessEmpresa(req, factura.empresa_id)) {
-      return res.status(403).json({ ok: false, message: 'No puede pagar esta factura' });
-    }
-
-    if (factura.estado === 'pagada') {
-      return res.status(400).json({ ok: false, message: 'La factura ya esta pagada' });
-    }
-
-    const result = await facturacionService.checkoutSimulado({
-      factura_id: factura.id,
-      empresa_id: factura.empresa_id,
-      banco: req.body?.banco || 'Stripe (Simulado)',
-      monto: Number(factura.total),
-    });
-
-    return res.status(201).json({ ok: true, data: result });
   } catch (error) {
     return next(error);
   }
@@ -301,5 +276,4 @@ module.exports = {
   aprobarPago,
   anularPago,
   triggerCronCheck,
-  checkoutSimulado,
 };

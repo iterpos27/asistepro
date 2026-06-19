@@ -6,7 +6,7 @@ services:
     rootDir: .
     buildCommand: npm ci
     startCommand: npm run start
-    healthCheckPath: /api/health
+    healthCheckPath: /api/health/ready
     envVars:
       - key: NODE_ENV
         value: production
@@ -18,9 +18,17 @@ services:
         value: none
       - key: RATE_LIMIT_MAX
         value: "1000"
+      - key: AUTH_LOGIN_RATE_LIMIT_MAX
+        value: "10"
+      - key: AUTH_REGISTER_RATE_LIMIT_MAX
+        value: "5"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN
+        value: https://asistepro.vercel.app
+      - key: CRON_SECRET
+        generateValue: true
+      - key: ALERT_WEBHOOK_URL
         sync: false
       - key: JWT_ACCESS_SECRET
         generateValue: true

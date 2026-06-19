@@ -1,13 +1,15 @@
 import { Suspense } from 'react';
+import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { privateRoutes } from '../config/routes';
 import AuthLayout from '../layouts/AuthLayout';
 import DashboardLayout from '../layouts/DashboardLayout';
-import Login from '../pages/auth/Login';
-import Register from '../pages/auth/Register';
-import Checkout from '../pages/auth/Checkout';
 import { getDefaultRoute } from '../utils/roles';
 import ProtectedRoute from './ProtectedRoute';
+
+const Login = lazy(() => import('../pages/auth/Login'));
+const Register = lazy(() => import('../pages/auth/Register'));
+const Checkout = lazy(() => import('../pages/auth/Checkout'));
 
 function PageLoader() {
   return (
@@ -32,9 +34,7 @@ export default function AppRoutes({ auth }) {
           auth.bootstrapping || auth.isAuthenticated ? (
             <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
           ) : (
-            <AuthLayout>
-              <Login />
-            </AuthLayout>
+            <Suspense fallback={<PageLoader />}><AuthLayout><Login /></AuthLayout></Suspense>
           )
         }
       />
@@ -44,9 +44,7 @@ export default function AppRoutes({ auth }) {
           auth.bootstrapping || auth.isAuthenticated ? (
             <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
           ) : (
-            <AuthLayout>
-              <Register />
-            </AuthLayout>
+            <Suspense fallback={<PageLoader />}><AuthLayout><Register /></AuthLayout></Suspense>
           )
         }
       />
@@ -54,9 +52,7 @@ export default function AppRoutes({ auth }) {
         path="/checkout"
         element={
           <ProtectedRoute auth={auth}>
-            <AuthLayout>
-              <Checkout />
-            </AuthLayout>
+            <Suspense fallback={<PageLoader />}><AuthLayout><Checkout /></AuthLayout></Suspense>
           </ProtectedRoute>
         }
       />

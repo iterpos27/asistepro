@@ -21,6 +21,12 @@ function errorHandler(error, req, res, next) {
       method: req.method,
       stack: isProduction ? undefined : error.stack,
     });
+    void notifyOperationalAlert({
+      message: error.message,
+      path: req.originalUrl,
+      method: req.method,
+      statusCode,
+    });
   }
 
   res.status(statusCode).json({
@@ -34,3 +40,4 @@ module.exports = {
   notFoundHandler,
   errorHandler,
 };
+const { notifyOperationalAlert } = require('../services/monitoring.service');
