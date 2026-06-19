@@ -92,7 +92,7 @@ function auditLogger(req, res, next) {
             body: sanitizeValue(req.body || {}),
             actor: {
               rol: req.auth?.rol || null,
-              email: req.auth?.email || null,
+              email: req.auth?.user?.email || null,
             },
           }),
         ],

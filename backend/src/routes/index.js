@@ -15,6 +15,9 @@ const suscripcionRoutes = require('./suscripcion.routes');
 const sucursalRoutes = require('./sucursal.routes');
 const tenantRoutes = require('./tenant.routes');
 const usuarioRoutes = require('./usuario.routes');
+const laboralRoutes = require('./laboral.routes');
+const solicitudRoutes = require('./solicitud.routes');
+const auditoriaRoutes = require('./auditoria.routes');
 
 const router = Router();
 
@@ -33,5 +36,8 @@ router.use('/suscripciones', suscripcionRoutes);
 router.use('/sucursales', sucursalRoutes);
 router.use('/tenant', tenantRoutes);
 router.use('/usuarios', usuarioRoutes);
+router.use('/laboral', laboralRoutes);
+router.use('/solicitudes', solicitudRoutes);
+router.use('/auditoria', auditoriaRoutes);
 
 module.exports = router;

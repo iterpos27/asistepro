@@ -1,0 +1,12 @@
+const {Router}=require('express');
+const controller=require('../controllers/auditoria.controller');
+const {authGuard,roleGuard}=require('../middlewares/auth.middleware');
+const {tenantGuard,subscriptionGuard}=require('../middlewares/tenant.middleware');
+const {permissionGuard}=require('../utils/granular-permissions.util');
+const {validateSchema}=require('../middlewares/validation.middleware');
+const {listAuditSchema}=require('../validators/auditoria.validator');
+const router=Router();
+router.use(authGuard,roleGuard(['SUPER_ADMIN','ADMIN_EMPRESA','RRHH']),tenantGuard,subscriptionGuard);
+router.get('/export',permissionGuard('auditoria','exportar'),validateSchema(listAuditSchema),controller.exportar);
+router.get('/',permissionGuard('auditoria','ver'),validateSchema(listAuditSchema),controller.list);
+module.exports=router;

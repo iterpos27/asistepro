@@ -2,6 +2,7 @@ const { pool } = require('../config/database');
 const reemplazoService = require('./reemplazo.service');
 const notificacionService = require('./notificacion.service');
 const { calculateDistanceMeters } = require('../utils/geo.util');
+const laboralService = require('./laboral.service');
 
 const MARCACION_TIPOS = ['entrada', 'salida'];
 const GPS_TOLERANCIA_METROS = Number(process.env.GPS_TOLERANCIA_METROS || 10);
@@ -186,6 +187,7 @@ async function assertDailyTipoLimit({ empresaId, empleadoId, tipo, markedAt = ne
         AND empleado_id = $2
         AND tipo = $3
         AND estado <> 'rechazada'
+        AND anulada = FALSE
         AND (marcado_en AT TIME ZONE $5)::date = ($4::timestamptz AT TIME ZONE $5)::date
       LIMIT 1
     `,
@@ -201,6 +203,7 @@ async function assertDailyTipoLimit({ empresaId, empleadoId, tipo, markedAt = ne
 
 async function registrarMarcacion({ empresaId, auth, payload }) {
   validateMarcacionPayload(payload);
+  await laboralService.assertPeriodoAbierto(empresaId, payload.marcado_en || new Date());
 
   const sucursal = await resolveSucursalByQr(empresaId, payload.qr_token);
 

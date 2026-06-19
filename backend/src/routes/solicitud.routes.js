@@ -1,0 +1,15 @@
+const { Router } = require('express');
+const controller = require('../controllers/solicitud.controller');
+const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
+const { tenantGuard, subscriptionGuard } = require('../middlewares/tenant.middleware');
+const { permissionGuard } = require('../utils/granular-permissions.util');
+const { validateSchema } = require('../middlewares/validation.middleware');
+const { createSolicitudSchema, idSolicitudSchema, listSolicitudesSchema, reviewSolicitudSchema } = require('../validators/solicitud.validator');
+const router = Router();
+router.use(authGuard, roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH', 'EMPLEADO']), tenantGuard, subscriptionGuard);
+router.get('/catalogos', permissionGuard('solicitudes', 'crear'), controller.catalogs);
+router.get('/', permissionGuard('solicitudes', 'ver'), validateSchema(listSolicitudesSchema), controller.list);
+router.post('/', permissionGuard('solicitudes', 'crear'), validateSchema(createSolicitudSchema), controller.create);
+router.post('/:id/revisar', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH']), permissionGuard('solicitudes', 'aprobar'), validateSchema(reviewSolicitudSchema), controller.review);
+router.delete('/:id', validateSchema(idSolicitudSchema), controller.cancel);
+module.exports = router;

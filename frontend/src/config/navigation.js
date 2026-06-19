@@ -11,6 +11,10 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  ClipboardCheck,
+  Calculator,
+  ScrollText,
+  UserCog,
 } from 'lucide-react';
 import { ROLES } from '../utils/roles';
 
@@ -48,7 +52,12 @@ export const navSections = [
     id: 'operations',
     label: 'Operacion',
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
-    items: [{ title: 'Reportes', href: '/reportes', icon: FileBarChart, feature: 'reportes_avanzados' }],
+    items: [
+      { title: 'Solicitudes', href: '/solicitudes', icon: ClipboardCheck, permission: ['solicitudes', 'ver'] },
+      { title: 'Calculo laboral', href: '/calculo-laboral', icon: Calculator, permission: ['calculo_laboral', 'ver'] },
+      { title: 'Reportes', href: '/reportes', icon: FileBarChart, feature: 'reportes_avanzados', permission: ['reportes', 'ver'] },
+      { title: 'Auditoria', href: '/auditoria', icon: ScrollText, permission: ['auditoria', 'ver'] },
+    ],
   },
   {
     id: 'billing',
@@ -63,6 +72,7 @@ export const navSections = [
     items: [
       { title: 'Marcar', href: '/marcaciones', icon: ScanLine, feature: 'marcaciones' },
       { title: 'Mis marcaciones', href: '/mis-marcaciones', icon: Activity, feature: 'mis_marcaciones' },
+      { title: 'Solicitudes', href: '/solicitudes', icon: ClipboardCheck, permission: ['solicitudes', 'ver'] },
     ],
   },
   {
@@ -78,16 +88,24 @@ export const navSections = [
     id: 'account',
     label: 'Cuenta',
     roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
-    items: [{ title: 'Ajustes', href: '/settings', icon: Settings }],
+    items: [
+      { title: 'Roles y permisos', href: '/roles-permisos', icon: UserCog, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA] },
+      { title: 'Ajustes', href: '/settings', icon: Settings },
+    ],
   },
 ];
 
-export function getNavSectionsForRole(role, userModulos = {}) {
+export function getNavSectionsForRole(role, userModulos = {}, userPermissions = {}) {
   return navSections
     .filter((section) => section.roles.includes(role))
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => {
+        if (item.roles && !item.roles.includes(role)) return false;
+        if (item.permission && role !== ROLES.SUPER_ADMIN) {
+          const [resource, action] = item.permission;
+          if (userPermissions?.[resource]?.[action] !== true) return false;
+        }
         if (!item.feature) return true;
         if (role === ROLES.SUPER_ADMIN) return true;
         return userModulos[item.feature] === true;

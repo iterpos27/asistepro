@@ -9,6 +9,7 @@ const {
 } = require('../config/jwt');
 const { hashToken } = require('../utils/token.util');
 const { buildEffectiveModules } = require('../utils/module-permissions.util');
+const { mergePermissions } = require('../utils/granular-permissions.util');
 
 function sanitizeUser(user) {
   const modulos = buildEffectiveModules({
@@ -16,6 +17,11 @@ function sanitizeUser(user) {
     userModules: user.usuario_configuracion_modulos,
     role: user.rol_codigo,
   });
+  const permisos = mergePermissions(
+    user.rol_codigo,
+    user.rol_personalizado_permisos,
+    user.usuario_configuracion_permisos,
+  );
 
   return {
     id: user.id,
@@ -27,6 +33,8 @@ function sanitizeUser(user) {
     rol: user.rol_codigo,
     empresa: user.empresa_nombre,
     modulos,
+    permisos,
+    rol_personalizado: user.rol_personalizado_nombre || null,
   };
 }
 
@@ -43,12 +51,16 @@ async function findUserByEmail(email) {
         u.password_hash,
         u.estado,
         u.configuracion_modulos AS usuario_configuracion_modulos,
+        u.configuracion_permisos AS usuario_configuracion_permisos,
         r.codigo AS rol_codigo,
         e.nombre AS empresa_nombre,
-        e.configuracion_modulos
+        e.configuracion_modulos,
+        rp.nombre AS rol_personalizado_nombre,
+        rp.permisos AS rol_personalizado_permisos
       FROM usuarios u
       INNER JOIN roles r ON r.id = u.rol_id
       LEFT JOIN empresas e ON e.id = u.empresa_id
+      LEFT JOIN roles_personalizados rp ON rp.id = u.rol_personalizado_id AND rp.activo = TRUE
       WHERE LOWER(u.email) = LOWER($1)
       LIMIT 1
     `,
@@ -70,12 +82,16 @@ async function findUserById(id) {
         u.email,
         u.estado,
         u.configuracion_modulos AS usuario_configuracion_modulos,
+        u.configuracion_permisos AS usuario_configuracion_permisos,
         r.codigo AS rol_codigo,
         e.nombre AS empresa_nombre,
-        e.configuracion_modulos
+        e.configuracion_modulos,
+        rp.nombre AS rol_personalizado_nombre,
+        rp.permisos AS rol_personalizado_permisos
       FROM usuarios u
       INNER JOIN roles r ON r.id = u.rol_id
       LEFT JOIN empresas e ON e.id = u.empresa_id
+      LEFT JOIN roles_personalizados rp ON rp.id = u.rol_personalizado_id AND rp.activo = TRUE
       WHERE u.id = $1
       LIMIT 1
     `,

@@ -4,7 +4,7 @@ import { getNavSectionsForRole } from '../../config/navigation';
 
 export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate, user }) {
   const location = useLocation();
-  const sections = getNavSectionsForRole(user?.rol, user?.modulos);
+  const sections = getNavSectionsForRole(user?.rol, user?.modulos, user?.permisos);
 
   let asideClasses = 'sidebar';
   if (open) asideClasses += ' open';

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const empresaId = '11111111-1111-4111-8111-111111111111';
 const facturaId = '22222222-2222-4222-8222-222222222222';
 
-function userFor(role, modulos = {}) {
+function userFor(role, modulos = {}, permisos = {}) {
   return {
     id: `user-${role.toLowerCase()}`,
     empresa_id: role === 'SUPER_ADMIN' ? null : empresaId,
@@ -13,6 +13,7 @@ function userFor(role, modulos = {}) {
     email: `${role.toLowerCase()}@qa.local`,
     rol: role,
     modulos,
+    permisos,
   };
 }
 
@@ -71,6 +72,14 @@ async function mockApi(page, user, onRequest = () => {}) {
         contentType: 'application/json',
         body: JSON.stringify({ ok: true, data: { pago: { estado: 'pendiente' } } }),
       });
+    }
+
+    if (url.pathname.endsWith('/laboral/cierres')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: [] }) });
+    }
+
+    if (/\/laboral\/\d{4}-\d{2}$/.test(url.pathname)) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { mes: '2026-06', resumen: {}, items: [], cierre: null } }) });
     }
 
     return route.fulfill({
@@ -149,4 +158,28 @@ test('checkout registra transferencia con comprobante y tenant', async ({ page }
   expect(paymentPayload.metodo).toBe('transferencia');
   expect(paymentPayload.referencia).toBe('REF-E2E-001');
   expect(paymentPayload.comprobante.nombre).toBe('comprobante.pdf');
+});
+
+test('empleado accede a solicitudes con permiso granular', async ({ page }) => {
+  const user = userFor('EMPLEADO', { marcaciones: true }, { solicitudes: { ver: true, crear: true, aprobar: false } });
+  await mockApi(page, user);
+  await page.goto('/solicitudes');
+  await expect(page.getByRole('heading', { name: 'Solicitudes y aprobaciones' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nueva solicitud' })).toBeVisible();
+});
+
+test('admin visualiza calculo laboral y cierre mensual', async ({ page }) => {
+  const user = userFor('ADMIN_EMPRESA', {}, { calculo_laboral: { ver: true, exportar: true }, cierres_mensuales: { ver: true, cerrar: true, reabrir: true } });
+  await mockApi(page, user);
+  await page.goto('/calculo-laboral');
+  await expect(page.getByRole('heading', { name: 'Calculo laboral' })).toBeVisible();
+  await page.getByLabel('Mes de calculo').fill('2026-05');
+  await expect(page.getByRole('button', { name: 'Cerrar mes' })).toBeVisible();
+});
+
+test('usuario sin permiso granular no puede abrir auditoria', async ({ page }) => {
+  const user = userFor('RRHH', {}, { auditoria: { ver: false } });
+  await mockApi(page, user);
+  await page.goto('/auditoria');
+  await expect(page).toHaveURL(/\/dashboard$/);
 });

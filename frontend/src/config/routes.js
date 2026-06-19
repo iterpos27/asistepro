@@ -14,6 +14,10 @@ const ReemplazosList = lazy(() => import('../pages/reemplazos/ReemplazosList'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
 const SuscripcionesList = lazy(() => import('../pages/suscripciones/SuscripcionesList'));
 const SucursalesList = lazy(() => import('../pages/sucursales/SucursalesList'));
+const SolicitudesList = lazy(() => import('../pages/solicitudes/SolicitudesList'));
+const CalculoLaboral = lazy(() => import('../pages/laboral/CalculoLaboral'));
+const Auditoria = lazy(() => import('../pages/auditoria/Auditoria'));
+const RolesPermisos = lazy(() => import('../pages/settings/RolesPermisos'));
 
 export const privateRoutes = [
   {
@@ -83,6 +87,18 @@ export const privateRoutes = [
     element: Facturas,
     roles: routeRoles.adminEmpresa,
     feature: 'facturacion',
+  },
+  {
+    path: '/solicitudes', element: SolicitudesList, roles: routeRoles.all, permission: ['solicitudes', 'ver'],
+  },
+  {
+    path: '/calculo-laboral', element: CalculoLaboral, roles: routeRoles.rrhh, permission: ['calculo_laboral', 'ver'],
+  },
+  {
+    path: '/auditoria', element: Auditoria, roles: routeRoles.rrhh, permission: ['auditoria', 'ver'],
+  },
+  {
+    path: '/roles-permisos', element: RolesPermisos, roles: routeRoles.adminEmpresa,
   },
   {
     path: '/settings',

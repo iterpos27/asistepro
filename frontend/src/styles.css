@@ -3826,4 +3826,38 @@ tbody tr:hover {
     padding: 32px;
   }
 }
+.audit-json {
+  max-height: 360px;
+  margin: 16px 0 0;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #0f172a;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
+.permission-modal {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.permission-table {
+  max-height: 430px;
+  margin-top: 16px;
+}
+
+.permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+@media (max-width: 720px) {
+  .permission-actions {
+    min-width: 280px;
+  }
+}
