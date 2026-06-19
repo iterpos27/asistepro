@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 process.env.NODE_ENV = 'production';
 process.env.CORS_ORIGIN = 'https://asistepro.vercel.app/';
+process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:5432/asistepro_test';
 
 const app = require('../src/app');
 
