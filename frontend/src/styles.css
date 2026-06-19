@@ -3984,6 +3984,7 @@ tbody tr:hover {
   justify-content: space-between;
   width: 100%;
   padding: 0 12px 0 0;
+  margin-bottom: 8px;
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -4035,4 +4036,8 @@ tbody tr:hover {
 
 .standalone-nav-list {
   margin-bottom: 8px;
+}
+
+.sidebar:not(.collapsed) .nav-section .nav-link {
+  padding-left: 28px;
 }
