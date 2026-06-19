@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ShieldCheck, ChevronDown } from 'lucide-react';
 import { getNavSectionsForRole } from '../../config/navigation';
@@ -7,25 +7,41 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
   const location = useLocation();
   const sections = getNavSectionsForRole(user?.rol, user?.modulos, user?.permisos);
 
-  const [expanded, setExpanded] = useState({});
-
-  // Auto-expand sections that have active items
-  useEffect(() => {
-    const nextExpanded = { ...expanded };
-    let changed = false;
+  const [expanded, setExpanded] = useState(() => {
+    const initialExpanded = {};
     sections.forEach((section) => {
       const hasActive = section.items.some(
         (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
       );
-      if (hasActive && !expanded[section.id]) {
-        nextExpanded[section.id] = true;
-        changed = true;
+      if (hasActive) {
+        initialExpanded[section.id] = true;
       }
     });
-    if (changed) {
-      setExpanded(nextExpanded);
+    return initialExpanded;
+  });
+
+  const lastPath = useRef(location.pathname);
+
+  // Auto-expand active sections only when navigating to a new route
+  useEffect(() => {
+    if (lastPath.current !== location.pathname) {
+      lastPath.current = location.pathname;
+      const nextExpanded = { ...expanded };
+      let changed = false;
+      sections.forEach((section) => {
+        const hasActive = section.items.some(
+          (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
+        );
+        if (hasActive && !expanded[section.id]) {
+          nextExpanded[section.id] = true;
+          changed = true;
+        }
+      });
+      if (changed) {
+        setExpanded(nextExpanded);
+      }
     }
-  }, [location.pathname, sections]);
+  }, [location.pathname, sections, expanded]);
 
   const toggleSection = (sectionId) => {
     setExpanded((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
