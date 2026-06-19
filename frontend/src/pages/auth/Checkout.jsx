@@ -172,31 +172,38 @@ export default function Checkout() {
           </div>
           <form className="checkout-form" onSubmit={submit}>
             <label>
-              Metodo
+              <span>Método</span>
               <select value={payment.metodo} onChange={(event) => updatePayment('metodo', event.target.value)}>
                 <option value="transferencia">Transferencia bancaria</option>
-                <option value="deposito">Deposito bancario</option>
+                <option value="deposito">Depósito bancario</option>
               </select>
             </label>
             <label>
-              Banco o entidad
+              <span>Banco o entidad</span>
               <input value={payment.banco} onChange={(event) => updatePayment('banco', event.target.value)} placeholder="Ej. Banco Pichincha" required />
             </label>
             <label>
-              Numero de referencia
-              <input value={payment.referencia} onChange={(event) => updatePayment('referencia', event.target.value)} placeholder="Numero de operacion" required />
+              <span>Número de referencia</span>
+              <input value={payment.referencia} onChange={(event) => updatePayment('referencia', event.target.value)} placeholder="Número de operación" required />
             </label>
             <label>
-              Nota
+              <span>Nota</span>
               <textarea value={payment.nota} onChange={(event) => updatePayment('nota', event.target.value)} placeholder="Detalle opcional" rows={3} />
             </label>
-            <label>
-              Comprobante
-              <span className="upload-zone">
-                <FileUp size={24} />
+            <label className="file-uploader-box">
+              <span>Comprobante</span>
+              <div className="uploader-area-dashed">
+                <FileUp size={28} className="uploader-icon" />
                 <input type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(event) => selectReceipt(event.target.files?.[0])} required />
-                <span>{receipt?.name || 'PDF, JPG, PNG o WEBP hasta 2MB'}</span>
-              </span>
+                {receipt ? (
+                  <div className="selected-file-info">
+                    <strong>{receipt.name}</strong>
+                    <span>{(receipt.size / 1024).toFixed(1)} KB · Cambiar archivo</span>
+                  </div>
+                ) : (
+                  <span>Haz clic para seleccionar el archivo (PDF, JPG, PNG o WEBP hasta 2MB)</span>
+                )}
+              </div>
             </label>
             <div className="info-banner">
               <Info size={18} />
