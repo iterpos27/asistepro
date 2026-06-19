@@ -95,6 +95,59 @@ async function assertUsuarioInTenant(empresaId, usuarioId) {
   }
 }
 
+async function assertEstructuraInTenant(empresaId, estructuraId, tipos = []) {
+  if (!estructuraId) return;
+
+  const values = [empresaId, estructuraId];
+  const typeFilter = tipos.length ? `AND tipo = ANY($3::text[])` : '';
+  if (tipos.length) values.push(tipos);
+
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM estructuras_organizacionales
+      WHERE empresa_id = $1
+        AND id = $2
+        AND activo = TRUE
+        ${typeFilter}
+      LIMIT 1
+    `,
+    values,
+  );
+
+  if (!result.rows.length) {
+    const error = new Error('La estructura organizacional indicada no pertenece a la empresa');
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+async function assertSupervisorInTenant(empresaId, empleadoId, supervisorId) {
+  if (!supervisorId) return;
+  if (empleadoId && supervisorId === empleadoId) {
+    const error = new Error('Un empleado no puede ser su propio supervisor');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM empleados
+      WHERE empresa_id = $1
+        AND id = $2
+      LIMIT 1
+    `,
+    [empresaId, supervisorId],
+  );
+
+  if (!result.rows.length) {
+    const error = new Error('supervisor_empleado_id no pertenece a la empresa');
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 async function createUsuarioAcceso(client, empresaId, payload) {
   const rolCodigo = payload.rol_acceso || 'EMPLEADO';
   const roleResult = await client.query('SELECT id FROM roles WHERE codigo = $1 LIMIT 1', [rolCodigo]);
@@ -169,10 +222,20 @@ async function listEmpleados({ empresaId, search, estado, sucursalId, limit = 20
         e.*,
         s.nombre AS sucursal_habitual_nombre,
         u.email AS usuario_email,
+        area.nombre AS area_nombre,
+        cargo_org.nombre AS cargo_estructura_nombre,
+        centro.nombre AS centro_costo_nombre,
+        supervisor.codigo AS supervisor_codigo,
+        supervisor.nombres AS supervisor_nombres,
+        supervisor.apellidos AS supervisor_apellidos,
         COUNT(*) OVER() AS total
       FROM empleados e
       LEFT JOIN sucursales s ON s.id = e.sucursal_habitual_id
       LEFT JOIN usuarios u ON u.id = e.usuario_id
+      LEFT JOIN estructuras_organizacionales area ON area.id = e.area_estructura_id
+      LEFT JOIN estructuras_organizacionales cargo_org ON cargo_org.id = e.cargo_estructura_id
+      LEFT JOIN estructuras_organizacionales centro ON centro.id = e.centro_costo_estructura_id
+      LEFT JOIN empleados supervisor ON supervisor.id = e.supervisor_empleado_id
       WHERE ${filters.join(' AND ')}
       ORDER BY e.creado_en DESC
       LIMIT $${limitParam}
@@ -195,10 +258,20 @@ async function findEmpleadoById(empresaId, id) {
       SELECT
         e.*,
         s.nombre AS sucursal_habitual_nombre,
-        u.email AS usuario_email
+        u.email AS usuario_email,
+        area.nombre AS area_nombre,
+        cargo_org.nombre AS cargo_estructura_nombre,
+        centro.nombre AS centro_costo_nombre,
+        supervisor.codigo AS supervisor_codigo,
+        supervisor.nombres AS supervisor_nombres,
+        supervisor.apellidos AS supervisor_apellidos
       FROM empleados e
       LEFT JOIN sucursales s ON s.id = e.sucursal_habitual_id
       LEFT JOIN usuarios u ON u.id = e.usuario_id
+      LEFT JOIN estructuras_organizacionales area ON area.id = e.area_estructura_id
+      LEFT JOIN estructuras_organizacionales cargo_org ON cargo_org.id = e.cargo_estructura_id
+      LEFT JOIN estructuras_organizacionales centro ON centro.id = e.centro_costo_estructura_id
+      LEFT JOIN empleados supervisor ON supervisor.id = e.supervisor_empleado_id
       WHERE e.empresa_id = $1
         AND e.id = $2
       LIMIT 1
@@ -214,6 +287,10 @@ async function createEmpleado(empresaId, payload) {
   validateUsuarioPayload(payload);
   await assertSucursalInTenant(empresaId, payload.sucursal_habitual_id);
   await assertUsuarioInTenant(empresaId, payload.usuario_id);
+  await assertEstructuraInTenant(empresaId, payload.area_estructura_id, ['direccion', 'departamento', 'area', 'unidad']);
+  await assertEstructuraInTenant(empresaId, payload.cargo_estructura_id, ['cargo']);
+  await assertEstructuraInTenant(empresaId, payload.centro_costo_estructura_id, ['centro_costo']);
+  await assertSupervisorInTenant(empresaId, null, payload.supervisor_empleado_id);
 
   const client = await pool.connect();
 
@@ -234,9 +311,15 @@ async function createEmpleado(empresaId, payload) {
           telefono,
           cargo,
           departamento,
+          area_estructura_id,
+          cargo_estructura_id,
+          centro_costo_estructura_id,
+          supervisor_empleado_id,
+          tipo_contrato,
+          salario_base,
           fecha_ingreso,
           estado
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING id
       `,
       [
@@ -250,6 +333,12 @@ async function createEmpleado(empresaId, payload) {
         payload.telefono?.trim() || null,
         payload.cargo?.trim() || null,
         payload.departamento?.trim() || null,
+        payload.area_estructura_id || null,
+        payload.cargo_estructura_id || null,
+        payload.centro_costo_estructura_id || null,
+        payload.supervisor_empleado_id || null,
+        payload.tipo_contrato?.trim() || null,
+        payload.salario_base !== undefined && payload.salario_base !== null ? Number(payload.salario_base) : null,
         payload.fecha_ingreso || null,
         payload.estado || 'activo',
       ],
@@ -292,12 +381,34 @@ async function updateEmpleado(empresaId, id, payload) {
     cargo: payload.cargo !== undefined ? payload.cargo?.trim() || null : current.cargo,
     departamento:
       payload.departamento !== undefined ? payload.departamento?.trim() || null : current.departamento,
+    area_estructura_id:
+      payload.area_estructura_id !== undefined ? payload.area_estructura_id || null : current.area_estructura_id,
+    cargo_estructura_id:
+      payload.cargo_estructura_id !== undefined ? payload.cargo_estructura_id || null : current.cargo_estructura_id,
+    centro_costo_estructura_id:
+      payload.centro_costo_estructura_id !== undefined
+        ? payload.centro_costo_estructura_id || null
+        : current.centro_costo_estructura_id,
+    supervisor_empleado_id:
+      payload.supervisor_empleado_id !== undefined
+        ? payload.supervisor_empleado_id || null
+        : current.supervisor_empleado_id,
+    tipo_contrato:
+      payload.tipo_contrato !== undefined ? payload.tipo_contrato?.trim() || null : current.tipo_contrato,
+    salario_base:
+      payload.salario_base !== undefined
+        ? payload.salario_base === null ? null : Number(payload.salario_base)
+        : current.salario_base,
     fecha_ingreso: payload.fecha_ingreso !== undefined ? payload.fecha_ingreso || null : current.fecha_ingreso,
     estado: payload.estado !== undefined ? payload.estado : current.estado,
   };
 
   await assertSucursalInTenant(empresaId, next.sucursal_habitual_id);
   await assertUsuarioInTenant(empresaId, next.usuario_id);
+  await assertEstructuraInTenant(empresaId, next.area_estructura_id, ['direccion', 'departamento', 'area', 'unidad']);
+  await assertEstructuraInTenant(empresaId, next.cargo_estructura_id, ['cargo']);
+  await assertEstructuraInTenant(empresaId, next.centro_costo_estructura_id, ['centro_costo']);
+  await assertSupervisorInTenant(empresaId, id, next.supervisor_empleado_id);
 
   const client = await pool.connect();
 
@@ -319,8 +430,14 @@ async function updateEmpleado(empresaId, id, payload) {
             telefono = $9,
             cargo = $10,
             departamento = $11,
-            fecha_ingreso = $12,
-            estado = $13,
+            area_estructura_id = $12,
+            cargo_estructura_id = $13,
+            centro_costo_estructura_id = $14,
+            supervisor_empleado_id = $15,
+            tipo_contrato = $16,
+            salario_base = $17,
+            fecha_ingreso = $18,
+            estado = $19,
             actualizado_en = NOW()
         WHERE empresa_id = $1
           AND id = $2
@@ -337,6 +454,12 @@ async function updateEmpleado(empresaId, id, payload) {
         next.telefono,
         next.cargo,
         next.departamento,
+        next.area_estructura_id,
+        next.cargo_estructura_id,
+        next.centro_costo_estructura_id,
+        next.supervisor_empleado_id,
+        next.tipo_contrato,
+        next.salario_base,
         next.fecha_ingreso,
         next.estado,
       ],

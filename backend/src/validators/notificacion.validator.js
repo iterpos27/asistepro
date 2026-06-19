@@ -7,7 +7,20 @@ const listNotificacionesSchema = z.object({
   params: z.object({}).passthrough(),
 });
 
+const subscribePushSchema = z.object({
+  body: z.object({
+    endpoint: z.url('endpoint invalido'),
+    keys: z.object({
+      p256dh: z.string().trim().min(1),
+      auth: z.string().trim().min(1),
+    }),
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough(),
+});
+
 module.exports = {
   listNotificacionesSchema,
   idParamSchema,
+  subscribePushSchema,
 };

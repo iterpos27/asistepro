@@ -15,6 +15,7 @@ export default function Topbar({ user, onOpenMenu, onLogout }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notificationsRef = useRef(null);
+  const seenNotificationIds = useRef(new Set());
 
   const activeItem = navSections
     .flatMap((section) => section.items)
@@ -34,6 +35,22 @@ export default function Topbar({ user, onOpenMenu, onLogout }) {
       setNotifications(data.items || []);
       const unread = data.items.filter((item) => !item.leido).length;
       setUnreadCount(unread);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        data.items
+          .filter((item) => !item.leido && !seenNotificationIds.current.has(item.id))
+          .slice(0, 2)
+          .forEach((item) => {
+            seenNotificationIds.current.add(item.id);
+            const registration = navigator.serviceWorker?.ready;
+            if (registration) {
+              registration.then((sw) => sw.showNotification(item.titulo, { body: item.mensaje, tag: item.id })).catch(() => {
+                new Notification(item.titulo, { body: item.mensaje });
+              });
+            } else {
+              new Notification(item.titulo, { body: item.mensaje });
+            }
+          });
+      }
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }

@@ -16,3 +16,8 @@ export async function markAllAsRead() {
   const response = await api.put('/notificaciones/read-all');
   return response.data.message;
 }
+
+export async function subscribePush(payload) {
+  const response = await api.post('/notificaciones/subscribe', payload);
+  return response.data.data;
+}

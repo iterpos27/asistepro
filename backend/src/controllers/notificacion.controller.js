@@ -44,8 +44,22 @@ async function markAllAsRead(req, res, next) {
   }
 }
 
+async function subscribePush(req, res, next) {
+  try {
+    const data = await notificacionService.savePushSubscription({
+      usuarioId: req.auth.usuario_id,
+      payload: req.body,
+      userAgent: req.headers['user-agent'],
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listNotificaciones,
   markAsRead,
   markAllAsRead,
+  subscribePush,
 };

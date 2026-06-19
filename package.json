@@ -15,10 +15,15 @@
   "engines": {
     "node": ">=20.19"
   },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1073.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",

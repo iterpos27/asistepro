@@ -55,6 +55,36 @@ async function markAllAsRead({ usuarioId }) {
   return true;
 }
 
+async function savePushSubscription({ usuarioId, payload, userAgent }) {
+  const endpoint = String(payload?.endpoint || '').trim();
+  const p256dh = String(payload?.keys?.p256dh || '').trim();
+  const auth = String(payload?.keys?.auth || '').trim();
+
+  if (!endpoint || !p256dh || !auth) {
+    const error = new Error('Suscripcion push invalida');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await pool.query(
+    `
+      INSERT INTO notificaciones_push_suscripciones (usuario_id, endpoint, p256dh, auth, user_agent, activo)
+      VALUES ($1, $2, $3, $4, $5, TRUE)
+      ON CONFLICT (endpoint)
+      DO UPDATE SET usuario_id = EXCLUDED.usuario_id,
+                    p256dh = EXCLUDED.p256dh,
+                    auth = EXCLUDED.auth,
+                    user_agent = EXCLUDED.user_agent,
+                    activo = TRUE,
+                    actualizado_en = NOW()
+      RETURNING id, endpoint, activo, creado_en, actualizado_en
+    `,
+    [usuarioId, endpoint, p256dh, auth, userAgent || null],
+  );
+
+  return result.rows[0];
+}
+
 async function createMarcacionNovedadNotification({ empresaId, empleadoNombre, sucursalNombre, motivo }) {
   // Buscar todos los usuarios ADMIN_EMPRESA y RRHH activos de la empresa
   const admins = await pool.query(
@@ -88,5 +118,6 @@ module.exports = {
   listNotificaciones,
   markAsRead,
   markAllAsRead,
+  savePushSubscription,
   createMarcacionNovedadNotification,
 };

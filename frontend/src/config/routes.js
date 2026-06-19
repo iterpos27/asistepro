@@ -18,6 +18,10 @@ const SolicitudesList = lazy(() => import('../pages/solicitudes/SolicitudesList'
 const CalculoLaboral = lazy(() => import('../pages/laboral/CalculoLaboral'));
 const Auditoria = lazy(() => import('../pages/auditoria/Auditoria'));
 const RolesPermisos = lazy(() => import('../pages/settings/RolesPermisos'));
+const EstructuraOrganizacional = lazy(() => import('../pages/organizacion/EstructuraOrganizacional'));
+const SaasControl = lazy(() => import('../pages/saas/SaasControl'));
+const Integraciones = lazy(() => import('../pages/integraciones/Integraciones'));
+const AppMovil = lazy(() => import('../pages/app/AppMovil'));
 
 export const privateRoutes = [
   {
@@ -87,6 +91,32 @@ export const privateRoutes = [
     element: Facturas,
     roles: routeRoles.adminEmpresa,
     feature: 'facturacion',
+  },
+  {
+    path: '/organizacion',
+    element: EstructuraOrganizacional,
+    roles: routeRoles.rrhh,
+    feature: 'organizacion',
+    permission: ['organizacion', 'ver'],
+  },
+  {
+    path: '/integraciones',
+    element: Integraciones,
+    roles: routeRoles.rrhh,
+    feature: 'integraciones',
+    permission: ['integraciones', 'ver'],
+  },
+  {
+    path: '/saas-control',
+    element: SaasControl,
+    roles: routeRoles.superAdmin,
+    permission: ['saas_consumo', 'ver'],
+  },
+  {
+    path: '/app-movil',
+    element: AppMovil,
+    roles: routeRoles.all,
+    feature: 'pwa_movil',
   },
   {
     path: '/solicitudes', element: SolicitudesList, roles: routeRoles.all, permission: ['solicitudes', 'ver'],

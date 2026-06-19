@@ -8,12 +8,25 @@
   "background_color": "#f4f7fb",
   "theme_color": "#0d1b2f",
   "orientation": "portrait",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/icons/asistepro-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Marcar asistencia",
+      "short_name": "Marcar",
+      "url": "/marcaciones"
+    },
+    {
+      "name": "Solicitudes",
+      "short_name": "Solicitudes",
+      "url": "/solicitudes"
     }
   ]
 }

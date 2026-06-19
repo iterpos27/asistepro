@@ -6,6 +6,10 @@ const RESOURCES = [
   { key: 'cierres_mensuales', label: 'Cierres mensuales', actions: ['ver', 'cerrar', 'reabrir'] },
   { key: 'auditoria', label: 'Auditoria', actions: ['ver', 'exportar'] },
   { key: 'empleados', label: 'Empleados', actions: ['ver', 'crear', 'editar', 'eliminar'] },
+  { key: 'organizacion', label: 'Organizacion', actions: ['ver', 'crear', 'editar', 'eliminar', 'exportar'] },
+  { key: 'importaciones', label: 'Importaciones', actions: ['ver', 'crear', 'exportar'] },
+  { key: 'integraciones', label: 'Integraciones', actions: ['ver', 'crear', 'editar', 'exportar'] },
+  { key: 'saas_consumo', label: 'SaaS y cobranza', actions: ['ver', 'exportar'] },
   { key: 'sucursales', label: 'Sucursales', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'horarios', label: 'Horarios', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'reportes', label: 'Reportes', actions: ['ver', 'exportar'] },
@@ -26,6 +30,8 @@ function defaultsForRole(role) {
       if (resource.key === 'cierres_mensuales') {
         all[resource.key].ver = true;
         all[resource.key].cerrar = true;
+      } else if (resource.key === 'saas_consumo') {
+        all[resource.key].ver = false;
       } else if (resource.key !== 'auditoria') {
         for (const action of resource.actions) all[resource.key][action] = action !== 'eliminar';
       }

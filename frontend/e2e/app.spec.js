@@ -78,6 +78,98 @@ async function mockApi(page, user, onRequest = () => {}) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: [] }) });
     }
 
+    if (url.pathname.endsWith('/organizacion/summary')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            empleados_activos: 12,
+            empleados_con_usuario: 8,
+            importaciones_mes: 2,
+            errores_mes: 1,
+            storage: { driver: 'database' },
+          },
+        }),
+      });
+    }
+
+    if (url.pathname.endsWith('/organizacion/catalogos')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            estructuras: [],
+            sucursales: [{ id: 's1', codigo: 'MAT', nombre: 'Matriz' }],
+            supervisores: [{ id: 'e1', codigo: 'EMP-001', nombres: 'Lina', apellidos: 'QA' }],
+          },
+        }),
+      });
+    }
+
+    if (url.pathname.endsWith('/organizacion/estructuras')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: [{ id: 'org-1', tipo: 'departamento', codigo: 'RRHH', nombre: 'Recursos Humanos' }],
+        }),
+      });
+    }
+
+    if (url.pathname.endsWith('/organizacion/importaciones')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: [{ id: 'imp-1', nombre_archivo: 'empleados.xlsx', estado: 'procesada', filas_creadas: 4, filas_actualizadas: 2, filas_con_error: 0, resumen: {} }],
+        }),
+      });
+    }
+
+    if (url.pathname.endsWith('/saas/overview')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            resumen: { empresas_activas: 2, mrr: 98, saldo_pendiente: 49, facturas_vencidas: 1 },
+            planes: [{ codigo: 'growth', nombre: 'Growth', total: 2 }],
+            riesgos: { con_limite_critico: 1, con_cobro_pendiente: 1, con_baja_actividad: 0 },
+          },
+        }),
+      });
+    }
+
+    if (url.pathname.endsWith('/saas/tenants')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          data: [{
+            id: 'tenant-1',
+            nombre: 'Tenant QA',
+            plan_nombre: 'Growth',
+            total_empleados: 10,
+            limite_empleados: 25,
+            total_sucursales: 2,
+            limite_sucursales: 5,
+            marcaciones_mes: 120,
+            saldo_pendiente: 49,
+            facturas_vencidas: 1,
+            riesgo_cobranza: true,
+          }],
+        }),
+      });
+    }
+
     if (/\/laboral\/\d{4}-\d{2}$/.test(url.pathname)) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, data: { mes: '2026-06', resumen: {}, items: [], cierre: null } }) });
     }
@@ -182,4 +274,20 @@ test('usuario sin permiso granular no puede abrir auditoria', async ({ page }) =
   await mockApi(page, user);
   await page.goto('/auditoria');
   await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test('rrhh con permiso puede abrir estructura organizacional', async ({ page }) => {
+  const user = userFor('RRHH', { organizacion: true, importaciones: true }, { organizacion: { ver: true, crear: true, editar: true, eliminar: true }, importaciones: { ver: true, crear: true, exportar: true } });
+  await mockApi(page, user);
+  await page.goto('/organizacion');
+  await expect(page.getByRole('heading', { name: 'Estructura organizacional' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Recursos Humanos' })).toBeVisible();
+});
+
+test('super admin puede abrir panel saas y cobranza', async ({ page }) => {
+  const user = userFor('SUPER_ADMIN', {}, { saas_consumo: { ver: true, exportar: true } });
+  await mockApi(page, user);
+  await page.goto('/saas-control');
+  await expect(page.getByRole('heading', { name: 'Panel SaaS y cobranza' })).toBeVisible();
+  await expect(page.getByText('Tenant QA')).toBeVisible();
 });

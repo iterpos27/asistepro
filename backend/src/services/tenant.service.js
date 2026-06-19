@@ -54,7 +54,13 @@ async function findActiveSubscription(empresaId) {
         p.codigo AS plan_codigo,
         p.nombre AS plan_nombre,
         p.limite_empleados,
-        p.limite_sucursales
+        p.limite_sucursales,
+        p.limite_importaciones_mensuales,
+        p.limite_almacenamiento_mb,
+        p.limite_integraciones,
+        p.soporte_pwa,
+        p.soporte_biometrico,
+        p.soporte_nomina
       FROM suscripciones s
       INNER JOIN planes p ON p.id = s.plan_id
       WHERE s.empresa_id = $1
@@ -127,8 +133,54 @@ async function assertPlanCapacity({ empresaId, plan, includeNew = {} }) {
   return usage;
 }
 
+async function assertMonthlyImportsCapacity({ empresaId, plan, includeNew = 1 }) {
+  const limit = normalizeLimit(plan?.limite_importaciones_mensuales);
+  if (limit === null) return null;
+
+  const result = await pool.query(
+    `
+      SELECT COUNT(*)::int AS total
+      FROM importaciones_empleados
+      WHERE empresa_id = $1
+        AND creado_en >= date_trunc('month', NOW())
+    `,
+    [empresaId],
+  );
+  const nextValue = Number(result.rows[0]?.total || 0) + includeNew;
+  if (nextValue > limit) {
+    const error = new Error(`Limite mensual de importaciones alcanzado (${limit})`);
+    error.statusCode = 409;
+    throw error;
+  }
+  return nextValue;
+}
+
+async function assertIntegrationsCapacity({ empresaId, plan, includeNew = 1 }) {
+  const limit = normalizeLimit(plan?.limite_integraciones);
+  if (limit === null) return null;
+
+  const result = await pool.query(
+    `
+      SELECT COUNT(*)::int AS total
+      FROM integraciones_externas
+      WHERE empresa_id = $1
+        AND estado = 'activa'
+    `,
+    [empresaId],
+  );
+  const nextValue = Number(result.rows[0]?.total || 0) + includeNew;
+  if (nextValue > limit) {
+    const error = new Error(`Limite de integraciones activas alcanzado (${limit})`);
+    error.statusCode = 409;
+    throw error;
+  }
+  return nextValue;
+}
+
 module.exports = {
   assertPlanCapacity,
+  assertIntegrationsCapacity,
+  assertMonthlyImportsCapacity,
   assertPlanCapacityForUsage,
   findEmpresaById,
   findFirstActiveEmpresa,
