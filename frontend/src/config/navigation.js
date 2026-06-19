@@ -20,11 +20,18 @@ import { ROLES } from '../utils/roles';
 
 export const navSections = [
   {
+    id: 'dashboard',
+    label: 'Dashboard',
+    hideHeader: true,
+    roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH],
+    items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
     id: 'platform',
     label: 'Plataforma',
+    icon: ShieldCheck,
     roles: [ROLES.SUPER_ADMIN],
     items: [
-      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { title: 'Empresas', href: '/empresas', icon: Building2 },
       { title: 'Planes', href: '/planes', icon: CreditCard },
       { title: 'Suscripciones', href: '/suscripciones', icon: ShieldCheck },
@@ -32,14 +39,9 @@ export const navSections = [
     ],
   },
   {
-    id: 'summary',
-    label: 'Resumen',
-    roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
-    items: [{ title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }],
-  },
-  {
     id: 'organization',
     label: 'Organizacion',
+    icon: Building2,
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
     items: [
       { title: 'Sucursales', href: '/sucursales', icon: MapPin, feature: 'sucursales' },
@@ -51,6 +53,7 @@ export const navSections = [
   {
     id: 'operations',
     label: 'Operacion',
+    icon: ClipboardCheck,
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
     items: [
       { title: 'Solicitudes', href: '/solicitudes', icon: ClipboardCheck, permission: ['solicitudes', 'ver'] },
@@ -62,12 +65,14 @@ export const navSections = [
   {
     id: 'billing',
     label: 'Suscripcion',
+    icon: CreditCard,
     roles: [ROLES.ADMIN_EMPRESA],
     items: [{ title: 'Facturacion', href: '/facturacion', icon: CreditCard, feature: 'facturacion' }],
   },
   {
     id: 'attendance',
     label: 'Asistencia',
+    icon: CalendarClock,
     roles: [ROLES.EMPLEADO],
     items: [
       { title: 'Marcar', href: '/marcaciones', icon: ScanLine, feature: 'marcaciones' },
@@ -78,6 +83,7 @@ export const navSections = [
   {
     id: 'self-attendance',
     label: 'Mi asistencia',
+    icon: CalendarClock,
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
     items: [
       { title: 'Marcar', href: '/marcaciones', icon: ScanLine, feature: 'marcaciones' },
@@ -87,6 +93,7 @@ export const navSections = [
   {
     id: 'account',
     label: 'Cuenta',
+    icon: UserCog,
     roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
     items: [
       { title: 'Roles y permisos', href: '/roles-permisos', icon: UserCog, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA] },

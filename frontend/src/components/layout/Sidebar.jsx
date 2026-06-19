@@ -58,10 +58,33 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
 
       <nav className="sidebar-nav">
         {sections.map((section) => {
+          if (section.hideHeader) {
+            return (
+              <div key={section.id} className="nav-list standalone-nav-list">
+                {section.items.map((item) => {
+                  const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      className={active ? 'nav-link active' : 'nav-link'}
+                      to={item.href}
+                      onClick={onNavigate}
+                    >
+                      <Icon size={18} />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          }
+
           const isExpanded = collapsed || expanded[section.id];
           const hasActive = section.items.some(
             (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
           );
+          const SectionIcon = section.icon;
 
           return (
             <div
@@ -74,7 +97,10 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
                 onClick={() => toggleSection(section.id)}
                 aria-expanded={isExpanded}
               >
-                <span className="nav-section-label">{section.label}</span>
+                <div className="nav-section-title-wrap">
+                  {SectionIcon && <SectionIcon size={16} className="nav-section-icon" />}
+                  <span className="nav-section-label">{section.label}</span>
+                </div>
                 <ChevronDown size={14} className="nav-section-arrow" />
               </button>
 

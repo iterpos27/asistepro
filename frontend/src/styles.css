@@ -4011,3 +4011,28 @@ tbody tr:hover {
 .sidebar.collapsed .nav-section-header {
   display: none !important;
 }
+
+.nav-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.nav-section-icon {
+  color: #98a2b3;
+  flex: 0 0 auto;
+  transition: color 150ms ease;
+}
+
+.nav-section-header:hover .nav-section-icon {
+  color: #ffffff;
+}
+
+.nav-section.active .nav-section-icon {
+  color: var(--primary, #2563eb);
+}
+
+.standalone-nav-list {
+  margin-bottom: 8px;
+}
