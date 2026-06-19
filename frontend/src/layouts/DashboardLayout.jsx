@@ -29,6 +29,9 @@ export default function DashboardLayout({ user, children }) {
         <Topbar user={user} onOpenMenu={() => setOpen(true)} onLogout={logout} />
         <main className="page">
           <div className="page-inner">{children}</div>
+          <footer className="app-footer">
+            <span>&copy; {new Date().getFullYear()} AsistePro &bull; Creado por <strong>IPS TECH</strong></span>
+          </footer>
         </main>
       </div>
     </div>
