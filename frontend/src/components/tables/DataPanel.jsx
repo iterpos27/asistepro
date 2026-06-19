@@ -4,7 +4,7 @@ export default function DataPanel({ title, rows, columns }) {
   return (
     <div className="panel">
       <PanelTitle title={title} />
-      <div className="table-wrap">
+      <div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>

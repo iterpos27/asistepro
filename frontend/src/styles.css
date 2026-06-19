@@ -4041,3 +4041,7 @@ tbody tr:hover {
 .sidebar:not(.collapsed) .nav-section .nav-link {
   padding-left: 28px;
 }
+
+.table-compact table {
+  min-width: auto;
+}
