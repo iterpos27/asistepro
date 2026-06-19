@@ -237,13 +237,13 @@ export default function EmpresasList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(empresa)} aria-label="Editar empresa">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(empresa)} title="Editar empresa" aria-label="Editar empresa">
                           <Edit size={16} />
                         </button>
                         <button className="icon-button" type="button" onClick={() => setPendingResetPassword(empresa)} title="Restablecer contraseña del admin" aria-label="Restablecer contraseña">
                           <KeyRound size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(empresa)} aria-label="Cancelar empresa">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(empresa)} title="Cancelar empresa" aria-label="Cancelar empresa">
                           <Trash2 size={16} />
                         </button>
                       </div>

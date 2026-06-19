@@ -222,13 +222,13 @@ export default function EmpleadosList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => setDetailEmpleado(empleado)} aria-label="Ver empleado">
+                        <button className="icon-button" type="button" onClick={() => setDetailEmpleado(empleado)} title="Ver empleado" aria-label="Ver empleado">
                           <Eye size={16} />
                         </button>
-                        <button className="icon-button" type="button" onClick={() => openEditForm(empleado)} aria-label="Editar empleado">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(empleado)} title="Editar empleado" aria-label="Editar empleado">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(empleado)} aria-label="Desactivar empleado">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(empleado)} title="Desactivar empleado" aria-label="Desactivar empleado">
                           <Trash2 size={16} />
                         </button>
                       </div>

@@ -400,13 +400,13 @@ export default function HorariosList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(horario)} aria-label="Editar horario">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(horario)} title="Editar horario" aria-label="Editar horario">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button" type="button" onClick={() => openAssignForm(horario)} aria-label="Asignar horario">
+                        <button className="icon-button" type="button" onClick={() => openAssignForm(horario)} title="Asignar horario" aria-label="Asignar horario">
                           <CalendarPlus size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(horario)} aria-label="Desactivar horario">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(horario)} title="Desactivar horario" aria-label="Desactivar horario">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -453,6 +453,7 @@ export default function HorariosList() {
                         className="icon-button danger"
                         type="button"
                         onClick={() => setPendingDeleteAsignacion(asignacion)}
+                        title="Eliminar asignacion"
                         aria-label="Eliminar asignacion"
                       >
                         <Trash2 size={16} />

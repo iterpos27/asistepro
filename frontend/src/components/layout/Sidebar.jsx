@@ -57,6 +57,7 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
         className="sidebar-toggle"
         onClick={onToggleCollapse}
         type="button"
+        title={collapsed ? 'Expandir menu' : 'Colapsar menu'}
         aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
       >
         {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

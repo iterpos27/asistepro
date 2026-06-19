@@ -364,7 +364,7 @@ export default function Facturas({ defaultTab = 'facturas' }) {
                           ) : null}
                           {isSuperAdmin && factura.estado !== 'anulada' ? (
                             <>
-                              <button className="icon-button" type="button" onClick={() => openEditForm(factura)} aria-label="Editar factura">
+                              <button className="icon-button" type="button" onClick={() => openEditForm(factura)} title="Editar factura" aria-label="Editar factura">
                                 <Edit size={16} />
                               </button>
                               <button
@@ -374,6 +374,7 @@ export default function Facturas({ defaultTab = 'facturas' }) {
                                   setCancelTarget(factura);
                                   setCancelReason('');
                                 }}
+                                title="Anular factura"
                                 aria-label="Anular factura"
                               >
                                 <Ban size={16} />

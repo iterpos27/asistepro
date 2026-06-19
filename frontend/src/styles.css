@@ -529,6 +529,11 @@ button {
   justify-content: flex-end;
   gap: 10px;
   min-width: 0;
+  margin-left: auto;
+}
+
+.topbar-mobile-title {
+  display: none;
 }
 
 .empresa-selector {
@@ -2696,14 +2701,14 @@ tbody tr:hover {
     padding: 10px 14px;
   }
 
-  .topbar-title {
-    order: 0;
-    flex-basis: auto;
-  }
-
-  .topbar-title p,
-  .topbar-kicker {
-    display: none;
+  .topbar-mobile-title {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .topbar-actions {
@@ -2711,6 +2716,7 @@ tbody tr:hover {
     width: auto;
     min-width: 0;
     justify-content: flex-end;
+    margin-left: 0;
   }
 
   .role-badge {

@@ -365,7 +365,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                         {isSuperAdmin && pago.estado !== 'anulado' ? (
                           <>
                             {pago.estado === 'pendiente' ? (
-                              <button className="icon-button" type="button" onClick={() => approvePago(pago)} aria-label="Aprobar pago">
+                              <button className="icon-button" type="button" onClick={() => approvePago(pago)} title="Aprobar pago" aria-label="Aprobar pago">
                                 <Check size={16} />
                               </button>
                             ) : null}
@@ -376,6 +376,7 @@ export default function Pagos({ facturas = [], userRole, selectedFacturaId = '',
                                 setCancelTarget(pago);
                                 setCancelReason('');
                               }}
+                              title="Anular pago"
                               aria-label="Anular pago"
                             >
                               <Ban size={16} />

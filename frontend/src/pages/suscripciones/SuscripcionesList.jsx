@@ -223,10 +223,10 @@ export default function SuscripcionesList() {
                     <td>${Number(suscripcion.monto_mensual || 0).toFixed(2)}</td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(suscripcion)} aria-label="Editar suscripcion">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(suscripcion)} title="Editar suscripcion" aria-label="Editar suscripcion">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(suscripcion)} aria-label="Cancelar suscripcion">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(suscripcion)} title="Cancelar suscripcion" aria-label="Cancelar suscripcion">
                           <Trash2 size={16} />
                         </button>
                       </div>

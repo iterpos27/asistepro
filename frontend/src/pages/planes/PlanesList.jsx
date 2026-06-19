@@ -159,10 +159,10 @@ export default function PlanesList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(plan)} aria-label="Editar plan">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(plan)} title="Editar plan" aria-label="Editar plan">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(plan)} aria-label="Desactivar plan">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(plan)} title="Desactivar plan" aria-label="Desactivar plan">
                           <Trash2 size={16} />
                         </button>
                       </div>

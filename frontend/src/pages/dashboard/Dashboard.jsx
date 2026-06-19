@@ -115,9 +115,8 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader
-        title={`Dashboard ${getRoleLabel(role)}`}
-        description={user?.empresa ? `${user.empresa} · ${user.email}` : user?.email || 'Panel operativo'}
-        actions={<span className="status-pill">{role}</span>}
+        title="Dashboard"
+        description={isSuperAdmin ? 'Resumen general de la plataforma' : user?.empresa || 'Resumen de tu actividad'}
       />
 
       {isSuperAdmin && (

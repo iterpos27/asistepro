@@ -240,10 +240,10 @@ export default function EstructuraOrganizacional() {
                   <td>{item.responsable_codigo ? `${item.responsable_codigo} - ${item.responsable_nombres}` : '-'}</td>
                   <td>
                     <div className="row-actions">
-                      <button className="icon-button" type="button" onClick={() => startEdit(item)} aria-label="Editar">
+                      <button className="icon-button" type="button" onClick={() => startEdit(item)} title="Editar" aria-label="Editar">
                         <Plus size={16} />
                       </button>
-                      <button className="icon-button danger" type="button" onClick={() => removeStructure(item.id)} aria-label="Eliminar">
+                      <button className="icon-button danger" type="button" onClick={() => removeStructure(item.id)} title="Eliminar" aria-label="Eliminar">
                         <Trash2 size={16} />
                       </button>
                     </div>

@@ -331,10 +331,10 @@ export default function ReemplazosList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(reemplazo)} aria-label="Editar reemplazo">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(reemplazo)} title="Editar reemplazo" aria-label="Editar reemplazo">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(reemplazo)} aria-label="Cancelar reemplazo">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingCancel(reemplazo)} title="Cancelar reemplazo" aria-label="Cancelar reemplazo">
                           <Trash2 size={16} />
                         </button>
                       </div>

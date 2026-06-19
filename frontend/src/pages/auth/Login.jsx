@@ -87,7 +87,7 @@ export default function Login() {
                 autoComplete="current-password"
                 placeholder="********"
               />
-              <button className="icon-button" type="button" onClick={() => setShowPassword((value) => !value)} aria-label="Mostrar contrasena">
+              <button className="icon-button" type="button" onClick={() => setShowPassword((value) => !value)} title="Mostrar contrasena" aria-label="Mostrar contrasena">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>

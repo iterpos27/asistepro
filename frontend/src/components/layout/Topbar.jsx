@@ -150,15 +150,11 @@ export default function Topbar({ user, onOpenMenu, onLogout }) {
 
   return (
     <header className="topbar">
-      <button className="icon-button mobile-only" onClick={onOpenMenu} type="button" aria-label="Abrir menu">
+      <button className="icon-button mobile-only" onClick={onOpenMenu} type="button" title="Abrir menu" aria-label="Abrir menu">
         <Menu size={20} />
       </button>
 
-      <div className="topbar-title">
-        <span className="topbar-kicker">AsistePro</span>
-        <strong>{activeItem?.title || 'Panel operativo'}</strong>
-        <p>{user?.empresa || user?.email || 'Sesion operativa'}</p>
-      </div>
+      <strong className="topbar-mobile-title">{activeItem?.title || 'Panel operativo'}</strong>
 
       <div className="topbar-actions">
         {isSuperAdmin ? <EmpresaSelector /> : null}
@@ -169,6 +165,7 @@ export default function Topbar({ user, onOpenMenu, onLogout }) {
             className="notifications-trigger"
             type="button"
             onClick={() => setNotificationsOpen((open) => !open)}
+            title="Notificaciones"
             aria-label="Notificaciones"
             aria-haspopup="true"
             aria-expanded={notificationsOpen}

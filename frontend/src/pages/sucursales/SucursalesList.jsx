@@ -248,16 +248,16 @@ export default function SucursalesList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        <button className="icon-button" type="button" onClick={() => openEditForm(sucursal)} aria-label="Editar sucursal">
+                        <button className="icon-button" type="button" onClick={() => openEditForm(sucursal)} title="Editar sucursal" aria-label="Editar sucursal">
                           <Edit size={16} />
                         </button>
-                        <button className="icon-button" type="button" onClick={() => showQr(sucursal, 'dynamic')} aria-label="Ver QR dinamico">
+                        <button className="icon-button" type="button" onClick={() => showQr(sucursal, 'dynamic')} title="Ver QR dinamico" aria-label="Ver QR dinamico">
                           <ShieldCheck size={16} />
                         </button>
-                        <button className="icon-button" type="button" onClick={() => showQr(sucursal, 'static')} aria-label="Ver QR estatico">
+                        <button className="icon-button" type="button" onClick={() => showQr(sucursal, 'static')} title="Ver QR estatico" aria-label="Ver QR estatico">
                           <QrCode size={16} />
                         </button>
-                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(sucursal)} aria-label="Desactivar sucursal">
+                        <button className="icon-button danger" type="button" onClick={() => setPendingDeactivate(sucursal)} title="Desactivar sucursal" aria-label="Desactivar sucursal">
                           <Trash2 size={16} />
                         </button>
                       </div>

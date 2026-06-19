@@ -58,7 +58,7 @@ export default function ToastProvider({ children }) {
                 <strong>{item.title || titles[item.type] || 'Aviso'}</strong>
                 <span>{item.message}</span>
               </div>
-              <button className="toast-close" type="button" onClick={() => dismiss(item.id)} aria-label="Cerrar aviso">
+              <button className="toast-close" type="button" onClick={() => dismiss(item.id)} title="Cerrar aviso" aria-label="Cerrar aviso">
                 <X size={16} />
               </button>
             </div>
