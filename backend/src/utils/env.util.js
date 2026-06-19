@@ -13,13 +13,15 @@ function validateProductionEnv() {
   if (process.env.NODE_ENV !== 'production') return;
 
   const errors = [];
-  const corsOrigin = process.env.CORS_ORIGIN || '';
+  const corsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '';
 
   if (!process.env.DATABASE_URL) errors.push('DATABASE_URL es requerida');
   if (!process.env.JWT_ACCESS_SECRET) errors.push('JWT_ACCESS_SECRET es requerida');
   if (!process.env.JWT_REFRESH_SECRET) errors.push('JWT_REFRESH_SECRET es requerida');
-  if (!corsOrigin) errors.push('CORS_ORIGIN es requerida');
-  if (/localhost|127\.0\.0\.1/i.test(corsOrigin)) errors.push('CORS_ORIGIN no puede usar localhost');
+  if (!corsOrigin) errors.push('CORS_ORIGIN o FRONTEND_URL es requerida');
+  if (/localhost|127\.0\.0\.1/i.test(corsOrigin)) {
+    errors.push('CORS_ORIGIN y FRONTEND_URL no pueden usar localhost');
+  }
   if (errors.length) {
     throw new Error(`Configuracion de produccion invalida: ${errors.join(', ')}`);
   }

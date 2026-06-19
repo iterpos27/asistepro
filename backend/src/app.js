@@ -10,9 +10,15 @@ const { notFoundHandler, errorHandler } = require('./middlewares/error.middlewar
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const rateLimitMax = Number(process.env.RATE_LIMIT_MAX || (isProduction ? 100 : 10000));
-const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5174')
-  .split(',')
+const corsOrigins = [
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL,
+  isProduction ? 'https://asistepro.vercel.app' : 'http://localhost:5174',
+]
+  .filter(Boolean)
+  .flatMap((value) => value.split(','))
   .map((origin) => origin.trim())
+  .map((origin) => origin.replace(/\/$/, ''))
   .filter(Boolean);
 
 app.use(helmet());
@@ -23,11 +29,14 @@ app.use(
         return callback(null, true);
       }
 
-      if (!origin || corsOrigins.includes(origin)) {
+      const normalizedOrigin = origin?.replace(/\/$/, '');
+      if (!normalizedOrigin || corsOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
       }
 
-      return callback(new Error('Origen no permitido por CORS'));
+      const error = new Error('Origen no permitido por CORS');
+      error.statusCode = 403;
+      return callback(error);
     },
     credentials: true,
   }),
