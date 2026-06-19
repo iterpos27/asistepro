@@ -1,10 +1,35 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ShieldCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShieldCheck, ChevronDown } from 'lucide-react';
 import { getNavSectionsForRole } from '../../config/navigation';
 
 export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate, user }) {
   const location = useLocation();
   const sections = getNavSectionsForRole(user?.rol, user?.modulos, user?.permisos);
+
+  const [expanded, setExpanded] = useState({});
+
+  // Auto-expand sections that have active items
+  useEffect(() => {
+    const nextExpanded = { ...expanded };
+    let changed = false;
+    sections.forEach((section) => {
+      const hasActive = section.items.some(
+        (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
+      );
+      if (hasActive && !expanded[section.id]) {
+        nextExpanded[section.id] = true;
+        changed = true;
+      }
+    });
+    if (changed) {
+      setExpanded(nextExpanded);
+    }
+  }, [location.pathname, sections]);
+
+  const toggleSection = (sectionId) => {
+    setExpanded((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
 
   let asideClasses = 'sidebar';
   if (open) asideClasses += ' open';
@@ -32,28 +57,47 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
       </div>
 
       <nav className="sidebar-nav">
-        {sections.map((section) => (
-          <div key={section.id} className="nav-section">
-            <span className="nav-section-label">{section.label}</span>
-            <div className="nav-list">
-              {section.items.map((item) => {
-                const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    className={active ? 'nav-link active' : 'nav-link'}
-                    to={item.href}
-                    onClick={onNavigate}
-                  >
-                    <Icon size={18} />
-                    <span>{item.title}</span>
-                  </Link>
-                );
-              })}
+        {sections.map((section) => {
+          const isExpanded = collapsed || expanded[section.id];
+          const hasActive = section.items.some(
+            (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
+          );
+
+          return (
+            <div
+              key={section.id}
+              className={`nav-section ${isExpanded ? 'expanded' : ''} ${hasActive ? 'active' : ''}`}
+            >
+              <button
+                type="button"
+                className="nav-section-header"
+                onClick={() => toggleSection(section.id)}
+                aria-expanded={isExpanded}
+              >
+                <span className="nav-section-label">{section.label}</span>
+                <ChevronDown size={14} className="nav-section-arrow" />
+              </button>
+
+              <div className="nav-list">
+                {section.items.map((item) => {
+                  const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      className={active ? 'nav-link active' : 'nav-link'}
+                      to={item.href}
+                      onClick={onNavigate}
+                    >
+                      <Icon size={18} />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
     </aside>
   );

@@ -3977,3 +3977,37 @@ tbody tr:hover {
   color: var(--admin-brand, #2563eb);
   font-weight: 700;
 }
+
+.nav-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 12px 0 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  outline: none;
+}
+
+.nav-section-header .nav-section-label {
+  margin: 0;
+  text-align: left;
+}
+
+.nav-section-arrow {
+  color: #98a2b3;
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-section.expanded .nav-section-arrow {
+  transform: rotate(180deg);
+}
+
+.nav-section:not(.expanded) .nav-list {
+  display: none;
+}
+
+.sidebar.collapsed .nav-section-header {
+  display: none !important;
+}
