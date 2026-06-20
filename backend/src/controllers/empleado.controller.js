@@ -13,6 +13,9 @@ async function listEmpleados(req, res, next) {
       search: req.query.search,
       estado: req.query.estado,
       sucursalId: req.query.sucursal_id,
+      areaId: req.query.area_id,
+      supervisorId: req.query.supervisor_id,
+      tipoContrato: req.query.tipo_contrato,
       limit,
       offset,
     });

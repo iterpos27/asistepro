@@ -187,7 +187,17 @@ async function createUsuarioAcceso(client, empresaId, payload) {
   return userResult.rows[0].id;
 }
 
-async function listEmpleados({ empresaId, search, estado, sucursalId, limit = 20, offset = 0 }) {
+async function listEmpleados({
+  empresaId,
+  search,
+  estado,
+  sucursalId,
+  areaId,
+  supervisorId,
+  tipoContrato,
+  limit = 20,
+  offset = 0,
+}) {
   const filters = ['e.empresa_id = $1'];
   const values = [empresaId];
 
@@ -209,6 +219,21 @@ async function listEmpleados({ empresaId, search, estado, sucursalId, limit = 20
   if (sucursalId) {
     values.push(sucursalId);
     filters.push(`e.sucursal_habitual_id = $${values.length}`);
+  }
+
+  if (areaId) {
+    values.push(areaId);
+    filters.push(`e.area_estructura_id = $${values.length}`);
+  }
+
+  if (supervisorId) {
+    values.push(supervisorId);
+    filters.push(`e.supervisor_empleado_id = $${values.length}`);
+  }
+
+  if (tipoContrato) {
+    values.push(tipoContrato);
+    filters.push(`e.tipo_contrato = $${values.length}`);
   }
 
   values.push(limit);

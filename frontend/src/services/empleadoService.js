@@ -1,15 +1,32 @@
 import { api } from './api';
 
-export async function listEmpleados({ search = '', estado = '', sucursalId = '', limit = 100, offset = 0 } = {}) {
+export async function listEmpleados({
+  search = '',
+  estado = '',
+  sucursalId = '',
+  areaId = '',
+  supervisorId = '',
+  tipoContrato = '',
+  limit = 100,
+  offset = 0,
+} = {}) {
   const response = await api.get('/empleados', {
     params: {
       search: search || undefined,
       estado: estado || undefined,
       sucursal_id: sucursalId || undefined,
+      area_id: areaId || undefined,
+      supervisor_id: supervisorId || undefined,
+      tipo_contrato: tipoContrato || undefined,
       limit,
       offset,
     },
   });
+  return response.data.data;
+}
+
+export async function getEmpleado(id) {
+  const response = await api.get(`/empleados/${id}`);
   return response.data.data;
 }
 

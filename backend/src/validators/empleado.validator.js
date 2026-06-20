@@ -44,6 +44,9 @@ const listEmpleadosSchema = z.object({
   query: paginationQuery.extend({
     estado: z.enum(['activo', 'inactivo', 'suspendido']).optional(),
     sucursal_id: uuid('sucursal_id').optional(),
+    area_id: uuid('area_id').optional(),
+    supervisor_id: uuid('supervisor_id').optional(),
+    tipo_contrato: z.string().trim().max(50).optional(),
   }),
   params: emptyParams,
 });
