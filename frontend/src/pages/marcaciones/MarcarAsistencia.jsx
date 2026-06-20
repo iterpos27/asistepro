@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Camera, MapPin, QrCode, Send, Square } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -34,7 +33,6 @@ function withTimeout(promise, milliseconds = 1500) {
 }
 
 export default function MarcarAsistencia() {
-  const navigate = useNavigate();
   const scannerRef = useRef(null);
   const scanLockedRef = useRef(false);
   const [readerKey, setReaderKey] = useState(0);
@@ -50,6 +48,7 @@ export default function MarcarAsistencia() {
   const [scannerStatus, setScannerStatus] = useState('');
   const [loadingGps, setLoadingGps] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
 
   useEffect(() => {
     validarPermisoGPS().then(setGpsPermission);
@@ -172,6 +171,7 @@ export default function MarcarAsistencia() {
     setShowNovedadModal(false);
     setMotivoNovedad('');
     setDetalleNovedad('');
+    scanLockedRef.current = false;
   }
 
   async function requestGps() {
@@ -210,7 +210,12 @@ export default function MarcarAsistencia() {
         toast.warning(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada con advertencia');
       } else {
         toast.success(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada correctamente');
-        navigate('/mis-marcaciones');
+        setLastResult({
+          tipo: payload.tipo,
+          estado: response.marcacion?.estado || 'aceptada',
+          sucursal: response.sucursal?.nombre || '-',
+          empleado: `${response.empleado?.nombres || ''} ${response.empleado?.apellidos || ''}`.trim(),
+        });
       }
       clearMarcacionForm();
     } catch (requestError) {
@@ -229,6 +234,7 @@ export default function MarcarAsistencia() {
 
   async function registerWithFreshGps(token) {
     const cleanToken = token.trim();
+    setLastResult(null);
 
     if (!cleanToken) {
       toast.error('Ingresa o escanea un QR valido');
@@ -284,6 +290,12 @@ export default function MarcarAsistencia() {
     <>
       <PageHeader title="Marcar asistencia" description="Registra entrada o salida con QR y ubicacion GPS." />
 
+      {lastResult ? (
+        <div className="alert-success">
+          {lastResult.empleado || 'Marcacion registrada'} en {lastResult.sucursal}. El formulario quedo listo para una nueva marcacion.
+        </div>
+      ) : null}
+
       <div className="panel">
         <PanelTitle title="Datos de marcacion" subtitle="Escanea el QR o registra manualmente; el GPS se obtiene automaticamente" />
         <form className="module-form" onSubmit={submit}>
@@ -337,7 +349,7 @@ export default function MarcarAsistencia() {
           <div className="form-actions">
             <button className="outline-button" type="button" onClick={requestGps} disabled={loadingGps}>
               <MapPin size={16} />
-              {loadingGps ? 'Obteniendo...' : 'Actualizar GPS'}
+              {loadingGps ? 'Obteniendo...' : 'Actualizar precision'}
             </button>
             <button className="primary-button compact" disabled={submitting || loadingGps}>
               <Send size={16} />

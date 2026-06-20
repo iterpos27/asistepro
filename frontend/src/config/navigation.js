@@ -16,8 +16,6 @@ import {
   ScrollText,
   UserCog,
   BriefcaseBusiness,
-  Smartphone,
-  PlugZap,
   DatabaseZap,
 } from 'lucide-react';
 import { ROLES } from '../utils/roles';
@@ -54,7 +52,6 @@ export const navSections = [
       { title: 'Estructura', href: '/organizacion', icon: BriefcaseBusiness, feature: 'organizacion', permission: ['organizacion', 'ver'] },
       { title: 'Horarios', href: '/horarios', icon: CalendarClock, feature: 'horarios' },
       { title: 'Reemplazos', href: '/reemplazos', icon: Repeat2, feature: 'reemplazos' },
-      { title: 'Integraciones', href: '/integraciones', icon: PlugZap, feature: 'integraciones', permission: ['integraciones', 'ver'] },
     ],
   },
   {
@@ -104,7 +101,6 @@ export const navSections = [
     roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH, ROLES.EMPLEADO],
     items: [
       { title: 'Roles y permisos', href: '/roles-permisos', icon: UserCog, roles: [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA] },
-      { title: 'App movil', href: '/app-movil', icon: Smartphone, feature: 'pwa_movil' },
       { title: 'Ajustes', href: '/settings', icon: Settings },
     ],
   },

@@ -177,6 +177,22 @@ async function atrasos(req, res, next) {
   }
 }
 
+async function resumenEjecutivo(req, res, next) {
+  try {
+    const result = await reporteService.resumenEjecutivo({
+      empresaId: getEmpresaId(req),
+      fechaDesde: req.query.fecha_desde,
+      fechaHasta: req.query.fecha_hasta,
+      sucursalId: req.query.sucursal_id,
+      empleadoId: req.query.empleado_id,
+    });
+
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function exportarAsistenciaDiaria(req, res, next) {
   try {
     const fecha = req.query.fecha || todayDate();
@@ -316,6 +332,7 @@ module.exports = {
   entradasSalidas,
   novedades,
   atrasos,
+  resumenEjecutivo,
   exportarAsistenciaDiaria,
   exportarEntradasSalidasExcel,
   exportarNovedades,

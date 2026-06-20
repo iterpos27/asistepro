@@ -88,8 +88,8 @@ export default function AppMovil() {
   return (
     <>
       <PageHeader
-        title="App movil y PWA"
-        description="Instalacion, modo offline y notificaciones para que el sistema funcione mejor desde celular sin depender del navegador abierto."
+        title="Acceso web y PWA"
+        description="Instalacion web progresiva, notificaciones y soporte offline ligero para usar AsistePro desde navegador en celular o escritorio."
       />
 
       <section className="metrics-grid">
@@ -101,7 +101,7 @@ export default function AppMovil() {
 
       <div className="dashboard-split">
         <div className="panel">
-          <PanelTitle title="Instalacion" subtitle="Abre la app como experiencia nativa en Android o escritorio compatible." />
+          <PanelTitle title="Instalacion web" subtitle="Ancla AsistePro en la pantalla principal sin publicar una app nativa." />
           <div className="stack-list">
             <div className="list-row"><strong>Manifest</strong><span>Activo</span></div>
             <div className="list-row"><strong>Service worker</strong><span>{'serviceWorker' in navigator ? 'Registrado' : 'No disponible'}</span></div>
@@ -113,7 +113,7 @@ export default function AppMovil() {
         </div>
 
         <div className="panel">
-          <PanelTitle title="Notificaciones" subtitle="Permite avisos de marcaciones, aprobaciones y alertas operativas." />
+          <PanelTitle title="Notificaciones" subtitle="Permite avisos del sistema dentro de la experiencia web/PWA." />
           <div className="stack-list">
             <div className="list-row"><strong>Permission API</strong><span>{permission}</span></div>
             <div className="list-row"><strong>Push manager</strong><span>{supportsPush ? 'Disponible' : 'Configuracion local'}</span></div>

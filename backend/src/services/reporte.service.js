@@ -381,10 +381,163 @@ async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleado
   };
 }
 
+async function resumenEjecutivo({ empresaId, fechaDesde, fechaHasta, sucursalId, empleadoId }) {
+  const employeeFilters = ['e.empresa_id = $1', "e.estado = 'activo'"];
+  const markFilters = ['m.empresa_id = $1', "m.estado <> 'rechazada'", 'm.anulada = FALSE'];
+  const values = [empresaId];
+  const range = buildDateRange({ fechaDesde, fechaHasta });
+  let sucursalParam = null;
+
+  applyDateFilters(markFilters, values, 'm', range);
+
+  if (sucursalId) {
+    values.push(sucursalId);
+    sucursalParam = values.length;
+    employeeFilters.push(`e.sucursal_habitual_id = $${values.length}`);
+    markFilters.push(`m.sucursal_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    employeeFilters.push(`e.id = $${values.length}`);
+    markFilters.push(`m.empleado_id = $${values.length}`);
+  }
+
+  const result = await pool.query(
+    `
+      WITH empleados_activos AS (
+        SELECT COUNT(*)::int AS total_empleados
+        FROM empleados e
+        WHERE ${employeeFilters.join(' AND ')}
+      ),
+      sucursales_activas AS (
+        SELECT COUNT(*)::int AS total_sucursales
+        FROM sucursales s
+        WHERE s.empresa_id = $1
+          AND s.estado = 'activa'
+          ${sucursalParam ? `AND s.id = $${sucursalParam}` : ''}
+      ),
+      solicitudes_pendientes AS (
+        SELECT COUNT(*)::int AS total_solicitudes
+        FROM solicitudes sol
+        WHERE sol.empresa_id = $1
+          AND sol.estado = 'pendiente'
+      ),
+      facturacion_resumen AS (
+        SELECT
+          COUNT(*) FILTER (WHERE estado = 'vencida')::int AS facturas_vencidas,
+          COALESCE(SUM(GREATEST(total - COALESCE(total_pagado, 0), 0)) FILTER (WHERE estado <> 'anulada'), 0)::numeric(12, 2) AS saldo_pendiente
+        FROM facturas
+        WHERE empresa_id = $1
+      ),
+      jornadas AS (
+        SELECT
+          DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}') AS fecha,
+          m.empleado_id,
+          MIN(CASE WHEN m.tipo = 'entrada' THEN m.marcado_en END) AS entrada,
+          MAX(CASE WHEN m.tipo = 'salida' THEN m.marcado_en END) AS salida,
+          COUNT(*) FILTER (WHERE m.tipo = 'entrada')::int AS total_entradas,
+          COUNT(*) FILTER (WHERE m.tipo = 'salida')::int AS total_salidas,
+          COUNT(*) FILTER (WHERE m.estado = 'aceptada_con_novedad')::int AS total_novedades,
+          MAX(
+            CASE
+              WHEN m.tipo = 'entrada'
+                AND m.horario_id IS NOT NULL
+                AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
+                  > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+              THEN 1
+              ELSE 0
+            END
+          )::int AS tiene_atraso
+        FROM marcaciones m
+        LEFT JOIN horarios h ON h.id = m.horario_id
+        WHERE ${markFilters.join(' AND ')}
+        GROUP BY DATE(m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}'), m.empleado_id
+      )
+      SELECT
+        ea.total_empleados,
+        sa.total_sucursales,
+        sp.total_solicitudes,
+        fr.facturas_vencidas,
+        fr.saldo_pendiente,
+        COUNT(j.empleado_id)::int AS jornadas,
+        COUNT(DISTINCT j.empleado_id)::int AS empleados_con_marcacion,
+        COUNT(*) FILTER (
+          WHERE j.entrada IS NOT NULL
+            AND j.salida IS NOT NULL
+            AND j.salida >= j.entrada
+        )::int AS jornadas_completas,
+        COUNT(*) FILTER (
+          WHERE j.entrada IS NOT NULL
+            AND (j.salida IS NULL OR j.salida < j.entrada)
+        )::int AS jornadas_incompletas,
+        COALESCE(SUM(j.total_novedades), 0)::int AS novedades,
+        COALESCE(SUM(j.tiene_atraso), 0)::int AS atrasos,
+        COALESCE(
+          ROUND(
+            SUM(
+              CASE
+                WHEN j.entrada IS NOT NULL
+                  AND j.salida IS NOT NULL
+                  AND j.salida >= j.entrada
+                THEN EXTRACT(EPOCH FROM (j.salida - j.entrada)) / 3600
+                ELSE 0
+              END
+            )::numeric,
+            2
+          ),
+          0
+        ) AS horas_trabajadas
+      FROM jornadas j
+      RIGHT JOIN empleados_activos ea ON TRUE
+      CROSS JOIN sucursales_activas sa
+      CROSS JOIN solicitudes_pendientes sp
+      CROSS JOIN facturacion_resumen fr
+      GROUP BY ea.total_empleados, sa.total_sucursales, sp.total_solicitudes, fr.facturas_vencidas, fr.saldo_pendiente
+    `,
+    values,
+  );
+
+  const row = result.rows[0] || {};
+  const totalEmpleados = Number(row.total_empleados || 0);
+  const empleadosConMarcacion = Number(row.empleados_con_marcacion || 0);
+  const jornadas = Number(row.jornadas || 0);
+  const jornadasCompletas = Number(row.jornadas_completas || 0);
+  const jornadasIncompletas = Number(row.jornadas_incompletas || 0);
+  const horasTrabajadas = Number(row.horas_trabajadas || 0);
+  const atrasosCount = Number(row.atrasos || 0);
+
+  return {
+    rango: {
+      fecha_desde: range.from ? String(range.from).slice(0, 10) : null,
+      fecha_hasta: range.to ? String(range.to).slice(0, 10) : null,
+    },
+    resumen: {
+      total_empleados: totalEmpleados,
+      total_sucursales: Number(row.total_sucursales || 0),
+      empleados_con_marcacion: empleadosConMarcacion,
+      ausentes_estimados: Math.max(totalEmpleados - empleadosConMarcacion, 0),
+      jornadas,
+      jornadas_completas: jornadasCompletas,
+      jornadas_incompletas: jornadasIncompletas,
+      puntualidad_porcentaje: jornadas ? Number((((jornadas - atrasosCount) / jornadas) * 100).toFixed(2)) : 0,
+      cumplimiento_jornada_porcentaje: jornadas ? Number(((jornadasCompletas / jornadas) * 100).toFixed(2)) : 0,
+      solicitudes_pendientes: Number(row.total_solicitudes || 0),
+      facturas_vencidas: Number(row.facturas_vencidas || 0),
+      saldo_pendiente: Number(row.saldo_pendiente || 0),
+      novedades: Number(row.novedades || 0),
+      atrasos: atrasosCount,
+      horas_trabajadas: horasTrabajadas,
+      promedio_horas_jornada: jornadasCompletas ? Number((horasTrabajadas / jornadasCompletas).toFixed(2)) : 0,
+    },
+  };
+}
+
 module.exports = {
   asistenciaDiaria,
   asistenciaMensual,
   entradasSalidas,
   novedades,
   atrasos,
+  resumenEjecutivo,
 };

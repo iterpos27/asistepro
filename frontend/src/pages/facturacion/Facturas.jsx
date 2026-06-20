@@ -70,6 +70,26 @@ export default function Facturas({ defaultTab = 'facturas' }) {
     [facturas],
   );
 
+  const vencidas = facturas.filter((factura) => factura.estado === 'vencida');
+  const pendientesValidacion = facturas.filter((factura) => factura.estado === 'pendiente');
+  const alertasCobranza = [
+    {
+      title: 'Facturas vencidas',
+      value: vencidas.length,
+      description: 'Cobros que ya superaron la fecha de vencimiento.',
+    },
+    {
+      title: 'Pendiente por cobrar',
+      value: money(totals.pendiente),
+      description: 'Saldo total aun no cubierto por pagos registrados.',
+    },
+    {
+      title: 'Facturas por seguimiento',
+      value: pendientesValidacion.length,
+      description: 'Documentos pendientes de confirmacion o cobro.',
+    },
+  ];
+
   async function loadCatalogs() {
     try {
       const [empresasResult, suscripcionesResult] = await Promise.all([
@@ -215,7 +235,47 @@ export default function Facturas({ defaultTab = 'facturas' }) {
         <MetricCard label="Facturado" value={money(totals.facturado)} icon={FileText} />
         <MetricCard label="Pagado" value={money(totals.pagado)} icon={CreditCard} tone="success" />
         <MetricCard label="Pendiente" value={money(totals.pendiente)} icon={Receipt} tone="warning" />
+        <MetricCard label="Vencidas" value={vencidas.length} icon={Ban} tone="warning" />
       </section>
+
+      <div className="dashboard-split">
+        <div className="panel">
+          <PanelTitle title="Cobranza" subtitle="Prioridades financieras de la empresa" />
+          <div className="stack-list">
+            {alertasCobranza.map((alerta) => (
+              <div className="list-row" key={alerta.title}>
+                <div>
+                  <strong>{alerta.title}</strong>
+                  <span className="table-subtext">{alerta.description}</span>
+                </div>
+                <span className={String(alerta.value) === '0' || String(alerta.value) === '$0.00' ? 'status-pill' : 'status-pill warning'}>
+                  {alerta.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel">
+          <PanelTitle title="Siguiente accion sugerida" subtitle="Lo mas util para mantener la suscripcion al dia" />
+          <div className="stack-list">
+            <div className="list-row">
+              <div>
+                <strong>Registrar comprobantes completos</strong>
+                <span className="table-subtext">Sube respaldo bancario en PDF o imagen para acelerar la validacion.</span>
+              </div>
+              <span className="status-pill muted">Proceso</span>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>Revisar vencimientos</strong>
+                <span className="table-subtext">Prioriza facturas vencidas para evitar bloqueos o suspension operativa.</span>
+              </div>
+              <span className="status-pill warning">{vencidas.length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="panel">
         <PanelTitle title="Suscripcion" subtitle="Estado vigente de la empresa" />

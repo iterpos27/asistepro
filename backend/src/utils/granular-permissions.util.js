@@ -8,7 +8,6 @@ const RESOURCES = [
   { key: 'empleados', label: 'Empleados', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'organizacion', label: 'Organizacion', actions: ['ver', 'crear', 'editar', 'eliminar', 'exportar'] },
   { key: 'importaciones', label: 'Importaciones', actions: ['ver', 'crear', 'exportar'] },
-  { key: 'integraciones', label: 'Integraciones', actions: ['ver', 'crear', 'editar', 'exportar'] },
   { key: 'saas_consumo', label: 'SaaS y cobranza', actions: ['ver', 'exportar'] },
   { key: 'sucursales', label: 'Sucursales', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'horarios', label: 'Horarios', actions: ['ver', 'crear', 'editar', 'eliminar'] },

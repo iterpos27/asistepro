@@ -70,6 +70,18 @@ export async function getAtrasos({ fechaDesde, fechaHasta, sucursalId, empleadoI
   return response.data.data;
 }
 
+export async function getResumenEjecutivo({ fechaDesde, fechaHasta, sucursalId, empleadoId } = {}) {
+  const response = await api.get('/reportes/resumen-ejecutivo', {
+    params: compactParams({
+      fecha_desde: fechaDesde,
+      fecha_hasta: fechaHasta,
+      sucursal_id: sucursalId,
+      empleado_id: empleadoId,
+    }),
+  });
+  return response.data.data;
+}
+
 export async function downloadCsv(path, params, filename) {
   const response = await api.get(path, {
     params: compactParams(params),

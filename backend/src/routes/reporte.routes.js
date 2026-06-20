@@ -10,6 +10,7 @@ const {
   asistenciaMensualSchema,
   atrasosSchema,
   entradasSalidasSchema,
+  resumenEjecutivoSchema,
   exportAsistenciaDiariaSchema,
   exportAtrasosSchema,
   exportEntradasSalidasSchema,
@@ -29,6 +30,7 @@ router.get('/asistencia-mensual', permissionGuard('reportes', 'ver'), validateSc
 router.get('/entradas-salidas', permissionGuard('reportes', 'ver'), validateSchema(entradasSalidasSchema), reporteController.entradasSalidas);
 router.get('/novedades', permissionGuard('reportes', 'ver'), validateSchema(novedadesSchema), reporteController.novedades);
 router.get('/atrasos', permissionGuard('reportes', 'ver'), validateSchema(atrasosSchema), reporteController.atrasos);
+router.get('/resumen-ejecutivo', permissionGuard('reportes', 'ver'), validateSchema(resumenEjecutivoSchema), reporteController.resumenEjecutivo);
 router.get(
   '/export/asistencia-diaria.csv',
   featureGuard('reportes_avanzados'),

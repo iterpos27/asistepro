@@ -55,6 +55,7 @@ const asistenciaMensualSchema = z.object({
 const entradasSalidasSchema = dateRangeSchema();
 const novedadesSchema = dateRangeSchema();
 const atrasosSchema = dateRangeSchema();
+const resumenEjecutivoSchema = dateRangeSchema(dateRangeQuery);
 
 const exportAsistenciaDiariaSchema = z.object({
   body: emptyBody,
@@ -75,6 +76,7 @@ module.exports = {
   asistenciaMensualSchema,
   atrasosSchema,
   entradasSalidasSchema,
+  resumenEjecutivoSchema,
   exportAsistenciaDiariaSchema,
   exportAtrasosSchema,
   exportEntradasSalidasSchema,

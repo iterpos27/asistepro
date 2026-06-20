@@ -24,18 +24,16 @@ function validateSuscripcionPayload(payload, { partial = false } = {}) {
   }
 
   if (!partial) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
     const startStr = payload.fecha_inicio || new Date().toISOString().slice(0, 10);
-    const start = new Date(startStr + 'T00:00:00');
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const start = new Date(`${startStr}T00:00:00Z`);
 
-    if (start < today) {
+    if (startStr < todayStr) {
       errors.push('La fecha de inicio no puede ser anterior a la actual');
     }
 
     if (payload.fecha_fin) {
-      const end = new Date(payload.fecha_fin + 'T00:00:00');
+      const end = new Date(`${payload.fecha_fin}T00:00:00Z`);
       const diffTime = end.getTime() - start.getTime();
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
       if (diffDays !== 30) {

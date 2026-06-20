@@ -224,7 +224,7 @@ export default function Topbar({ user, onOpenMenu, onLogout }) {
                   to={getNotificationsLink()}
                   onClick={() => setNotificationsOpen(false)}
                 >
-                  Ver todas las marcaciones
+                  Ver centro operativo
                 </Link>
               </div>
             </div>

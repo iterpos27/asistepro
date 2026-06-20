@@ -201,6 +201,42 @@ async function assertDailyTipoLimit({ empresaId, empleadoId, tipo, markedAt = ne
   }
 }
 
+async function findOperationalStateForDate({ empresaId, empleadoId, markedAt = new Date() }) {
+  const result = await pool.query(
+    `
+      SELECT
+        MIN(CASE WHEN tipo = 'entrada' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS entrada,
+        MAX(CASE WHEN tipo = 'salida' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS salida
+      FROM marcaciones
+      WHERE empresa_id = $1
+        AND empleado_id = $2
+        AND (marcado_en AT TIME ZONE $4)::date = ($3::timestamptz AT TIME ZONE $4)::date
+    `,
+    [empresaId, empleadoId, markedAt, REPORT_TIME_ZONE],
+  );
+
+  return result.rows[0] || { entrada: null, salida: null };
+}
+
+async function assertOperationalSequence({ empresaId, empleadoId, tipo, markedAt = new Date() }) {
+  const state = await findOperationalStateForDate({ empresaId, empleadoId, markedAt });
+  const hasEntrada = Boolean(state.entrada);
+  const hasSalida = Boolean(state.salida);
+  const hasOpenJornada = hasEntrada && !hasSalida;
+
+  if (tipo === 'entrada' && hasOpenJornada) {
+    const error = new Error('Ya existe una jornada abierta para este empleado. Debe registrar la salida antes de una nueva entrada');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (tipo === 'salida' && !hasEntrada) {
+    const error = new Error('No existe una entrada valida previa para registrar la salida');
+    error.statusCode = 409;
+    throw error;
+  }
+}
+
 async function registrarMarcacion({ empresaId, auth, payload }) {
   validateMarcacionPayload(payload);
   await laboralService.assertPeriodoAbierto(empresaId, payload.marcado_en || new Date());
@@ -277,6 +313,12 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
   }
 
   if (estado !== 'rechazada') {
+    await assertOperationalSequence({
+      empresaId,
+      empleadoId: empleado.id,
+      tipo: payload.tipo,
+      markedAt,
+    });
     await assertDailyTipoLimit({
       empresaId,
       empleadoId: empleado.id,
