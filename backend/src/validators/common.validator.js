@@ -4,7 +4,11 @@ const emptyBody = z.object({}).passthrough();
 const emptyQuery = z.object({}).passthrough();
 const emptyParams = z.object({}).passthrough();
 
-const uuid = (field = 'id') => z.uuid(`${field} invalido`);
+const uuid = (field = 'id') =>
+  z.preprocess(
+    (value) => (value === '' || value === null ? undefined : value),
+    z.string().uuid(`${field} invalido`)
+  );
 
 function isValidIsoDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -14,16 +18,25 @@ function isValidIsoDate(value) {
 }
 
 const isoDate = (field = 'fecha') =>
-  z
-    .string()
-    .trim()
-    .refine(isValidIsoDate, `${field} debe tener formato YYYY-MM-DD`);
+  z.preprocess(
+    (val) => (val === '' || val === null ? undefined : val),
+    z
+      .string()
+      .trim()
+      .refine(isValidIsoDate, `${field} debe tener formato YYYY-MM-DD`)
+  );
 
 const isoMonth = (field = 'mes') =>
-  z
-    .string()
-    .trim()
-    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, `${field} debe tener formato YYYY-MM`);
+  z.preprocess(
+    (val) => (val === '' || val === null ? undefined : val),
+    z
+      .string()
+      .trim()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/, `${field} debe tener formato YYYY-MM`)
+  );
+
+const preprocessEmpty = (schema) =>
+  z.preprocess((val) => (val === '' || val === null ? undefined : val), schema);
 
 function requiredNumber(field = 'valor', { min, max } = {}) {
   let schema = z.coerce.number({ message: `${field} es requerido` });
@@ -72,6 +85,7 @@ module.exports = {
   isoDate,
   isoMonth,
   paginationQuery,
+  preprocessEmpty,
   requiredNumber,
   updateBodySchema,
   uuid,

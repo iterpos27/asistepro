@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyQuery, idParams, isoDate, paginationQuery, uuid } = require('./common.validator');
+const { emptyBody, emptyQuery, idParams, isoDate, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
 
 const correctionSchema = z.object({
   accion: z.enum(['crear', 'editar', 'anular']),
@@ -31,8 +31,8 @@ const body = z.object({
 
 const createSolicitudSchema = z.object({ body, query: emptyQuery, params: z.object({}).passthrough() });
 const listSolicitudesSchema = z.object({ body: emptyBody, params: z.object({}).passthrough(), query: paginationQuery.extend({
-  estado: z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada']).optional(),
-  tipo: z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion']).optional(),
+  estado: preprocessEmpty(z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada'])).optional(),
+  tipo: preprocessEmpty(z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion'])).optional(),
   empleado_id: uuid('empleado_id').optional(),
 }) });
 const reviewSolicitudSchema = z.object({ body: z.object({ decision: z.enum(['aprobar', 'rechazar']), comentario: z.string().trim().max(1000).optional().nullable() }), query: emptyQuery, params: idParams });

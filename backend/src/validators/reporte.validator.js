@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, isoDate, isoMonth, paginationQuery, uuid } = require('./common.validator');
+const { emptyBody, emptyParams, isoDate, isoMonth, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
 
 const asistenciaEstado = z.enum(['presente', 'ausente']);
 const marcacionEstado = z.enum(['aceptada', 'aceptada_con_novedad', 'rechazada']);
@@ -37,7 +37,7 @@ const asistenciaDiariaSchema = z.object({
   query: paginationQuery.extend({
     ...scopedQuery,
     fecha: isoDate('fecha').optional(),
-    estado: asistenciaEstado.optional(),
+    estado: preprocessEmpty(asistenciaEstado).optional(),
   }),
   params: emptyParams,
 });
@@ -47,7 +47,7 @@ const asistenciaMensualSchema = z.object({
   query: paginationQuery.extend({
     ...scopedQuery,
     mes: isoMonth('mes').optional(),
-    estado: marcacionEstado.optional(),
+    estado: preprocessEmpty(marcacionEstado).optional(),
   }),
   params: emptyParams,
 });
