@@ -320,8 +320,6 @@ export default function Reportes() {
         </div>
       </div>
 
-      {error ? <div className="alert-error">{error}</div> : null}
-
       <section className="metrics-grid">
         <MetricCard label="Presentes" value={diaria.resumen?.presentes || 0} icon={UserCheck} tone="success" />
         <MetricCard label="Ausentes" value={resumen.ausentes_estimados ?? diaria.resumen?.ausentes ?? 0} icon={Users} tone="warning" />

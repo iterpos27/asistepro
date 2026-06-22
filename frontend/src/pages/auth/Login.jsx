@@ -7,6 +7,7 @@ import { BarChart3, Eye, EyeOff, MapPin, ScanFace, ShieldCheck } from 'lucide-re
 import Feature from '../../components/common/Feature';
 import { useAuthContext } from '../../context/AuthContext';
 import { getDefaultRoute } from '../../utils/roles';
+import { toast } from '../../services/toastService';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalido'),
@@ -17,7 +18,6 @@ export default function Login() {
   const navigate = useNavigate();
   const auth = useAuthContext();
   const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError] = useState('');
   const {
     register,
     handleSubmit,
@@ -31,9 +31,8 @@ export default function Login() {
   });
 
   async function submit(values) {
-    setServerError('');
     const user = await auth.login(values).catch((error) => {
-      setServerError(error.response?.data?.message || 'No se pudo iniciar sesion');
+      toast.error(error.response?.data?.message || 'No se pudo iniciar sesion');
       return null;
     });
 

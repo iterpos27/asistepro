@@ -165,9 +165,6 @@ export default function SuscripcionesList() {
         </div>
       </div>
 
-      {message ? <div className="alert-success">{message}</div> : null}
-      {error ? <div className="alert-error">{error}</div> : null}
-
       <ActionDialog
         open={Boolean(pendingCancel)}
         danger

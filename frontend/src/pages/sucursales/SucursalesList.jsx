@@ -192,9 +192,6 @@ export default function SucursalesList() {
         </div>
       </div>
 
-      {message ? <div className="alert-success">{message}</div> : null}
-      {error ? <div className="alert-error">{error}</div> : null}
-
       <ActionDialog
         open={Boolean(pendingDeactivate)}
         danger

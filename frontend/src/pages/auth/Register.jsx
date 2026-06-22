@@ -10,8 +10,7 @@ import {
   ArrowRight, 
   ArrowLeft, 
   CheckCircle2, 
-  ScanFace, 
-  AlertCircle 
+  ScanFace
 } from 'lucide-react';
 import { useAuthContext } from '../../context/AuthContext';
 import { listPublicPlanes } from '../../services/planService';
@@ -25,7 +24,6 @@ export default function Register() {
   const [planes, setPlanes] = useState([]);
   const [loadingPlanes, setLoadingPlanes] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -78,10 +76,9 @@ export default function Register() {
   };
 
   const validateStep = (currentStep) => {
-    setErrorMsg('');
     if (currentStep === 1) {
       if (!formData.plan_id) {
-        setErrorMsg('Por favor seleccione un plan para continuar.');
+        toast.error('Por favor seleccione un plan para continuar.');
         return false;
       }
       return true;
@@ -89,20 +86,20 @@ export default function Register() {
     
     if (currentStep === 2) {
       if (!formData.nombre.trim()) {
-        setErrorMsg('El nombre de la empresa es requerido.');
+        toast.error('El nombre de la empresa es requerido.');
         return false;
       }
       if (!formData.identificacion_fiscal.trim()) {
-        setErrorMsg('La identificación fiscal (RUC / NIT) es requerida.');
+        toast.error('La identificación fiscal (RUC / NIT) es requerida.');
         return false;
       }
       if (!formData.email.trim()) {
-        setErrorMsg('El email de la empresa es requerido.');
+        toast.error('El email de la empresa es requerido.');
         return false;
       }
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email.trim())) {
-        setErrorMsg('El email de la empresa no es válido.');
+        toast.error('El email de la empresa no es válido.');
         return false;
       }
       return true;
@@ -118,38 +115,36 @@ export default function Register() {
   };
 
   const handleBack = () => {
-    setErrorMsg('');
     setStep(prev => prev - 1);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
 
     // Validations for step 3
     if (!formData.admin_nombre.trim()) {
-      setErrorMsg('El nombre del administrador es requerido.');
+      toast.error('El nombre del administrador es requerido.');
       return;
     }
     if (!formData.admin_apellido.trim()) {
-      setErrorMsg('El apellido del administrador es requerido.');
+      toast.error('El apellido del administrador es requerido.');
       return;
     }
     if (!formData.admin_email.trim()) {
-      setErrorMsg('El email del administrador es requerido.');
+      toast.error('El email del administrador es requerido.');
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.admin_email.trim())) {
-      setErrorMsg('El email del administrador no es válido.');
+      toast.error('El email del administrador no es válido.');
       return;
     }
     if (formData.admin_password.length < 8) {
-      setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
+      toast.error('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
     if (formData.admin_password !== formData.confirm_password) {
-      setErrorMsg('Las contraseñas no coinciden.');
+      toast.error('Las contraseñas no coinciden.');
       return;
     }
 
@@ -159,8 +154,7 @@ export default function Register() {
         nombre: formData.nombre,
         identificacion_fiscal: formData.identificacion_fiscal,
         email: formData.email,
-        telefono: formData.telefono || null,
-        direccion: formData.direccion || null,
+        telefono: formData.telefono,
         plan_id: formData.plan_id,
         admin_nombre: formData.admin_nombre,
         admin_apellido: formData.admin_apellido,
@@ -175,7 +169,7 @@ export default function Register() {
       navigate(`/checkout?factura_id=${result.factura_id}`);
     } catch (err) {
       console.error('Registration error:', err);
-      setErrorMsg(err.response?.data?.message || 'Error al registrar la empresa. Intente nuevamente.');
+      toast.error(err.response?.data?.message || 'Error al registrar la empresa. Intente nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -242,12 +236,7 @@ export default function Register() {
             <p>Paso {step} de 3: {step === 1 ? 'Selecciona tu plan ideal' : step === 2 ? 'Cuéntanos sobre tu empresa' : 'Registra al usuario administrador'}</p>
           </div>
 
-          {errorMsg && (
-            <div className="error-alert">
-              <AlertCircle size={18} />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+
 
           {/* STEP 1: PLAN SELECTION */}
           {step === 1 && (

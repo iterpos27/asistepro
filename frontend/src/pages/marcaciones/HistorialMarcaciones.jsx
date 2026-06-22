@@ -78,8 +78,6 @@ export default function HistorialMarcaciones() {
         </div>
       </div>
 
-      {error ? <div className="alert-error">{error}</div> : null}
-
       <div className="panel">
         <PanelTitle title="Marcaciones registradas" />
         <div className="table-wrap">
