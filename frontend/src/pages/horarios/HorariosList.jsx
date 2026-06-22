@@ -48,6 +48,33 @@ export default function HorariosList() {
   const [pendingDeactivate, setPendingDeactivate] = useState(null);
   const [pendingDeleteAsignacion, setPendingDeleteAsignacion] = useState(null);
   const [assignment, setAssignment] = useState({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+
+  function toggleEmployeeSelection(empId) {
+    setSelectedEmployeeIds((current) =>
+      current.includes(empId) ? current.filter((id) => id !== empId) : [...current, empId]
+    );
+  }
+
+  function toggleSelectAll(filteredList) {
+    const filteredIds = filteredList.map((emp) => emp.id);
+    const allSelected = filteredIds.every((id) => selectedEmployeeIds.includes(id));
+
+    if (allSelected) {
+      setSelectedEmployeeIds((current) => current.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedEmployeeIds((current) => {
+        const next = [...current];
+        filteredIds.forEach((id) => {
+          if (!next.includes(id)) {
+            next.push(id);
+          }
+        });
+        return next;
+      });
+    }
+  }
 
   async function loadSucursales() {
     const result = await sucursalService.listSucursales({ limit: 100 });
@@ -94,25 +121,46 @@ export default function HorariosList() {
 
   async function saveAssignment(event) {
     event.preventDefault();
+    if (!selectedEmployeeIds.length) {
+      toast.error('Debe seleccionar al menos un empleado');
+      return;
+    }
     setAssignLoading(true);
     setError('');
     setMessage('');
 
-    try {
-      await horarioService.assignHorario({
-        empleado_id: assignment.empleado_id,
-        horario_id: assignment.horario_id,
-        fecha_inicio: assignment.fecha_inicio || undefined,
-        fecha_fin: assignment.fecha_fin || undefined,
-      });
-      setMessage('Horario asignado correctamente');
-      toast.success('Horario asignado correctamente');
+    let successCount = 0;
+    let failCount = 0;
+    let lastError = '';
+
+    for (const empId of selectedEmployeeIds) {
+      try {
+        await horarioService.assignHorario({
+          empleado_id: empId,
+          horario_id: assignment.horario_id,
+          fecha_inicio: assignment.fecha_inicio || undefined,
+          fecha_fin: assignment.fecha_fin || undefined,
+        });
+        successCount++;
+      } catch (requestError) {
+        failCount++;
+        lastError = requestError.response?.data?.message || requestError.message;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`Horario asignado a ${successCount} empleados correctamente.`);
+    }
+    if (failCount > 0) {
+      toast.error(`Error al asignar a ${failCount} empleados: ${lastError}`);
+    }
+
+    if (successCount > 0) {
       setShowAssignForm(false);
-      setAssignment({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
+      setSelectedEmployeeIds([]);
+      setEmployeeSearch('');
       await loadAsignaciones();
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'No se pudo asignar el horario');
-    } finally {
+    } else {
       setAssignLoading(false);
     }
   }
@@ -170,6 +218,8 @@ export default function HorariosList() {
       fecha_inicio: new Date().toISOString().slice(0, 10),
       fecha_fin: '',
     });
+    setSelectedEmployeeIds([]);
+    setEmployeeSearch('');
     setShowAssignForm(true);
     setMessage('');
     setError('');
@@ -178,6 +228,8 @@ export default function HorariosList() {
   function closeAssignForm() {
     setShowAssignForm(false);
     setAssignment({ empleado_id: '', horario_id: '', fecha_inicio: '', fecha_fin: '' });
+    setSelectedEmployeeIds([]);
+    setEmployeeSearch('');
   }
 
   async function saveHorario(values) {
@@ -299,66 +351,131 @@ export default function HorariosList() {
 
       {showAssignForm ? (
         <div className="modal-backdrop" onClick={closeAssignForm}>
-          <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
-            <PanelTitle title="Asignar horario" subtitle="Vincula un empleado activo con un turno vigente" />
+          <div className="modal-panel large-modal" onClick={(event) => event.stopPropagation()}>
+            <PanelTitle title="Asignar horario" subtitle="Vincula uno o más empleados activos con un turno vigente" />
             <form className="module-form" onSubmit={saveAssignment}>
-              <div className="form-grid">
-                <label>
-                  Empleado
-                  <select
-                    required
-                    value={assignment.empleado_id}
-                    onChange={(event) => setAssignment((current) => ({ ...current, empleado_id: event.target.value }))}
-                  >
-                    <option value="">Seleccionar empleado</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id}>
-                        {empleado.codigo} - {empleado.nombres} {empleado.apellidos}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Horario
-                  <select
-                    required
-                    value={assignment.horario_id}
-                    onChange={(event) => setAssignment((current) => ({ ...current, horario_id: event.target.value }))}
-                  >
-                    <option value="">Seleccionar horario</option>
-                    {horarios
-                      .filter((horario) => horario.activo)
-                      .map((horario) => (
-                        <option key={horario.id} value={horario.id}>
-                          {horario.nombre} ({timeOnly(horario.hora_inicio)} - {timeOnly(horario.hora_fin)})
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  Fecha inicio
-                  <input
-                    required
-                    type="date"
-                    value={assignment.fecha_inicio}
-                    onChange={(event) => setAssignment((current) => ({ ...current, fecha_inicio: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Fecha fin
-                  <input
-                    type="date"
-                    value={assignment.fecha_fin}
-                    onChange={(event) => setAssignment((current) => ({ ...current, fecha_fin: event.target.value }))}
-                  />
-                </label>
+              <div className="bulk-assign-container">
+                <div className="form-grid" style={{ gridTemplateColumns: '1fr', height: 'fit-content' }}>
+                  <label>
+                    Horario
+                    <select
+                      required
+                      value={assignment.horario_id}
+                      onChange={(event) => setAssignment((current) => ({ ...current, horario_id: event.target.value }))}
+                    >
+                      <option value="">Seleccionar horario</option>
+                      {horarios
+                        .filter((horario) => horario.activo)
+                        .map((horario) => (
+                          <option key={horario.id} value={horario.id}>
+                            {horario.nombre} ({timeOnly(horario.hora_inicio)} - {timeOnly(horario.hora_fin)})
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Fecha inicio
+                    <input
+                      required
+                      type="date"
+                      value={assignment.fecha_inicio}
+                      onChange={(event) => setAssignment((current) => ({ ...current, fecha_inicio: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Fecha fin (Opcional)
+                    <input
+                      type="date"
+                      value={assignment.fecha_fin}
+                      onChange={(event) => setAssignment((current) => ({ ...current, fecha_fin: event.target.value }))}
+                    />
+                  </label>
+                </div>
+
+                <div className="employee-check-list-wrapper">
+                  <label>Empleados a asignar ({selectedEmployeeIds.length} seleccionados)</label>
+                  
+                  <div className="employee-search-wrapper">
+                    <Search size={16} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por código o nombre..."
+                      value={employeeSearch}
+                      onChange={(e) => setEmployeeSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="employee-check-list">
+                    {empleados.length ? (
+                      (() => {
+                        const filtered = empleados.filter((emp) => {
+                          const query = employeeSearch.toLowerCase().trim();
+                          if (!query) return true;
+                          const fullName = `${emp.nombres || ''} ${emp.apellidos || ''}`.toLowerCase();
+                          const code = (emp.codigo || '').toLowerCase();
+                          return fullName.includes(query) || code.includes(query);
+                        });
+
+                        const isAllSelected = filtered.length > 0 && filtered.every((emp) => selectedEmployeeIds.includes(emp.id));
+
+                        return (
+                          <>
+                            {filtered.length > 0 && (
+                              <div className="select-all-row" onClick={() => toggleSelectAll(filtered)}>
+                                <input
+                                  type="checkbox"
+                                  checked={isAllSelected}
+                                  onChange={() => {}} // handled by click on parent div
+                                />
+                                <span>Seleccionar todos los filtrados</span>
+                              </div>
+                            )}
+
+                            {filtered.length > 0 ? (
+                              filtered.map((empleado) => {
+                                const isSelected = selectedEmployeeIds.includes(empleado.id);
+                                return (
+                                  <div
+                                    key={empleado.id}
+                                    className={`employee-check-item ${isSelected ? 'selected' : ''}`}
+                                    onClick={() => toggleEmployeeSelection(empleado.id)}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}} // handled by click on parent div
+                                    />
+                                    <span>
+                                      <strong>{empleado.codigo}</strong> - {empleado.nombres} {empleado.apellidos}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <p style={{ padding: '12px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
+                                Ningún empleado coincide con la búsqueda
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()
+                    ) : (
+                      <p style={{ padding: '12px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
+                        No hay empleados activos registrados
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="form-actions">
+              <div className="form-actions" style={{ marginTop: '20px' }}>
                 <button className="outline-button" type="button" onClick={closeAssignForm}>
                   Cancelar
                 </button>
-                <button className="primary-button compact" disabled={assignLoading || !empleados.length || !horarios.some((horario) => horario.activo)}>
-                  {assignLoading ? 'Asignando...' : 'Asignar horario'}
+                <button
+                  className="primary-button compact"
+                  disabled={assignLoading || !selectedEmployeeIds.length || !horarios.some((horario) => horario.activo)}
+                >
+                  {assignLoading ? 'Asignando...' : `Asignar horario (${selectedEmployeeIds.length})`}
                 </button>
               </div>
             </form>
