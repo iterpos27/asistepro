@@ -31,8 +31,6 @@ const migrations = [
   '024_workflows_closures_granular_roles.sql',
   '025_platform_expansion.sql',
   '026_external_storage_files.sql',
-  '027_seed_essart.sql',
-  '028_cleanup_old_essart.sql',
 ];
 
 async function runMigrations() {
