@@ -425,10 +425,15 @@ async function resumenEjecutivo({ empresaId, fechaDesde, fechaHasta, sucursalId,
       ),
       facturacion_resumen AS (
         SELECT
-          COUNT(*) FILTER (WHERE estado = 'vencida')::int AS facturas_vencidas,
-          COALESCE(SUM(GREATEST(total - COALESCE(total_pagado, 0), 0)) FILTER (WHERE estado <> 'anulada'), 0)::numeric(12, 2) AS saldo_pendiente
-        FROM facturas
-        WHERE empresa_id = $1
+          COUNT(*) FILTER (WHERE f.estado = 'vencida')::int AS facturas_vencidas,
+          COALESCE(SUM(GREATEST(f.total - COALESCE(p.total_pagado, 0), 0)) FILTER (WHERE f.estado <> 'anulada'), 0)::numeric(12, 2) AS saldo_pendiente
+        FROM facturas f
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(pg.monto) FILTER (WHERE pg.estado = 'registrado'), 0)::numeric AS total_pagado
+          FROM pagos pg
+          WHERE pg.factura_id = f.id
+        ) p ON TRUE
+        WHERE f.empresa_id = $1
       ),
       jornadas AS (
         SELECT
