@@ -7,22 +7,358 @@ import * as service from '../../services/usuarioService';
 import { toast } from '../../services/toastService';
 import { ROLES, getRoleLabel } from '../../utils/roles';
 
-function blankPermissions(resources){return Object.fromEntries((resources||[]).map(resource=>[resource.key,Object.fromEntries(resource.actions.map(action=>[action,false]))]));}
+function blankPermissions(resources) {
+  return Object.fromEntries(
+    (resources || []).map((resource) => [
+      resource.key,
+      Object.fromEntries(resource.actions.map((action) => [action, false])),
+    ])
+  );
+}
 
-export default function RolesPermisos(){
-  const {user}=useAuthContext();const [users,setUsers]=useState({items:[],resources:[]});const [roles,setRoles]=useState({items:[],resources:[]});const [open,setOpen]=useState(false);const [editing,setEditing]=useState(null);const [form,setForm]=useState({nombre:'',descripcion:'',rol_base:user?.rol===ROLES.SUPER_ADMIN?'ADMIN_EMPRESA':'RRHH',permisos:{},activo:true});const [loading,setLoading]=useState(false);
-  async function load(){setLoading(true);try{const [userData,roleData]=await Promise.all([service.listPermisosUsuarios(),service.listRolesPersonalizados()]);setUsers(userData);setRoles(roleData);}finally{setLoading(false);}}
-  useEffect(()=>{load();},[]);const resources=roles.resources?.length?roles.resources:users.resources||[];
-  function openCreate(){setEditing(null);setForm({nombre:'',descripcion:'',rol_base:user?.rol===ROLES.SUPER_ADMIN?'ADMIN_EMPRESA':'RRHH',permisos:blankPermissions(resources),activo:true});setOpen(true);}
-  function openEdit(role){setEditing(role);setForm({nombre:role.nombre,descripcion:role.descripcion||'',rol_base:role.rol_base,permisos:{...blankPermissions(resources),...(role.permisos||{})},activo:role.activo});setOpen(true);}
-  function toggle(resource,action){setForm(current=>({...current,permisos:{...current.permisos,[resource]:{...(current.permisos[resource]||{}),[action]:!current.permisos?.[resource]?.[action]}}}));}
-  async function save(event){event.preventDefault();if(editing)await service.updateRolPersonalizado(editing.id,form);else await service.createRolPersonalizado(form);toast.success('Perfil de permisos guardado');setOpen(false);await load();}
-  async function assign(target,roleId){await service.assignRolPersonalizado(target.id,roleId||null,{});toast.success('Perfil asignado. El usuario recibira los cambios al renovar su sesion.');await load();}
-  const baseOptions=user?.rol===ROLES.SUPER_ADMIN?[ROLES.ADMIN_EMPRESA]:[ROLES.RRHH,ROLES.EMPLEADO];
-  return <>
-    <PageHeader title="Roles y permisos" description="Perfiles por empresa y acciones permitidas en cada recurso." actions={<button className="primary-button compact" onClick={openCreate}><Plus size={16}/>Nuevo perfil</button>}/>
-    {open&&<div className="modal-backdrop" onClick={()=>setOpen(false)}><div className="modal-panel permission-modal" onClick={e=>e.stopPropagation()}><PanelTitle title={editing?'Editar perfil':'Nuevo perfil'} subtitle="El rol base mantiene el limite de seguridad principal"/><form className="module-form" onSubmit={save}><div className="form-grid"><label>Nombre<input required value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})}/></label><label>Rol base<select value={form.rol_base} disabled={Boolean(editing)} onChange={e=>setForm({...form,rol_base:e.target.value})}>{baseOptions.map(role=><option key={role} value={role}>{getRoleLabel(role)}</option>)}</select></label><label className="wide-field">Descripcion<input value={form.descripcion} onChange={e=>setForm({...form,descripcion:e.target.value})}/></label></div><div className="table-wrap permission-table"><table><thead><tr><th>Recurso</th><th>Acciones</th></tr></thead><tbody>{resources.map(resource=><tr key={resource.key}><td>{resource.label}</td><td><div className="permission-actions">{resource.actions.map(action=><label className="switch-field compact-switch" key={action}><input type="checkbox" checked={form.permisos?.[resource.key]?.[action]===true} onChange={()=>toggle(resource.key,action)}/><span>{action}</span></label>)}</div></td></tr>)}</tbody></table></div><div className="form-actions"><button type="button" className="outline-button" onClick={()=>setOpen(false)}>Cancelar</button><button className="primary-button compact">Guardar perfil</button></div></form></div></div>}
-    <div className="panel"><PanelTitle title="Perfiles personalizados" subtitle={loading?'Cargando...':`${roles.items?.length||0} perfiles`}/><div className="table-wrap"><table><thead><tr><th>Perfil</th><th>Rol base</th><th>Estado</th><th>Acciones habilitadas</th><th></th></tr></thead><tbody>{roles.items?.length?roles.items.map(role=><tr key={role.id}><td><strong>{role.nombre}</strong><span className="table-subtext">{role.descripcion||'-'}</span></td><td>{getRoleLabel(role.rol_base)}</td><td><span className="status-pill">{role.activo?'activo':'inactivo'}</span></td><td>{Object.values(role.permisos||{}).reduce((total,actions)=>total+Object.values(actions).filter(Boolean).length,0)}</td><td><button className="icon-button" onClick={()=>openEdit(role)} aria-label="Editar perfil"><Edit size={16}/></button></td></tr>):<tr><td colSpan="5">No hay perfiles personalizados.</td></tr>}</tbody></table></div></div>
-    <div className="panel"><PanelTitle title="Asignacion a usuarios" subtitle="El perfil se combina con excepciones individuales" actions={<button className="icon-button" onClick={load} aria-label="Actualizar"><RotateCcw size={16}/></button>}/><div className="table-wrap"><table><thead><tr><th>Usuario</th><th>Rol base</th><th>Perfil asignado</th></tr></thead><tbody>{users.items?.length?users.items.map(target=><tr key={target.id}><td>{target.nombre} {target.apellido}<span className="table-subtext">{target.email}</span></td><td>{getRoleLabel(target.rol)}</td><td><select value={target.rol_personalizado_id||''} onChange={e=>assign(target,e.target.value)}><option value="">Permisos predeterminados</option>{roles.items?.filter(role=>role.activo&&role.rol_base===target.rol).map(role=><option key={role.id} value={role.id}>{role.nombre}</option>)}</select></td></tr>):<tr><td colSpan="3">No hay usuarios administrables.</td></tr>}</tbody></table></div></div>
-  </>;
+export default function RolesPermisos() {
+  const { user } = useAuthContext();
+  const [users, setUsers] = useState({ items: [], resources: [] });
+  const [roles, setRoles] = useState({ items: [], resources: [] });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    nombre: '',
+    descripcion: '',
+    rol_base: user?.rol === ROLES.SUPER_ADMIN ? 'ADMIN_EMPRESA' : 'RRHH',
+    permisos: {},
+    activo: true,
+  });
+  const [loading, setLoading] = useState(false);
+  const [permissionData, setPermissionData] = useState({ modules: [], items: [] });
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+
+  const canManagePermissions = [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA].includes(user?.rol);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [userData, roleData] = await Promise.all([
+        service.listPermisosUsuarios(),
+        service.listRolesPersonalizados(),
+      ]);
+      setUsers(userData);
+      setRoles(roleData);
+      setPermissionData(userData);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const resources = roles.resources?.length ? roles.resources : users.resources || [];
+
+  function openCreate() {
+    setEditing(null);
+    setForm({
+      nombre: '',
+      descripcion: '',
+      rol_base: user?.rol === ROLES.SUPER_ADMIN ? 'ADMIN_EMPRESA' : 'RRHH',
+      permisos: blankPermissions(resources),
+      activo: true,
+    });
+    setOpen(true);
+  }
+
+  function openEdit(role) {
+    setEditing(role);
+    setForm({
+      nombre: role.nombre,
+      descripcion: role.descripcion || '',
+      rol_base: role.rol_base,
+      permisos: { ...blankPermissions(resources), ...(role.permisos || {}) },
+      activo: role.activo,
+    });
+    setOpen(true);
+  }
+
+  function toggle(resource, action) {
+    setForm((current) => ({
+      ...current,
+      permisos: {
+        ...current.permisos,
+        [resource]: {
+          ...(current.permisos[resource] || {}),
+          [action]: !current.permisos?.[resource]?.[action],
+        },
+      },
+    }));
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    if (editing) await service.updateRolPersonalizado(editing.id, form);
+    else await service.createRolPersonalizado(form);
+    toast.success('Perfil de permisos guardado');
+    setOpen(false);
+    await load();
+  }
+
+  async function assign(target, roleId) {
+    await service.assignRolPersonalizado(target.id, roleId || null, {});
+    toast.success('Perfil asignado. El usuario recibira los cambios al renovar su sesion.');
+    await load();
+  }
+
+  async function toggleUserModule(targetUser, moduleKey) {
+    const nextModules = {
+      ...(targetUser.overrides || targetUser.modulos || {}),
+      [moduleKey]: !(targetUser.modulos?.[moduleKey] === true),
+    };
+
+    setPermissionsLoading(true);
+    try {
+      const updatedData = await service.updatePermisosUsuario(targetUser.id, nextModules);
+      setPermissionData(updatedData);
+      setUsers(updatedData);
+      toast.success('Permisos actualizados correctamente');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'No se pudieron actualizar los permisos');
+    } finally {
+      setPermissionsLoading(false);
+    }
+  }
+
+  const baseOptions = user?.rol === ROLES.SUPER_ADMIN ? [ROLES.ADMIN_EMPRESA] : [ROLES.RRHH, ROLES.EMPLEADO];
+
+  return (
+    <>
+      <PageHeader
+        title="Roles y permisos"
+        description="Perfiles por empresa y acciones permitidas en cada recurso."
+        actions={
+          <button className="primary-button compact" onClick={openCreate}>
+            <Plus size={16} />
+            Nuevo perfil
+          </button>
+        }
+      />
+      {open && (
+        <div className="modal-backdrop" onClick={() => setOpen(false)}>
+          <div className="modal-panel permission-modal" onClick={(e) => e.stopPropagation()}>
+            <PanelTitle title={editing ? 'Editar perfil' : 'Nuevo perfil'} subtitle="El rol base mantiene el limite de seguridad principal" />
+            <form className="module-form" onSubmit={save}>
+              <div className="form-grid">
+                <label>
+                  Nombre
+                  <input required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+                </label>
+                <label>
+                  Rol base
+                  <select value={form.rol_base} disabled={Boolean(editing)} onChange={(e) => setForm({ ...form, rol_base: e.target.value })}>
+                    {baseOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {getRoleLabel(role)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="wide-field">
+                  Descripcion
+                  <input value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />
+                </label>
+              </div>
+              <div className="table-wrap permission-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Recurso</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resources.map((resource) => (
+                      <tr key={resource.key}>
+                        <td>{resource.label}</td>
+                        <td>
+                          <div className="permission-actions">
+                            {resource.actions.map((action) => (
+                              <label className="switch-field compact-switch" key={action}>
+                                <input
+                                  type="checkbox"
+                                  checked={form.permisos?.[resource.key]?.[action] === true}
+                                  onChange={() => toggle(resource.key, action)}
+                                />
+                                <span>{action}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="outline-button" onClick={() => setOpen(false)}>
+                  Cancelar
+                </button>
+                <button className="primary-button compact">Guardar perfil</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      <div className="panel">
+        <PanelTitle title="Perfiles personalizados" subtitle={loading ? 'Cargando...' : `${roles.items?.length || 0} perfiles`} />
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Perfil</th>
+                <th>Rol base</th>
+                <th>Estado</th>
+                <th>Acciones habilitadas</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {roles.items?.length ? (
+                roles.items.map((role) => (
+                  <tr key={role.id}>
+                    <td>
+                      <strong>{role.nombre}</strong>
+                      <span className="table-subtext">{role.descripcion || '-'}</span>
+                    </td>
+                    <td>{getRoleLabel(role.rol_base)}</td>
+                    <td>
+                      <span className="status-pill">{role.activo ? 'activo' : 'inactivo'}</span>
+                    </td>
+                    <td>{Object.values(role.permisos || {}).reduce((total, actions) => total + Object.values(actions).filter(Boolean).length, 0)}</td>
+                    <td>
+                      <button className="icon-button" onClick={() => openEdit(role)} aria-label="Editar perfil">
+                        <Edit size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5">No hay perfiles personalizados.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <PanelTitle
+          title="Asignacion a usuarios"
+          subtitle="El perfil se combina con excepciones individuales"
+          actions={
+            <button className="icon-button" onClick={load} aria-label="Actualizar">
+              <RotateCcw size={16} />
+            </button>
+          }
+        />
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Rol base</th>
+                <th>Perfil asignado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.items?.length ? (
+                users.items.map((target) => (
+                  <tr key={target.id}>
+                    <td>
+                      {target.nombre} {target.apellido}
+                      <span className="table-subtext">{target.email}</span>
+                    </td>
+                    <td>{getRoleLabel(target.rol)}</td>
+                    <td>
+                      <select value={target.rol_personalizado_id || ''} onChange={(e) => assign(target, e.target.value)}>
+                        <option value="">Permisos predeterminados</option>
+                        {roles.items
+                          ?.filter((role) => role.activo && role.rol_base === target.rol)
+                          .map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.nombre}
+                            </option>
+                          ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="3">No hay usuarios administrables.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {canManagePermissions && (
+        <div className="panel">
+          <PanelTitle
+            title="Permisos por usuario"
+            subtitle={
+              user?.rol === ROLES.SUPER_ADMIN
+                ? 'Habilita modulos para el administrador de la empresa seleccionada.'
+                : 'Habilita modulos para recursos humanos y empleados.'
+            }
+          />
+          
+          <div className="user-permissions-grid">
+            {permissionData.items?.length ? (
+              permissionData.items.map((targetUser) => (
+                <div className="user-permission-card" key={targetUser.id}>
+                  <div className="user-card-header">
+                    <div>
+                      <h3>{`${targetUser.nombre || ''} ${targetUser.apellido || ''}`.trim() || targetUser.email}</h3>
+                      <span className="user-email">{targetUser.email}</span>
+                    </div>
+                    <span className="user-role-badge">{getRoleLabel(targetUser.rol)}</span>
+                  </div>
+                  
+                  <div className="user-modules-grid">
+                    {permissionData.modules?.map((module) => {
+                      const availableForRole = module.roles?.includes(targetUser.rol);
+                      return (
+                        <div key={module.key} className="module-switch-item">
+                          <span className="module-label">{module.label}</span>
+                          {availableForRole ? (
+                            <label className="switch-field compact-switch">
+                              <input
+                                type="checkbox"
+                                checked={targetUser.modulos?.[module.key] === true}
+                                disabled={permissionsLoading}
+                                onChange={() => toggleUserModule(targetUser, module.key)}
+                              />
+                              <span className="switch-text">{targetUser.modulos?.[module.key] === true ? 'Activo' : 'Inactivo'}</span>
+                            </label>
+                          ) : (
+                            <span className="status-pill muted">N/A</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p style={{ gridColumn: '1 / -1', color: '#64748b', fontSize: '13.5px', padding: '16px 0' }}>
+                {loading ? 'Cargando permisos...' : 'No hay usuarios administrables para este contexto.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
