@@ -35,6 +35,7 @@ async function listMarcaciones(req, res, next) {
       estado: req.query.estado,
       fechaDesde: req.query.fecha_desde,
       fechaHasta: req.query.fecha_hasta,
+      soloMios: req.query.solo_mios === 'true',
       limit,
       offset,
     });

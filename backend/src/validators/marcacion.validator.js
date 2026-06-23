@@ -37,6 +37,7 @@ const listMarcacionesSchema = z
       estado: marcacionEstado.optional(),
       fecha_desde: isoDate('fecha_desde').optional(),
       fecha_hasta: isoDate('fecha_hasta').optional(),
+      solo_mios: z.string().optional(),
     }),
     params: emptyParams,
   })

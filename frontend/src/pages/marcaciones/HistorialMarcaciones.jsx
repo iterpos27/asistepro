@@ -28,29 +28,42 @@ export default function HistorialMarcaciones() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function loadMarcaciones() {
-    setLoading(true);
-    setError('');
+  async function loadMarcaciones(silent = false) {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
 
     try {
       const result = await marcacionService.listMarcaciones({
         estado,
         fechaDesde,
         fechaHasta,
+        soloMios: true,
         limit: 100,
       });
       setMarcaciones(result.items || []);
       setTotal(result.total || 0);
     } catch (requestError) {
-      setError(requestError.response?.data?.message || 'No se pudieron cargar las marcaciones');
+      if (!silent) {
+        setError(requestError.response?.data?.message || 'No se pudieron cargar las marcaciones');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     loadMarcaciones();
-  }, []);
+
+    const interval = setInterval(() => {
+      loadMarcaciones(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [estado, fechaDesde, fechaHasta]);
 
   return (
     <>

@@ -7,6 +7,7 @@ const EmpresasList = lazy(() => import('../pages/empresas/EmpresasList'));
 const Facturas = lazy(() => import('../pages/facturacion/Facturas'));
 const HorariosList = lazy(() => import('../pages/horarios/HorariosList'));
 const HistorialMarcaciones = lazy(() => import('../pages/marcaciones/HistorialMarcaciones'));
+const HistorialGeneral = lazy(() => import('../pages/marcaciones/HistorialGeneral'));
 const MarcarAsistencia = lazy(() => import('../pages/marcaciones/MarcarAsistencia'));
 const PlanesList = lazy(() => import('../pages/planes/PlanesList'));
 const Reportes = lazy(() => import('../pages/reportes/Reportes'));
@@ -78,6 +79,12 @@ export const privateRoutes = [
     element: HistorialMarcaciones,
     roles: routeRoles.personal,
     feature: 'mis_marcaciones',
+  },
+  {
+    path: '/historial-general',
+    element: HistorialGeneral,
+    roles: routeRoles.rrhh,
+    permission: ['reportes', 'ver'],
   },
   {
     path: '/reportes',

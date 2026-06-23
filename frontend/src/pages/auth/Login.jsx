@@ -42,65 +42,61 @@ export default function Login() {
   }
 
   return (
-    <main className="login-screen">
-      <section className="login-brand">
-        <div className="brand-row">
-          <div className="brand-mark">
-            <ScanFace size={24} />
-          </div>
-          <strong>AsistePro</strong>
-        </div>
-        <div>
-          <h1>Asistencia multi-sucursal con QR y GPS.</h1>
-          <p>Gestiona empresas, empleados, horarios y reportes desde una plataforma SaaS segura.</p>
-        </div>
-        <div className="brand-highlights">
-          <Feature icon={MapPin} title="Geocercas" text="Validacion por radio y ubicacion real." />
-          <Feature icon={ShieldCheck} title="Multi tenant" text="Datos aislados por empresa." />
-          <Feature icon={BarChart3} title="Reportes" text="Asistencia diaria, mensual y novedades." />
-        </div>
-      </section>
-      <section className="login-panel">
-        <form className="login-form" onSubmit={handleSubmit(submit)}>
-          <div className="mobile-brand">
-            <div className="brand-mark">
-              <ScanFace size={20} />
+    <main className="login-screen-centered">
+      <div className="login-card-centered">
+        <form className="login-form-centered" onSubmit={handleSubmit(submit)}>
+          <div className="login-logo-centered">
+            <div className="brand-mark-centered">
+              <ScanFace size={26} />
             </div>
-            <strong>AsistePro</strong>
+            <h1>AsistePro</h1>
           </div>
-          <div>
-            <h2>Iniciar sesion</h2>
+          <div className="login-header-centered">
+            <h2>Iniciar sesión</h2>
             <p>Accede con tu cuenta corporativa.</p>
           </div>
-          <label>
+          <label className="login-label-centered">
             Email
-            <input {...register('email')} type="email" autoComplete="email" placeholder="tu@empresa.com" />
+            <input
+              {...register('email')}
+              type="email"
+              autoComplete="email"
+              placeholder="tu@empresa.com"
+              className="login-input-centered"
+            />
             {errors.email && <small className="field-error">{errors.email.message}</small>}
           </label>
-          <label>
-            Contrasena
-            <div className="password-row">
+          <label className="login-label-centered">
+            Contraseña
+            <div className="password-row-centered">
               <input
                 {...register('password')}
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="********"
+                className="login-input-centered"
               />
-              <button className="icon-button" type="button" onClick={() => setShowPassword((value) => !value)} title="Mostrar contrasena" aria-label="Mostrar contrasena">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                title="Mostrar contraseña"
+                aria-label="Mostrar contraseña"
+              >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
             {errors.password && <small className="field-error">{errors.password.message}</small>}
           </label>
-          <button className="primary-button" type="submit" disabled={isSubmitting}>
+          <button className="primary-button-centered" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Validando...' : 'Entrar'}
           </button>
           
-          <div className="login-footer-text" style={{ marginTop: '20px', textAlign: 'center', fontSize: '13.5px', color: '#64748b' }}>
-            ¿No tienes cuenta? <Link to="/register" style={{ color: '#16a34a', fontWeight: '700', textDecoration: 'none' }}>Regístrate aquí</Link>
+          <div className="login-footer-centered">
+            ¿No tienes cuenta? <Link to="/register" className="register-link-centered">Regístrate aquí</Link>
           </div>
         </form>
-      </section>
+      </div>
     </main>
   );
 }

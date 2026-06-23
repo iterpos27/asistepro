@@ -60,6 +60,7 @@ export const navSections = [
     icon: ClipboardCheck,
     roles: [ROLES.ADMIN_EMPRESA, ROLES.RRHH],
     items: [
+      { title: 'Historial general', href: '/historial-general', icon: Activity, permission: ['reportes', 'ver'] },
       { title: 'Solicitudes', href: '/solicitudes', icon: ClipboardCheck, permission: ['solicitudes', 'ver'] },
       { title: 'Calculo laboral', href: '/calculo-laboral', icon: Calculator, permission: ['calculo_laboral', 'ver'] },
       { title: 'Reportes', href: '/reportes', icon: FileBarChart, feature: 'reportes_avanzados', permission: ['reportes', 'ver'] },

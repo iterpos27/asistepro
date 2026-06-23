@@ -11,6 +11,7 @@ export async function listMarcaciones({
   estado = '',
   fechaDesde = '',
   fechaHasta = '',
+  soloMios = false,
   limit = 100,
   offset = 0,
 } = {}) {
@@ -21,6 +22,7 @@ export async function listMarcaciones({
       estado: estado || undefined,
       fecha_desde: fechaDesde || undefined,
       fecha_hasta: fechaHasta || undefined,
+      solo_mios: soloMios || undefined,
       limit,
       offset,
     },
