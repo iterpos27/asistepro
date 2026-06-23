@@ -53,6 +53,9 @@ export default function EmpresaSelector() {
     } else {
       setStoredEmpresaId('');
     }
+
+    // Force page reload so that all API requests fetch data for the newly selected tenant
+    window.location.reload();
   }
 
   return (
