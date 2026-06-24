@@ -166,7 +166,8 @@ export default function SolicitudesList() {
       setFileAttachment(null);
       await load();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'No se pudo registrar la solicitud');
+      const errorMsg = err.response?.data?.errors?.[0]?.mensaje || err.response?.data?.message || 'No se pudo registrar la solicitud';
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }

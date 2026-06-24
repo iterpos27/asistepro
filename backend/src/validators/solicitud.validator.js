@@ -19,7 +19,7 @@ const body = z.object({
   fecha_fin: isoDate('fecha_fin'),
   hora_inicio: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
   hora_fin: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
-  motivo: z.string().trim().min(5).max(1000),
+  motivo: z.string().trim().min(5, 'El motivo debe tener al menos 5 caracteres').max(1000, 'El motivo no puede exceder los 1000 caracteres'),
   datos_correccion: correctionSchema.optional().nullable(),
   comprobante_storage_provider: z.string().trim().max(40).optional().nullable(),
   comprobante_storage_bucket: z.string().trim().max(120).optional().nullable(),
