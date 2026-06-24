@@ -37,13 +37,30 @@ function sanitizeValue(value) {
   return value;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function resolveEntity(req) {
-  const parts = req.path.split('/').filter(Boolean);
+  const urlPath = (req.originalUrl || '').split('?')[0];
+  const parts = urlPath.split('/').filter(Boolean);
   const offset = parts[0] === 'api' ? 1 : 0;
-  return {
-    entidad: parts[offset] || 'api',
-    entidad_id: req.params?.id || null,
-  };
+  
+  let entidad = parts[offset] || 'api';
+  let entidad_id = null;
+
+  if (parts.length > 0) {
+    const lastSegment = parts[parts.length - 1];
+    if (UUID_REGEX.test(lastSegment)) {
+      entidad_id = lastSegment;
+      const entityIndex = parts.length - 2;
+      if (entityIndex >= offset) {
+        entidad = parts[entityIndex];
+      }
+    } else {
+      entidad_id = req.params?.id || null;
+    }
+  }
+
+  return { entidad, entidad_id };
 }
 
 function auditLogger(req, res, next) {
