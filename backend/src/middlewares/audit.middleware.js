@@ -142,6 +142,30 @@ function resolveEntity(req) {
   return { entidad, entidad_id };
 }
 
+const ENTITY_SINGULAR = {
+  auth: 'sesión',
+  empleados: 'empleado',
+  empresas: 'empresa',
+  facturacion: 'facturación',
+  health: 'salud',
+  horarios: 'horario',
+  integraciones: 'integración',
+  marcaciones: 'marcación',
+  organizacion: 'estructura',
+  planes: 'plan',
+  reportes: 'reporte',
+  reemplazos: 'reemplazo',
+  saas: 'administración',
+  notificaciones: 'notificación',
+  suscripciones: 'suscripción',
+  sucursales: 'sucursal',
+  tenant: 'configuración',
+  usuarios: 'usuario',
+  laboral: 'parámetro laboral',
+  solicitudes: 'solicitud',
+  auditoria: 'auditoría',
+};
+
 function getFriendlyRouteAndAction(req, cleanRuta, method, entidad) {
   const parts = cleanRuta.split('/').filter(Boolean);
   const firstSegment = parts[0] === 'api' ? parts[1] : parts[0];
@@ -151,10 +175,11 @@ function getFriendlyRouteAndAction(req, cleanRuta, method, entidad) {
   let friendlyAction = '';
   const methodUpper = (method || '').toUpperCase();
   let entidadName = entidad || firstSegment || 'recurso';
-  if (UUID_REGEX.test(entidadName)) {
+  if (UUID_REGEX.test(entidadName) || entidadName === 'recurso' || entidadName === 'api') {
     entidadName = firstSegment || 'recurso';
   }
-  const entidadCapitalized = entidadName.charAt(0).toUpperCase() + entidadName.slice(1);
+
+  const singular = ENTITY_SINGULAR[entidadName] || entidadName;
 
   if (cleanRuta.includes('/auth/login')) {
     friendlyAction = 'Inicio de sesión';
@@ -169,17 +194,17 @@ function getFriendlyRouteAndAction(req, cleanRuta, method, entidad) {
   } else {
     switch (methodUpper) {
       case 'POST':
-        friendlyAction = `Creación de ${entidadCapitalized}`;
+        friendlyAction = `Crear ${singular}`;
         break;
       case 'PUT':
       case 'PATCH':
-        friendlyAction = `Modificación de ${entidadCapitalized}`;
+        friendlyAction = `Modificar ${singular}`;
         break;
       case 'DELETE':
-        friendlyAction = `Eliminación de ${entidadCapitalized}`;
+        friendlyAction = `Eliminar ${singular}`;
         break;
       default:
-        friendlyAction = `${methodUpper} - ${entidadCapitalized}`;
+        friendlyAction = `Consultar ${singular}`;
     }
   }
 

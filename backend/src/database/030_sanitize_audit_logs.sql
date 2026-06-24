@@ -38,9 +38,108 @@ UPDATE logs_auditoria SET accion = 'Renovación de sesión' WHERE accion ILIKE '
 UPDATE logs_auditoria SET accion = 'Generación de QR Dinámico' WHERE accion ILIKE '%qr/dynamic%';
 UPDATE logs_auditoria SET accion = 'Rotación de QR' WHERE accion ILIKE '%qr/rotate%';
 
--- Update standard CRUD action strings
-UPDATE logs_auditoria SET accion = 'Creación de ' || INITCAP(entidad) WHERE metodo = 'POST' AND (accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %' OR accion ILIKE '%ea1d%');
-UPDATE logs_auditoria SET accion = 'Modificación de ' || INITCAP(entidad) WHERE metodo IN ('PUT', 'PATCH') AND (accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %' OR accion ILIKE '%ea1d%');
-UPDATE logs_auditoria SET accion = 'Eliminación de ' || INITCAP(entidad) WHERE metodo = 'DELETE' AND (accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %' OR accion ILIKE '%ea1d%');
-UPDATE logs_auditoria SET accion = 'Consulta de ' || INITCAP(entidad) WHERE metodo = 'GET' AND (accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %' OR accion ILIKE '%ea1d%');
-UPDATE logs_auditoria SET accion = metodo || ' - ' || INITCAP(entidad) WHERE accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %';
+-- Update standard CRUD action strings using a clean SQL translation
+UPDATE logs_auditoria SET accion = 
+  CASE 
+    WHEN metodo = 'POST' THEN 'Crear ' || 
+      CASE entidad
+        WHEN 'auth' THEN 'sesión'
+        WHEN 'empleados' THEN 'empleado'
+        WHEN 'empresas' THEN 'empresa'
+        WHEN 'facturacion' THEN 'facturación'
+        WHEN 'health' THEN 'salud'
+        WHEN 'horarios' THEN 'horario'
+        WHEN 'integraciones' THEN 'integración'
+        WHEN 'marcaciones' THEN 'marcación'
+        WHEN 'organizacion' THEN 'estructura'
+        WHEN 'planes' THEN 'plan'
+        WHEN 'reportes' THEN 'reporte'
+        WHEN 'reemplazos' THEN 'reemplazo'
+        WHEN 'saas' THEN 'administración'
+        WHEN 'notificaciones' THEN 'notificación'
+        WHEN 'suscripciones' THEN 'suscripción'
+        WHEN 'sucursales' THEN 'sucursal'
+        WHEN 'tenant' THEN 'configuración'
+        WHEN 'usuarios' THEN 'usuario'
+        WHEN 'laboral' THEN 'parámetro laboral'
+        WHEN 'solicitudes' THEN 'solicitud'
+        WHEN 'auditoria' THEN 'auditoría'
+        ELSE entidad
+      END
+    WHEN metodo IN ('PUT', 'PATCH') THEN 'Modificar ' || 
+      CASE entidad
+        WHEN 'auth' THEN 'sesión'
+        WHEN 'empleados' THEN 'empleado'
+        WHEN 'empresas' THEN 'empresa'
+        WHEN 'facturacion' THEN 'facturación'
+        WHEN 'health' THEN 'salud'
+        WHEN 'horarios' THEN 'horario'
+        WHEN 'integraciones' THEN 'integración'
+        WHEN 'marcaciones' THEN 'marcación'
+        WHEN 'organizacion' THEN 'estructura'
+        WHEN 'planes' THEN 'plan'
+        WHEN 'reportes' THEN 'reporte'
+        WHEN 'reemplazos' THEN 'reemplazo'
+        WHEN 'saas' THEN 'administración'
+        WHEN 'notificaciones' THEN 'notificación'
+        WHEN 'suscripciones' THEN 'suscripción'
+        WHEN 'sucursales' THEN 'sucursal'
+        WHEN 'tenant' THEN 'configuración'
+        WHEN 'usuarios' THEN 'usuario'
+        WHEN 'laboral' THEN 'parámetro laboral'
+        WHEN 'solicitudes' THEN 'solicitud'
+        WHEN 'auditoria' THEN 'auditoría'
+        ELSE entidad
+      END
+    WHEN metodo = 'DELETE' THEN 'Eliminar ' || 
+      CASE entidad
+        WHEN 'auth' THEN 'sesión'
+        WHEN 'empleados' THEN 'empleado'
+        WHEN 'empresas' THEN 'empresa'
+        WHEN 'facturacion' THEN 'facturación'
+        WHEN 'health' THEN 'salud'
+        WHEN 'horarios' THEN 'horario'
+        WHEN 'integraciones' THEN 'integración'
+        WHEN 'marcaciones' THEN 'marcación'
+        WHEN 'organizacion' THEN 'estructura'
+        WHEN 'planes' THEN 'plan'
+        WHEN 'reportes' THEN 'reporte'
+        WHEN 'reemplazos' THEN 'reemplazo'
+        WHEN 'saas' THEN 'administración'
+        WHEN 'notificaciones' THEN 'notificación'
+        WHEN 'suscripciones' THEN 'suscripción'
+        WHEN 'sucursales' THEN 'sucursal'
+        WHEN 'tenant' THEN 'configuración'
+        WHEN 'usuarios' THEN 'usuario'
+        WHEN 'laboral' THEN 'parámetro laboral'
+        WHEN 'solicitudes' THEN 'solicitud'
+        WHEN 'auditoria' THEN 'auditoría'
+        ELSE entidad
+      END
+    ELSE 'Consultar ' || 
+      CASE entidad
+        WHEN 'auth' THEN 'sesión'
+        WHEN 'empleados' THEN 'empleado'
+        WHEN 'empresas' THEN 'empresa'
+        WHEN 'facturacion' THEN 'facturación'
+        WHEN 'health' THEN 'salud'
+        WHEN 'horarios' THEN 'horario'
+        WHEN 'integraciones' THEN 'integración'
+        WHEN 'marcaciones' THEN 'marcación'
+        WHEN 'organizacion' THEN 'estructura'
+        WHEN 'planes' THEN 'plan'
+        WHEN 'reportes' THEN 'reporte'
+        WHEN 'reemplazos' THEN 'reemplazo'
+        WHEN 'saas' THEN 'administración'
+        WHEN 'notificaciones' THEN 'notificación'
+        WHEN 'suscripciones' THEN 'suscripción'
+        WHEN 'sucursales' THEN 'sucursal'
+        WHEN 'tenant' THEN 'configuración'
+        WHEN 'usuarios' THEN 'usuario'
+        WHEN 'laboral' THEN 'parámetro laboral'
+        WHEN 'solicitudes' THEN 'solicitud'
+        WHEN 'auditoria' THEN 'auditoría'
+        ELSE entidad
+      END
+  END
+WHERE (accion LIKE '%/%' OR accion LIKE '%-%' OR accion LIKE '% %' OR accion ILIKE '%ea1d%' OR accion ILIKE '%api%' OR accion ILIKE '%recurso%');
