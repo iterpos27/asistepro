@@ -39,7 +39,7 @@ const preprocessEmpty = (schema) =>
   z.preprocess((val) => (val === '' || val === null ? undefined : val), schema.optional().nullable());
 
 const maybeUuid = (field = 'id') =>
-  z.union([z.string().uuid(`${field} invalido`), z.literal(''), z.null(), z.undefined()]);
+  z.union([z.string().uuid(`${field} invalido`), z.literal(''), z.null(), z.undefined()]).optional();
 
 const maybeIsoDate = (field = 'fecha') =>
   z.union([
@@ -47,7 +47,7 @@ const maybeIsoDate = (field = 'fecha') =>
     z.literal(''),
     z.null(),
     z.undefined(),
-  ]);
+  ]).optional();
 
 const maybeIsoMonth = (field = 'mes') =>
   z.union([
@@ -55,7 +55,7 @@ const maybeIsoMonth = (field = 'mes') =>
     z.literal(''),
     z.null(),
     z.undefined(),
-  ]);
+  ]).optional();
 
 function requiredNumber(field = 'valor', { min, max } = {}) {
   let schema = z.coerce.number({ message: `${field} es requerido` });
