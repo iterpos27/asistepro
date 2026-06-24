@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Download, FileSpreadsheet, Plus, Save, ShieldCheck, Trash2, Upload } from 'lucide-react';
+import { Building2, Download, FileSpreadsheet, Pencil, Plus, Save, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import MetricCard from '../../components/cards/MetricCard';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -241,7 +241,7 @@ export default function EstructuraOrganizacional() {
                   <td>
                     <div className="row-actions">
                       <button className="icon-button" type="button" onClick={() => startEdit(item)} title="Editar" aria-label="Editar">
-                        <Plus size={16} />
+                        <Pencil size={16} />
                       </button>
                       <button className="icon-button danger" type="button" onClick={() => removeStructure(item.id)} title="Eliminar" aria-label="Eliminar">
                         <Trash2 size={16} />

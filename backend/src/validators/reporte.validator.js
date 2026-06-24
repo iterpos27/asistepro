@@ -1,18 +1,18 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, isoDate, isoMonth, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
+const { emptyBody, emptyParams, maybeIsoDate, maybeIsoMonth, paginationQuery, maybeUuid, preprocessEmpty } = require('./common.validator');
 
 const asistenciaEstado = z.enum(['presente', 'ausente']);
 const marcacionEstado = z.enum(['aceptada', 'aceptada_con_novedad', 'rechazada']);
 
 const scopedQuery = {
-  sucursal_id: uuid('sucursal_id').optional(),
-  empleado_id: uuid('empleado_id').optional(),
+  sucursal_id: maybeUuid('sucursal_id'),
+  empleado_id: maybeUuid('empleado_id'),
 };
 
 const dateRangeQuery = paginationQuery.extend({
   ...scopedQuery,
-  fecha_desde: isoDate('fecha_desde').optional(),
-  fecha_hasta: isoDate('fecha_hasta').optional(),
+  fecha_desde: maybeIsoDate('fecha_desde'),
+  fecha_hasta: maybeIsoDate('fecha_hasta'),
 });
 
 function dateRangeSchema(querySchema = dateRangeQuery) {
@@ -36,7 +36,7 @@ const asistenciaDiariaSchema = z.object({
   body: emptyBody,
   query: paginationQuery.extend({
     ...scopedQuery,
-    fecha: isoDate('fecha').optional(),
+    fecha: maybeIsoDate('fecha'),
     estado: preprocessEmpty(asistenciaEstado).optional(),
   }),
   params: emptyParams,
@@ -46,7 +46,7 @@ const asistenciaMensualSchema = z.object({
   body: emptyBody,
   query: paginationQuery.extend({
     ...scopedQuery,
-    mes: isoMonth('mes').optional(),
+    mes: maybeIsoMonth('mes'),
     estado: preprocessEmpty(marcacionEstado).optional(),
   }),
   params: emptyParams,
@@ -61,7 +61,7 @@ const exportAsistenciaDiariaSchema = z.object({
   body: emptyBody,
   query: paginationQuery.extend({
     ...scopedQuery,
-    fecha: isoDate('fecha').optional(),
+    fecha: maybeIsoDate('fecha'),
     estado: asistenciaEstado.optional(),
   }),
   params: emptyParams,

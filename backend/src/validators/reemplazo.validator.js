@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, idParamSchema, idParams, isoDate, paginationQuery, updateBodySchema, uuid } = require('./common.validator');
+const { emptyBody, emptyParams, idParamSchema, idParams, isoDate, paginationQuery, updateBodySchema, uuid, maybeIsoDate, maybeUuid } = require('./common.validator');
 
 const time = (field) => z.string().trim().regex(/^\d{2}:\d{2}(:\d{2})?$/, `${field} invalida`);
 const estado = z.enum(['activo', 'cancelado', 'finalizado']);
@@ -53,11 +53,11 @@ const listReemplazosSchema = z
   .object({
     body: emptyBody,
     query: paginationQuery.extend({
-      empleado_id: uuid('empleado_id').optional(),
-      sucursal_id: uuid('sucursal_id').optional(),
+      empleado_id: maybeUuid('empleado_id'),
+      sucursal_id: maybeUuid('sucursal_id'),
       estado: estado.optional(),
-      fecha_desde: isoDate('fecha_desde').optional(),
-      fecha_hasta: isoDate('fecha_hasta').optional(),
+      fecha_desde: maybeIsoDate('fecha_desde'),
+      fecha_hasta: maybeIsoDate('fecha_hasta'),
     }),
     params: emptyParams,
   })

@@ -22,29 +22,34 @@ export default function Sidebar({ open, collapsed, onToggleCollapse, onNavigate,
 
   const lastPath = useRef(location.pathname);
 
-  // Auto-expand active sections only when navigating to a new route
+  // Auto-expand active section and collapse others only when navigating to a new route
   useEffect(() => {
     if (lastPath.current !== location.pathname) {
       lastPath.current = location.pathname;
-      const nextExpanded = { ...expanded };
-      let changed = false;
+      
+      let activeSectionId = null;
       sections.forEach((section) => {
         const hasActive = section.items.some(
           (item) => location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
         );
-        if (hasActive && !expanded[section.id]) {
-          nextExpanded[section.id] = true;
-          changed = true;
+        if (hasActive) {
+          activeSectionId = section.id;
         }
       });
-      if (changed) {
-        setExpanded(nextExpanded);
-      }
+
+      setExpanded(activeSectionId ? { [activeSectionId]: true } : {});
     }
-  }, [location.pathname, sections, expanded]);
+  }, [location.pathname, sections]);
 
   const toggleSection = (sectionId) => {
-    setExpanded((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+    setExpanded((prev) => {
+      const isCurrentlyExpanded = prev[sectionId];
+      if (isCurrentlyExpanded) {
+        return {};
+      } else {
+        return { [sectionId]: true };
+      }
+    });
   };
 
   let asideClasses = 'sidebar';

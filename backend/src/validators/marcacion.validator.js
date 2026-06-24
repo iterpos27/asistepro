@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, idParamSchema, isoDate, paginationQuery, requiredNumber, uuid } = require('./common.validator');
+const { emptyBody, emptyParams, idParamSchema, isoDate, paginationQuery, requiredNumber, uuid, maybeIsoDate, maybeUuid } = require('./common.validator');
 
 const marcacionEstado = z.enum(['aceptada', 'aceptada_con_novedad', 'rechazada']);
 
@@ -32,11 +32,11 @@ const listMarcacionesSchema = z
   .object({
     body: emptyBody,
     query: paginationQuery.extend({
-      empleado_id: uuid('empleado_id').optional(),
-      sucursal_id: uuid('sucursal_id').optional(),
+      empleado_id: maybeUuid('empleado_id'),
+      sucursal_id: maybeUuid('sucursal_id'),
       estado: marcacionEstado.optional(),
-      fecha_desde: isoDate('fecha_desde').optional(),
-      fecha_hasta: isoDate('fecha_hasta').optional(),
+      fecha_desde: maybeIsoDate('fecha_desde'),
+      fecha_hasta: maybeIsoDate('fecha_hasta'),
       solo_mios: z.string().optional(),
     }),
     params: emptyParams,
