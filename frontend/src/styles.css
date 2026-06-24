@@ -185,7 +185,8 @@ button {
 
 .login-form input,
 .settings-grid input,
-.search-box input {
+.search-box input,
+.register-form-step input {
   width: 100%;
   border: 1px solid #d9e2ef;
   border-radius: 8px;
@@ -198,14 +199,16 @@ button {
 }
 
 .login-form input,
-.settings-grid input {
+.settings-grid input,
+.register-form-step input {
   min-height: 46px;
   padding: 0 14px;
 }
 
 .login-form input:focus,
 .settings-grid input:focus,
-.search-box input:focus {
+.search-box input:focus,
+.register-form-step input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
@@ -3435,6 +3438,13 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+@media (max-width: 480px) {
+  .form-row-2col {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 
 /* checkout portal styles */
