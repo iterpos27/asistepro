@@ -20,8 +20,16 @@ const initialForm = {
   marcacion_id: '',
   tipo_marcacion: 'entrada',
   marcado_en: '',
-  sucursal_id: ''
+  sucursal_id: '',
+  duracion_tipo: 'dias'
 };
+
+const timeOptions = [];
+for (let h = 0; h < 24; h++) {
+  const hh = String(h).padStart(2, '0');
+  timeOptions.push(`${hh}:00`);
+  timeOptions.push(`${hh}:30`);
+}
 const typeLabels = {
   vacaciones: 'Vacaciones',
   permiso: 'Permiso',
@@ -89,7 +97,16 @@ export default function SolicitudesList() {
   );
 
   function change(field, value) {
-    setForm(current => ({ ...current, [field]: value }));
+    setForm(current => {
+      const next = { ...current, [field]: value };
+      if (field === 'duracion_tipo' && value === 'horas') {
+        next.fecha_fin = next.fecha_inicio;
+      }
+      if (field === 'fecha_inicio' && next.duracion_tipo === 'horas') {
+        next.fecha_fin = value;
+      }
+      return next;
+    });
   }
 
   function handleFileChange(file) {
@@ -117,9 +134,9 @@ export default function SolicitudesList() {
         empleado_id: isEmployee ? undefined : form.empleado_id,
         tipo: form.tipo,
         fecha_inicio: form.fecha_inicio,
-        fecha_fin: form.fecha_fin,
-        hora_inicio: form.hora_inicio || null,
-        hora_fin: form.hora_fin || null,
+        fecha_fin: form.duracion_tipo === 'horas' ? form.fecha_inicio : form.fecha_fin,
+        hora_inicio: form.duracion_tipo === 'horas' && form.hora_inicio ? form.hora_inicio : null,
+        hora_fin: form.duracion_tipo === 'horas' && form.hora_fin ? form.hora_fin : null,
         motivo: form.motivo
       };
 
@@ -221,20 +238,48 @@ export default function SolicitudesList() {
                     ))}
                   </select>
                 </label>
-                <label>
-                  Fecha inicio
-                  <input required type="date" value={form.fecha_inicio} onChange={e => change('fecha_inicio', e.target.value)} />
-                </label>
-                <label>
-                  Fecha fin
-                  <input required type="date" value={form.fecha_fin} onChange={e => change('fecha_fin', e.target.value)} />
-                </label>
                 {!correction && (
-                  <>
-                    <label>Hora inicio<input type="time" value={form.hora_inicio} onChange={e => change('hora_inicio', e.target.value)} /></label>
-                    <label>Hora fin<input type="time" value={form.hora_fin} onChange={e => change('hora_fin', e.target.value)} /></label>
-                  </>
+                  <label>
+                    Duración
+                    <select value={form.duracion_tipo || 'dias'} onChange={e => change('duracion_tipo', e.target.value)}>
+                      <option value="dias">Por días (Día completo)</option>
+                      <option value="horas">Por horas</option>
+                    </select>
+                  </label>
                 )}
+                {(!correction && form.duracion_tipo === 'horas') ? (
+                  <>
+                    <label>
+                      Fecha
+                      <input required type="date" value={form.fecha_inicio} onChange={e => change('fecha_inicio', e.target.value)} />
+                    </label>
+                    <label>
+                      Hora inicio
+                      <select required value={form.hora_inicio || ''} onChange={e => change('hora_inicio', e.target.value)}>
+                        <option value="">Seleccionar hora</option>
+                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Hora fin
+                      <select required value={form.hora_fin || ''} onChange={e => change('hora_fin', e.target.value)}>
+                        <option value="">Seleccionar hora</option>
+                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </label>
+                  </>
+                ) : !correction ? (
+                  <>
+                    <label>
+                      Fecha inicio
+                      <input required type="date" value={form.fecha_inicio} onChange={e => change('fecha_inicio', e.target.value)} />
+                    </label>
+                    <label>
+                      Fecha fin
+                      <input required type="date" value={form.fecha_fin} onChange={e => change('fecha_fin', e.target.value)} />
+                    </label>
+                  </>
+                ) : null}
                 {correction && (
                   <>
                     <label>
@@ -341,7 +386,10 @@ export default function SolicitudesList() {
                   <tr key={item.id}>
                     <td>{item.empleado_codigo} - {item.empleado_nombres} {item.empleado_apellidos}</td>
                     <td>{typeLabels[item.tipo]}</td>
-                    <td>{String(item.fecha_inicio).slice(0, 10)} a {String(item.fecha_fin).slice(0, 10)}</td>
+                    <td>
+                      {String(item.fecha_inicio).slice(0, 10)}
+                      {item.hora_inicio ? ` (${String(item.hora_inicio).slice(0, 5)} - ${String(item.hora_fin).slice(0, 5)})` : ` a ${String(item.fecha_fin).slice(0, 10)}`}
+                    </td>
                     <td>{item.motivo}</td>
                     <td>
                       <span className={`status-pill ${item.estado === 'rechazada' ? 'danger' : item.estado === 'pendiente' ? 'warning' : ''}`}>{item.estado}</span>

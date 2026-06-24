@@ -251,57 +251,7 @@ export default function RolesPermisos() {
         </div>
       </div>
 
-      <div className="panel">
-        <PanelTitle
-          title="Asignacion a usuarios"
-          subtitle="El perfil se combina con excepciones individuales"
-          actions={
-            <button className="icon-button" onClick={load} aria-label="Actualizar">
-              <RotateCcw size={16} />
-            </button>
-          }
-        />
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Usuario</th>
-                <th>Rol base</th>
-                <th>Perfil asignado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.items?.length ? (
-                users.items.map((target) => (
-                  <tr key={target.id}>
-                    <td>
-                      {target.nombre} {target.apellido}
-                      <span className="table-subtext">{target.email}</span>
-                    </td>
-                    <td>{getRoleLabel(target.rol)}</td>
-                    <td>
-                      <select value={target.rol_personalizado_id || ''} onChange={(e) => assign(target, e.target.value)}>
-                        <option value="">Permisos predeterminados</option>
-                        {roles.items
-                          ?.filter((role) => role.activo && role.rol_base === target.rol)
-                          .map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.nombre}
-                            </option>
-                          ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="3">No hay usuarios administrables.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+
 
       {canManagePermissions && (
         <div className="panel">

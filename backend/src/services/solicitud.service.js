@@ -80,7 +80,7 @@ async function createSolicitud({ empresaId, auth, payload }) {
         hora_inicio, hora_fin, motivo, datos_correccion,
         comprobante_storage_provider, comprobante_storage_bucket, comprobante_storage_key, comprobante_storage_url
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15) RETURNING *`,
       [
         solicitudId,
         empresaId,

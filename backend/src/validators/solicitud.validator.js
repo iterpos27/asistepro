@@ -17,8 +17,8 @@ const body = z.object({
   tipo: z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion']),
   fecha_inicio: isoDate('fecha_inicio'),
   fecha_fin: isoDate('fecha_fin'),
-  hora_inicio: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().nullable(),
-  hora_fin: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().nullable(),
+  hora_inicio: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).optional().nullable(),
+  hora_fin: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).optional().nullable(),
   motivo: z.string().trim().min(5).max(1000),
   datos_correccion: correctionSchema.optional().nullable(),
   comprobante_storage_provider: z.string().trim().max(40).optional().nullable(),
@@ -33,6 +33,7 @@ const body = z.object({
 }).superRefine((value, context) => {
   if (value.fecha_fin < value.fecha_inicio) context.addIssue({ code: 'custom', path: ['fecha_fin'], message: 'fecha_fin no puede ser anterior' });
   if (Boolean(value.hora_inicio) !== Boolean(value.hora_fin)) context.addIssue({ code: 'custom', path: ['hora_fin'], message: 'Debe completar ambas horas' });
+  if (value.hora_inicio && value.fecha_inicio !== value.fecha_fin) context.addIssue({ code: 'custom', path: ['fecha_fin'], message: 'Las solicitudes por horas deben ser del mismo dia' });
   if (value.tipo === 'correccion_marcacion' && !value.datos_correccion) context.addIssue({ code: 'custom', path: ['datos_correccion'], message: 'Datos de correccion requeridos' });
   const correctionDate = value.datos_correccion?.marcado_en?.slice(0, 10);
   if (correctionDate && (correctionDate < value.fecha_inicio || correctionDate > value.fecha_fin)) context.addIssue({ code: 'custom', path: ['datos_correccion', 'marcado_en'], message: 'La marcacion propuesta debe estar dentro del periodo solicitado' });
