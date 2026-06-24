@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyQuery, idParams, isoDate, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
+const { emptyBody, emptyParams, emptyQuery, idParams, isoDate, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
 
 const correctionSchema = z.object({
   accion: z.enum(['crear', 'editar', 'anular']),
@@ -38,8 +38,8 @@ const body = z.object({
   if (correctionDate && (correctionDate < value.fecha_inicio || correctionDate > value.fecha_fin)) context.addIssue({ code: 'custom', path: ['datos_correccion', 'marcado_en'], message: 'La marcacion propuesta debe estar dentro del periodo solicitado' });
 });
 
-const createSolicitudSchema = z.object({ body, query: emptyQuery, params: z.object({}).passthrough() });
-const listSolicitudesSchema = z.object({ body: emptyBody, params: z.object({}).passthrough(), query: paginationQuery.extend({
+const createSolicitudSchema = z.object({ body, query: emptyQuery, params: emptyParams });
+const listSolicitudesSchema = z.object({ body: emptyBody, params: emptyParams, query: paginationQuery.extend({
   estado: preprocessEmpty(z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada'])).optional(),
   tipo: preprocessEmpty(z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion'])).optional(),
   empleado_id: uuid('empleado_id').optional(),
