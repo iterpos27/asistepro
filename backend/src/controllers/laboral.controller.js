@@ -24,4 +24,25 @@ async function exportar(req, res, next) {
   } catch (error) { next(error); }
 }
 
-module.exports = { cerrar, exportar, getCalculo, listCierres, reabrir };
+async function exportarPrenomina(req, res, next) {
+  try {
+    const data = await laboralService.getCalculo({ empresaId: empresaId(req), mes: req.params.mes });
+    const csv = toCsv(data.prenomina, [
+      { key: 'empleado_codigo', header: 'Codigo' },
+      { key: 'empleado_nombre', header: 'Empleado' },
+      { key: 'salario_base', header: 'Salario Base' },
+      { key: 'ausencias', header: 'Ausencias' },
+      { key: 'minutos_atraso', header: 'Minutos Atraso' },
+      { key: 'minutos_extra', header: 'Minutos Extra' },
+      { key: 'descuento_ausencias', header: 'Descuento Ausencias' },
+      { key: 'descuento_atrasos', header: 'Descuento Atrasos' },
+      { key: 'pago_horas_extra', header: 'Pago Horas Extra' },
+      { key: 'neto_pagar', header: 'Neto a Pagar' },
+    ]);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="prenomina-${req.params.mes}.csv"`);
+    res.send(csv);
+  } catch (error) { next(error); }
+}
+
+module.exports = { cerrar, exportar, exportarPrenomina, getCalculo, listCierres, reabrir };

@@ -12,6 +12,11 @@ async function run() {
     await checkDatabaseConnection();
     const count = await suscripcionService.checkSubscriptionExpirations();
     console.log(`Expiration check finished. Sent ${count} notifications.`);
+
+    console.log('Starting database cleanup and billing suspensions...');
+    await suscripcionService.runDatabaseCleanupAndSuspensions();
+    console.log('Database cleanup and suspensions finished successfully.');
+
     process.exit(0);
   } catch (error) {
     console.error('Expiration check failed:', error);

@@ -9,6 +9,7 @@ const { monthParamSchema, reopenSchema } = require('../validators/laboral.valida
 const router = Router();
 router.use(authGuard, roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH']), tenantGuard, subscriptionGuard);
 router.get('/cierres', permissionGuard('cierres_mensuales', 'ver'), controller.listCierres);
+router.get('/:mes/export-prenomina', permissionGuard('calculo_laboral', 'exportar'), validateSchema(monthParamSchema), controller.exportarPrenomina);
 router.get('/:mes/export', permissionGuard('calculo_laboral', 'exportar'), validateSchema(monthParamSchema), controller.exportar);
 router.get('/:mes', permissionGuard('calculo_laboral', 'ver'), validateSchema(monthParamSchema), controller.getCalculo);
 router.post('/:mes/cerrar', permissionGuard('cierres_mensuales', 'cerrar'), validateSchema(monthParamSchema), controller.cerrar);

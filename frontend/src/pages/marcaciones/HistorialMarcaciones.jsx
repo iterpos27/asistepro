@@ -5,6 +5,8 @@ import PanelTitle from '../../components/common/PanelTitle';
 import { useAuthContext } from '../../context/AuthContext';
 import { ROLES } from '../../utils/roles';
 import * as marcacionService from '../../services/marcacionService';
+import * as empleadoService from '../../services/empleadoService';
+import * as sucursalService from '../../services/sucursalService';
 
 function statusClass(estado) {
   if (estado === 'aceptada') return 'status-pill';
@@ -20,13 +22,44 @@ function formatDateTime(value) {
 export default function HistorialMarcaciones() {
   const { user } = useAuthContext();
   const canSeeGps = [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH].includes(user?.rol);
+  const isGeneral = window.location.pathname === '/historial-general';
+
   const [marcaciones, setMarcaciones] = useState([]);
   const [total, setTotal] = useState(0);
+  
+  // Lists for filters (used in general mode)
+  const [empleados, setEmpleados] = useState([]);
+  const [sucursales, setSucursales] = useState([]);
+  
+  // Filter States
+  const [empleadoId, setEmpleadoId] = useState('');
+  const [sucursalId, setSucursalId] = useState('');
   const [estado, setEstado] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Load filter options if in general mode
+  useEffect(() => {
+    if (!isGeneral) return;
+
+    async function loadFilterOptions() {
+      try {
+        const [empRes, sucRes] = await Promise.all([
+          empleadoService.listEmpleados({ limit: 200 }),
+          sucursalService.listSucursales({ limit: 100 }),
+        ]);
+        setEmpleados(empRes.items || []);
+        setSucursales(sucRes.items || []);
+      } catch (err) {
+        console.error('Error cargando opciones de filtros:', err);
+      }
+    }
+
+    loadFilterOptions();
+  }, [isGeneral]);
 
   async function loadMarcaciones(silent = false) {
     if (!silent) {
@@ -36,10 +69,12 @@ export default function HistorialMarcaciones() {
 
     try {
       const result = await marcacionService.listMarcaciones({
+        empleadoId: isGeneral ? empleadoId : undefined,
+        sucursalId: isGeneral ? sucursalId : undefined,
         estado,
         fechaDesde,
         fechaHasta,
-        soloMios: true,
+        soloMios: !isGeneral,
         limit: 100,
       });
       setMarcaciones(result.items || []);
@@ -55,6 +90,7 @@ export default function HistorialMarcaciones() {
     }
   }
 
+  // Reload data reactively and set up silent polling
   useEffect(() => {
     loadMarcaciones();
 
@@ -63,30 +99,78 @@ export default function HistorialMarcaciones() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [estado, fechaDesde, fechaHasta]);
+  }, [isGeneral, empleadoId, sucursalId, estado, fechaDesde, fechaHasta]);
+
+  const handleClearFilters = () => {
+    setEmpleadoId('');
+    setSucursalId('');
+    setEstado('');
+    setFechaDesde('');
+    setFechaHasta('');
+  };
 
   return (
     <>
       <PageHeader
-        title="Historial de marcaciones"
-        description="Registros QR + GPS con estado, distancia y novedades."
-        actions={<span className="status-pill">{loading ? 'Cargando' : `${total} registros`}</span>}
+        title={isGeneral ? "Historial general de marcaciones" : "Historial de marcaciones"}
+        description={isGeneral ? "Visualiza registros en tiempo real de todos los empleados con geocercas y novedades." : "Registros QR + GPS con estado, distancia y novedades."}
+        actions={<span className="status-pill">{loading ? 'Cargando...' : `${total} registros`}</span>}
       />
 
       <div className="panel">
-        <PanelTitle title="Filtros" subtitle="Filtra por estado o rango de fechas" />
-        <div className="toolbar-grid">
+        <PanelTitle title="Filtros" subtitle={isGeneral ? "Filtra por empleado, sucursal, estado o rango de fechas" : "Filtra por estado o rango de fechas"} />
+        <div className="toolbar-grid" style={isGeneral ? { gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' } : undefined}>
+          
+          {isGeneral && (
+            <>
+              <select value={empleadoId} onChange={(event) => setEmpleadoId(event.target.value)}>
+                <option value="">Todos los empleados</option>
+                {empleados.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nombres} {emp.apellidos} ({emp.codigo})
+                  </option>
+                ))}
+              </select>
+
+              <select value={sucursalId} onChange={(event) => setSucursalId(event.target.value)}>
+                <option value="">Todas las sucursales</option>
+                {sucursales.map((suc) => (
+                  <option key={suc.id} value={suc.id}>
+                    {suc.nombre}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
           <select value={estado} onChange={(event) => setEstado(event.target.value)}>
             <option value="">Todos los estados</option>
             <option value="aceptada">Aceptada</option>
             <option value="aceptada_con_novedad">Con novedad</option>
             <option value="rechazada">Rechazada</option>
           </select>
-          <input value={fechaDesde} onChange={(event) => setFechaDesde(event.target.value)} type="date" />
-          <input value={fechaHasta} onChange={(event) => setFechaHasta(event.target.value)} type="date" />
-          <button className="outline-button" type="button" onClick={loadMarcaciones}>
+
+          {isGeneral ? (
+            <>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Desde:</span>
+                <input value={fechaDesde} onChange={(event) => setFechaDesde(event.target.value)} type="date" style={{ flex: 1 }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Hasta:</span>
+                <input value={fechaHasta} onChange={(event) => setFechaHasta(event.target.value)} type="date" style={{ flex: 1 }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <input value={fechaDesde} onChange={(event) => setFechaDesde(event.target.value)} type="date" />
+              <input value={fechaHasta} onChange={(event) => setFechaHasta(event.target.value)} type="date" />
+            </>
+          )}
+
+          <button className="outline-button" type="button" onClick={isGeneral ? handleClearFilters : () => loadMarcaciones()}>
             <RotateCcw size={16} />
-            Aplicar
+            {isGeneral ? "Limpiar filtros" : "Aplicar"}
           </button>
         </div>
       </div>
@@ -111,11 +195,22 @@ export default function HistorialMarcaciones() {
               {marcaciones.length ? (
                 marcaciones.map((marcacion) => (
                   <tr key={marcacion.id}>
-                    <td>{marcacion.empleado_codigo || '-'}</td>
-                    <td>{marcacion.sucursal_nombre || '-'}</td>
-                    <td>{marcacion.tipo}</td>
                     <td>
-                      <span className={statusClass(marcacion.estado)}>{marcacion.estado}</span>
+                      {isGeneral ? (
+                        <>
+                          <div style={{ fontWeight: '500' }}>
+                            {marcacion.empleado_nombres ? `${marcacion.empleado_nombres} ${marcacion.empleado_apellidos || ''}` : '-'}
+                          </div>
+                          <small style={{ color: '#64748b' }}>Código: {marcacion.empleado_codigo || '-'}</small>
+                        </>
+                      ) : (
+                        marcacion.empleado_codigo || '-'
+                      )}
+                    </td>
+                    <td>{marcacion.sucursal_nombre || '-'}</td>
+                    <td>{marcacion.tipo === 'entrada' ? 'Entrada' : 'Salida'}</td>
+                    <td>
+                      <span className={statusClass(marcacion.estado)}>{marcacion.estado.replace(/_/g, ' ')}</span>
                     </td>
                     <td>{marcacion.distancia_metros ? `${Number(marcacion.distancia_metros).toFixed(2)} m` : '-'}</td>
                     {canSeeGps ? (
@@ -131,7 +226,9 @@ export default function HistorialMarcaciones() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={canSeeGps ? 8 : 7}>Sin marcaciones para mostrar.</td>
+                  <td colSpan={canSeeGps ? 8 : 7} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                    Sin marcaciones para mostrar.
+                  </td>
                 </tr>
               )}
             </tbody>

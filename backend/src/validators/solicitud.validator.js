@@ -21,6 +21,15 @@ const body = z.object({
   hora_fin: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().nullable(),
   motivo: z.string().trim().min(5).max(1000),
   datos_correccion: correctionSchema.optional().nullable(),
+  comprobante_storage_provider: z.string().trim().max(40).optional().nullable(),
+  comprobante_storage_bucket: z.string().trim().max(120).optional().nullable(),
+  comprobante_storage_key: z.string().trim().optional().nullable(),
+  comprobante_storage_url: z.string().trim().optional().nullable(),
+  comprobante: z.object({
+    nombre: z.string().trim().min(1),
+    tipo: z.string().trim().min(1),
+    data_base64: z.string().min(1),
+  }).optional().nullable(),
 }).superRefine((value, context) => {
   if (value.fecha_fin < value.fecha_inicio) context.addIssue({ code: 'custom', path: ['fecha_fin'], message: 'fecha_fin no puede ser anterior' });
   if (Boolean(value.hora_inicio) !== Boolean(value.hora_fin)) context.addIssue({ code: 'custom', path: ['hora_fin'], message: 'Debe completar ambas horas' });

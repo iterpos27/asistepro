@@ -378,6 +378,74 @@ async function checkSubscriptionExpirations() {
   return count;
 }
 
+async function runDatabaseCleanupAndSuspensions() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Clean up expired dynamic QR tokens (expired more than 1 day ago)
+    const qrCleanup = await client.query(
+      `
+        DELETE FROM sucursal_tokens_dinamicos
+        WHERE expira_en <= NOW() - INTERVAL '1 day'
+      `
+    );
+    console.log(`[Cleanup] Deleted ${qrCleanup.rowCount} expired dynamic QR tokens.`);
+
+    // 2. Mark invoices past their due date as 'vencida' (overdue)
+    const overdueInvoices = await client.query(
+      `
+        UPDATE facturas
+        SET estado = 'vencida', actualizado_en = NOW()
+        WHERE estado = 'pendiente'
+          AND fecha_vencimiento < CURRENT_DATE
+      `
+    );
+    console.log(`[Billing] Marked ${overdueInvoices.rowCount} pending invoices as overdue (vencida).`);
+
+    // 3. Suspend companies (tenants) with invoices overdue by more than 5 days
+    const suspendedCompanies = await client.query(
+      `
+        UPDATE empresas
+        SET estado = 'suspendida', actualizado_en = NOW()
+        WHERE estado = 'activa'
+          AND id IN (
+            SELECT empresa_id
+            FROM facturas
+            WHERE estado IN ('pendiente', 'vencida')
+              AND fecha_vencimiento < CURRENT_DATE - INTERVAL '5 days'
+          )
+        RETURNING id, nombre
+      `
+    );
+
+    if (suspendedCompanies.rows.length) {
+      console.log(`[Billing] Suspended ${suspendedCompanies.rows.length} companies due to unpaid invoices:`, suspendedCompanies.rows.map(r => r.nombre).join(', '));
+
+      // 4. Suspend active subscriptions for the suspended companies
+      const companyIds = suspendedCompanies.rows.map(r => r.id);
+      const suspendedSubs = await client.query(
+        `
+          UPDATE suscripciones
+          SET estado = 'suspendida', actualizado_en = NOW()
+          WHERE estado = 'activa'
+            AND empresa_id = ANY($1::uuid[])
+        `,
+        [companyIds]
+      );
+      console.log(`[Billing] Suspended ${suspendedSubs.rowCount} active subscriptions for suspended companies.`);
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error during database cleanup and suspensions:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listSuscripciones,
   findSuscripcionById,
@@ -386,4 +454,5 @@ module.exports = {
   cancelSuscripcion,
   checkSubscriptionExpirations,
   validateSuscripcionPayload,
+  runDatabaseCleanupAndSuspensions,
 };

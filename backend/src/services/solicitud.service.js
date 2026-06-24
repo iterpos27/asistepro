@@ -1,5 +1,43 @@
+const crypto = require('crypto');
 const { pool } = require('../config/database');
 const laboralService = require('./laboral.service');
+const { putObject } = require('./storage.service');
+
+function getComprobanteBase64(comprobante) {
+  const rawBase64 = String(comprobante.data_base64 || comprobante.data || '');
+  return rawBase64.includes(',') ? rawBase64.split(',').pop() : rawBase64;
+}
+
+function normalizeComprobante(comprobante) {
+  if (!comprobante) return null;
+  const base64 = getComprobanteBase64(comprobante);
+  return {
+    nombre: String(comprobante.nombre || comprobante.name || '').trim().slice(0, 255),
+    tipo: String(comprobante.tipo || comprobante.type || 'application/octet-stream').trim(),
+    data: Buffer.from(base64, 'base64'),
+  };
+}
+
+function buildStorageKey({ empresaId, scope, entityId, fileName }) {
+  return `tenants/${empresaId}/${scope}/${entityId}/${Date.now()}-${String(fileName || 'archivo').replace(/[^a-zA-Z0-9._-]+/g, '_')}`;
+}
+
+async function uploadStoredFile({ empresaId, scope, entityId, file }) {
+  if (!file?.data?.length) {
+    return { provider: null, bucket: null, key: null, url: null };
+  }
+  const stored = await putObject({
+    key: buildStorageKey({ empresaId, scope, entityId, fileName: file.nombre }),
+    body: file.data,
+    contentType: file.tipo,
+  });
+  return {
+    provider: stored.provider,
+    bucket: stored.bucket,
+    key: stored.key,
+    url: stored.url,
+  };
+}
 
 async function resolveEmpleado(client, empresaId, auth, requestedId) {
   const values = [empresaId];
@@ -22,10 +60,45 @@ async function createSolicitud({ empresaId, auth, payload }) {
        AND fecha_inicio <= $5::date AND fecha_fin >= $4::date LIMIT 1`,
       [empresaId, employee.id, payload.tipo, payload.fecha_inicio, payload.fecha_fin]);
     if (overlap.rows.length) { const error = new Error('Ya existe una solicitud activa que se cruza con esas fechas'); error.statusCode = 409; throw error; }
+    
+    const solicitudId = crypto.randomUUID();
+
+    let fileData = { provider: null, bucket: null, key: null, url: null };
+    if (payload.comprobante) {
+      const normalizedFile = normalizeComprobante(payload.comprobante);
+      fileData = await uploadStoredFile({
+        empresaId,
+        scope: 'solicitudes',
+        entityId: solicitudId,
+        file: normalizedFile,
+      });
+    }
+
     const result = await client.query(
-      `INSERT INTO solicitudes (empresa_id, empleado_id, solicitado_por, tipo, fecha_inicio, fecha_fin, hora_inicio, hora_fin, motivo, datos_correccion)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *`,
-      [empresaId, employee.id, auth.usuario_id, payload.tipo, payload.fecha_inicio, payload.fecha_fin, payload.hora_inicio || null, payload.hora_fin || null, payload.motivo, payload.datos_correccion ? JSON.stringify(payload.datos_correccion) : null]);
+      `INSERT INTO solicitudes (
+        id, empresa_id, empleado_id, solicitado_por, tipo, fecha_inicio, fecha_fin,
+        hora_inicio, hora_fin, motivo, datos_correccion,
+        comprobante_storage_provider, comprobante_storage_bucket, comprobante_storage_key, comprobante_storage_url
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15) RETURNING *`,
+      [
+        solicitudId,
+        empresaId,
+        employee.id,
+        auth.usuario_id,
+        payload.tipo,
+        payload.fecha_inicio,
+        payload.fecha_fin,
+        payload.hora_inicio || null,
+        payload.hora_fin || null,
+        payload.motivo,
+        payload.datos_correccion ? JSON.stringify(payload.datos_correccion) : null,
+        fileData.provider,
+        fileData.bucket,
+        fileData.key,
+        fileData.url
+      ]
+    );
     await client.query('COMMIT'); return result.rows[0];
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }

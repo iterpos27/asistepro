@@ -50,13 +50,75 @@ async function assertPeriodoAbierto(empresaId, dateValue, client = pool) {
   }
 }
 
+async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
+  if (!detalle || !detalle.length) return [];
+  const employeeIds = [...new Set(detalle.map((d) => d.empleado_id))];
+  if (!employeeIds.length) return [];
+
+  const employeesResult = await pool.query(
+    `SELECT id, salario_base FROM empleados WHERE id = ANY($1)`,
+    [employeeIds]
+  );
+  const salaryMap = new Map(employeesResult.rows.map((r) => [r.id, Number(r.salario_base || 0)]));
+
+  const empMap = new Map();
+  for (const item of detalle) {
+    if (!empMap.has(item.empleado_id)) {
+      empMap.set(item.empleado_id, {
+        empleado_id: item.empleado_id,
+        empleado_codigo: item.empleado_codigo,
+        empleado_nombre: item.empleado_nombre,
+        ausencias: 0,
+        minutos_atraso: 0,
+        minutos_extra: 0,
+        minutos_trabajados: 0,
+      });
+    }
+    const e = empMap.get(item.empleado_id);
+    if (item.estado === 'ausente') e.ausencias++;
+    e.minutos_atraso += item.minutos_atraso || 0;
+    e.minutos_extra += item.minutos_extra || 0;
+    e.minutos_trabajados += item.minutos_trabajados || 0;
+  }
+
+  const prenomina = [];
+  for (const e of empMap.values()) {
+    const salarioBase = salaryMap.get(e.empleado_id) || 0;
+    let descuentoAusencias = 0;
+    let descuentoAtrasos = 0;
+    let pagoHorasExtra = 0;
+    let netoPagar = 0;
+
+    if (salarioBase > 0) {
+      const tarifaPorHora = salarioBase / 240;
+      const tarifaPorMinuto = tarifaPorHora / 60;
+      const tarifaHoraExtra = tarifaPorHora * 1.5;
+
+      descuentoAusencias = e.ausencias * (salarioBase / 30);
+      descuentoAtrasos = e.minutos_atraso * tarifaPorMinuto;
+      pagoHorasExtra = (e.minutos_extra / 60) * tarifaHoraExtra;
+      netoPagar = Math.max(0, salarioBase - descuentoAusencias - descuentoAtrasos + pagoHorasExtra);
+    }
+
+    prenomina.push({
+      ...e,
+      salario_base: salarioBase,
+      descuento_ausencias: Number(descuentoAusencias.toFixed(2)),
+      descuento_atrasos: Number(descuentoAtrasos.toFixed(2)),
+      pago_horas_extra: Number(pagoHorasExtra.toFixed(2)),
+      neto_pagar: Number(netoPagar.toFixed(2)),
+    });
+  }
+  return prenomina;
+}
+
 async function calcularMes({ empresaId, mes }) {
   const range = monthRange(mes);
   const today = localToday();
   const maximumDate = mes > today.slice(0, 7) ? `${mes}-00` : mes === today.slice(0, 7) ? today : range.last;
   const [employeesResult, schedulesResult, marksResult, requestsResult] = await Promise.all([
     pool.query(
-      `SELECT id, codigo, nombres, apellidos, sucursal_habitual_id FROM empleados WHERE empresa_id = $1 AND estado = 'activo' ORDER BY codigo`,
+      `SELECT id, codigo, nombres, apellidos, sucursal_habitual_id, salario_base FROM empleados WHERE empresa_id = $1 AND estado = 'activo' ORDER BY codigo`,
       [empresaId],
     ),
     pool.query(
@@ -152,15 +214,57 @@ async function calcularMes({ empresaId, mes }) {
     acc.ausencias += item.estado === 'ausente' ? 1 : 0;
     acc.ausencias_justificadas += item.estado === 'justificada' ? 1 : 0;
     return acc;
-  }, { empleados: employeesResult.rows.length, minutos_programados: 0, minutos_trabajados: 0, minutos_ordinarios: 0, minutos_extra: 0, minutos_atraso: 0, jornadas_completas: 0, jornadas_incompletas: 0, ausencias: 0, ausencias_justificadas: 0 });
+  }, { empleados: employeesResult.rows.length, minutos_programados: 0, minutos_trabajados: 0, minutes_ordinarios: 0, minutos_ordinarios: 0, minutos_extra: 0, minutos_atraso: 0, jornadas_completas: 0, jornadas_incompletas: 0, ausencias: 0, ausencias_justificadas: 0 });
 
-  return { mes, resumen, items };
+  const prenomina = [];
+  for (const employee of employeesResult.rows) {
+    const empItems = items.filter((item) => item.empleado_id === employee.id);
+    const salarioBase = Number(employee.salario_base || 0);
+    const ausencias = empItems.filter((item) => item.estado === 'ausente').length;
+    const minutosAtraso = empItems.reduce((acc, item) => acc + item.minutos_atraso, 0);
+    const minutosExtra = empItems.reduce((acc, item) => acc + item.minutos_extra, 0);
+    const minutosTrabajados = empItems.reduce((acc, item) => acc + item.minutos_trabajados, 0);
+
+    let descuentoAusencias = 0;
+    let descuentoAtrasos = 0;
+    let pagoHorasExtra = 0;
+    let netoPagar = 0;
+
+    if (salarioBase > 0) {
+      const tarifaPorHora = salarioBase / 240;
+      const tarifaPorMinuto = tarifaPorHora / 60;
+      const tarifaHoraExtra = tarifaPorHora * 1.5;
+
+      descuentoAusencias = ausencias * (salarioBase / 30);
+      descuentoAtrasos = minutosAtraso * tarifaPorMinuto;
+      pagoHorasExtra = (minutosExtra / 60) * tarifaHoraExtra;
+      netoPagar = Math.max(0, salarioBase - descuentoAusencias - descuentoAtrasos + pagoHorasExtra);
+    }
+
+    prenomina.push({
+      empleado_id: employee.id,
+      empleado_codigo: employee.codigo,
+      empleado_nombre: `${employee.nombres} ${employee.apellidos || ''}`.trim(),
+      salario_base: salarioBase,
+      ausencias,
+      minutos_atraso: minutosAtraso,
+      minutos_extra: minutosExtra,
+      minutos_trabajados: minutosTrabajados,
+      descuento_ausencias: Number(descuentoAusencias.toFixed(2)),
+      descuento_atrasos: Number(descuentoAtrasos.toFixed(2)),
+      pago_horas_extra: Number(pagoHorasExtra.toFixed(2)),
+      neto_pagar: Number(netoPagar.toFixed(2)),
+    });
+  }
+
+  return { mes, resumen, items, prenomina };
 }
 
 async function getCalculo({ empresaId, mes }) {
   const closure = await pool.query(`SELECT * FROM cierres_mensuales WHERE empresa_id = $1 AND mes = $2 LIMIT 1`, [empresaId, mes]);
   if (closure.rows[0]?.estado === 'cerrado') {
-    return { mes, resumen: closure.rows[0].resumen, items: closure.rows[0].detalle, cierre: closure.rows[0] };
+    const prenomina = closure.rows[0].resumen?.prenomina || await calcularPrenominaDesdeDetalle(empresaId, closure.rows[0].detalle);
+    return { mes, resumen: closure.rows[0].resumen, items: closure.rows[0].detalle, prenomina, cierre: closure.rows[0] };
   }
   const calculation = await calcularMes({ empresaId, mes });
   return { ...calculation, cierre: closure.rows[0] || null };
@@ -174,6 +278,10 @@ async function cerrarMes({ empresaId, mes, usuarioId }) {
     throw error;
   }
   const calculation = await calcularMes({ empresaId, mes });
+  const resumenGuardar = {
+    ...calculation.resumen,
+    prenomina: calculation.prenomina,
+  };
   const result = await pool.query(
     `INSERT INTO cierres_mensuales (empresa_id, mes, estado, resumen, detalle, cerrado_por)
      VALUES ($1, $2, 'cerrado', $3::jsonb, $4::jsonb, $5)
@@ -181,7 +289,7 @@ async function cerrarMes({ empresaId, mes, usuarioId }) {
        detalle = EXCLUDED.detalle, cerrado_por = EXCLUDED.cerrado_por, cerrado_en = NOW(),
        reabierto_por = NULL, reabierto_en = NULL, motivo_reapertura = NULL
      RETURNING *`,
-    [empresaId, mes, JSON.stringify(calculation.resumen), JSON.stringify(calculation.items), usuarioId],
+    [empresaId, mes, JSON.stringify(resumenGuardar), JSON.stringify(calculation.items), usuarioId],
   );
   return result.rows[0];
 }
