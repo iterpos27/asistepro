@@ -33,6 +33,7 @@ const migrations = [
   '026_external_storage_files.sql',
   '027_seed_essart.sql',
   '028_solicitudes_comprobantes.sql',
+  '029_update_duenas.sql',
 ];
 
 async function runMigrations() {

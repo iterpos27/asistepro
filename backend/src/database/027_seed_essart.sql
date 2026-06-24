@@ -136,7 +136,7 @@ BEGIN
 
   -- 4. Seed users and employees
   PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_empleado_id, v_branch_matriz_id, 'amin.alarcon@essart.com.ec', 'Amin', 'Alarcon', 'AMIN_ALARCON', v_pwd_hash);
-  PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_admin_id, v_branch_matriz_id, 'juan.duenas@essart.com.ec', 'Juan', 'Duenas', 'JUAN_DUENAS', v_pwd_hash);
+  PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_admin_id, v_branch_matriz_id, 'juan.duenas@essart.com.ec', 'Juan', 'Dueñas', 'JUAN_DUEÑAS', v_pwd_hash);
   PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_rrhh_id, v_branch_matriz_id, 'gianella.herrera@essart.com.ec', 'Gianella', 'Herrera', 'GIANELLA_HERRERA', v_pwd_hash);
   PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_empleado_id, v_branch_pv01_id, 'ramiro.muentes@essart.com.ec', 'Ramiro', 'Muentes', 'RAMIRO_MUENTES', v_pwd_hash);
   PERFORM pg_temp.seed_user_employee(v_company_id, v_rol_empleado_id, v_branch_pv02_id, 'ariel.valdiviezo@essart.com.ec', 'Ariel', 'Valdiviezo', 'ARIEL_VALDIVIEZO', v_pwd_hash);

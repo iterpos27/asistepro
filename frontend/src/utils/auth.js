@@ -44,10 +44,16 @@ export function saveSession({ accessToken, refreshToken, user, csrfToken, expire
     localStorage.setItem(SESSION_EXPIRES_AT_KEY, String(Date.now() + Number(expiresInMs)));
   }
 
-  if (user?.empresa_id) {
-    localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
+  if (user?.rol === 'SUPER_ADMIN') {
+    if (user?.empresa_id) {
+      localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
+    }
   } else {
-    localStorage.removeItem(EMPRESA_ID_KEY);
+    if (user?.empresa_id) {
+      localStorage.setItem(EMPRESA_ID_KEY, user.empresa_id);
+    } else {
+      localStorage.removeItem(EMPRESA_ID_KEY);
+    }
   }
 }
 
