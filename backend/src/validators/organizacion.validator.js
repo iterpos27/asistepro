@@ -1,13 +1,13 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, idParamSchema, idParams, paginationQuery, updateBodySchema, uuid } = require('./common.validator');
+const { emptyBody, emptyParams, idParamSchema, idParams, paginationQuery, updateBodySchema, uuid, maybeUuid } = require('./common.validator');
 
 const structureBodyBase = z.object({
-  parent_id: uuid('parent_id').optional().nullable(),
+  parent_id: maybeUuid('parent_id'),
   tipo: z.enum(['direccion', 'departamento', 'area', 'cargo', 'centro_costo', 'unidad']),
   codigo: z.string().trim().min(1).max(50),
   nombre: z.string().trim().min(1).max(160),
   descripcion: z.string().trim().max(500).optional().nullable(),
-  responsable_empleado_id: uuid('responsable_empleado_id').optional().nullable(),
+  responsable_empleado_id: maybeUuid('responsable_empleado_id'),
   metadata: z.record(z.string(), z.any()).optional(),
   activo: z.coerce.boolean().optional(),
 });

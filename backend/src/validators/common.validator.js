@@ -36,7 +36,26 @@ const isoMonth = (field = 'mes') =>
   );
 
 const preprocessEmpty = (schema) =>
-  z.preprocess((val) => (val === '' || val === null ? undefined : val), schema);
+  z.preprocess((val) => (val === '' || val === null ? undefined : val), schema.optional().nullable());
+
+const maybeUuid = (field = 'id') =>
+  z.union([z.string().uuid(`${field} invalido`), z.literal(''), z.null(), z.undefined()]);
+
+const maybeIsoDate = (field = 'fecha') =>
+  z.union([
+    z.string().trim().refine(isValidIsoDate, `${field} debe tener formato YYYY-MM-DD`),
+    z.literal(''),
+    z.null(),
+    z.undefined(),
+  ]);
+
+const maybeIsoMonth = (field = 'mes') =>
+  z.union([
+    z.string().trim().regex(/^\d{4}-(0[1-9]|1[0-2])$/, `${field} debe tener formato YYYY-MM`),
+    z.literal(''),
+    z.null(),
+    z.undefined(),
+  ]);
 
 function requiredNumber(field = 'valor', { min, max } = {}) {
   let schema = z.coerce.number({ message: `${field} es requerido` });
@@ -84,6 +103,9 @@ module.exports = {
   idParams,
   isoDate,
   isoMonth,
+  maybeUuid,
+  maybeIsoDate,
+  maybeIsoMonth,
   paginationQuery,
   preprocessEmpty,
   requiredNumber,

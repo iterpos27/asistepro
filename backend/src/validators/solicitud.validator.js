@@ -1,24 +1,24 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, emptyQuery, idParams, isoDate, paginationQuery, uuid, preprocessEmpty } = require('./common.validator');
+const { emptyBody, emptyParams, emptyQuery, idParams, isoDate, paginationQuery, uuid, preprocessEmpty, maybeUuid } = require('./common.validator');
 
 const correctionSchema = z.object({
   accion: z.enum(['crear', 'editar', 'anular']),
-  marcacion_id: uuid('marcacion_id').optional().nullable(),
+  marcacion_id: maybeUuid('marcacion_id'),
   tipo: z.enum(['entrada', 'salida']).optional().nullable(),
   marcado_en: z.iso.datetime({ offset: true }).optional().nullable(),
-  sucursal_id: uuid('sucursal_id').optional().nullable(),
+  sucursal_id: maybeUuid('sucursal_id'),
 }).superRefine((value, context) => {
   if (['editar', 'anular'].includes(value.accion) && !value.marcacion_id) context.addIssue({ code: 'custom', path: ['marcacion_id'], message: 'marcacion_id es requerido' });
   if (['crear', 'editar'].includes(value.accion) && (!value.tipo || !value.marcado_en || !value.sucursal_id)) context.addIssue({ code: 'custom', path: ['marcado_en'], message: 'tipo, marcado_en y sucursal_id son requeridos' });
 });
 
 const body = z.object({
-  empleado_id: uuid('empleado_id').optional(),
+  empleado_id: maybeUuid('empleado_id'),
   tipo: z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion']),
   fecha_inicio: isoDate('fecha_inicio'),
   fecha_fin: isoDate('fecha_fin'),
-  hora_inicio: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).optional().nullable(),
-  hora_fin: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).optional().nullable(),
+  hora_inicio: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
+  hora_fin: preprocessEmpty(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)),
   motivo: z.string().trim().min(5).max(1000),
   datos_correccion: correctionSchema.optional().nullable(),
   comprobante_storage_provider: z.string().trim().max(40).optional().nullable(),
@@ -41,9 +41,9 @@ const body = z.object({
 
 const createSolicitudSchema = z.object({ body, query: emptyQuery, params: emptyParams });
 const listSolicitudesSchema = z.object({ body: emptyBody, params: emptyParams, query: paginationQuery.extend({
-  estado: preprocessEmpty(z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada'])).optional(),
-  tipo: preprocessEmpty(z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion'])).optional(),
-  empleado_id: uuid('empleado_id').optional(),
+  estado: preprocessEmpty(z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada'])),
+  tipo: preprocessEmpty(z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion'])),
+  empleado_id: maybeUuid('empleado_id'),
 }) });
 const reviewSolicitudSchema = z.object({ body: z.object({ decision: z.enum(['aprobar', 'rechazar']), comentario: z.string().trim().max(1000).optional().nullable() }), query: emptyQuery, params: idParams });
 const idSolicitudSchema = z.object({ body: emptyBody, query: emptyQuery, params: idParams });
