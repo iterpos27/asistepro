@@ -113,7 +113,7 @@ test('assertPlanCapacity bloquea creacion al exceder limite de empleados del pla
         },
         includeNew: { empleados: 1 },
       }),
-    /Limite de empleados del plan alcanzado \(10\)/,
+    /Límite de empleados alcanzado. Debe elegir un nuevo plan/,
   );
 });
 

@@ -115,13 +115,13 @@ function assertPlanCapacityForUsage({ plan, usage, includeNew = {} }) {
   const nextSucursales = usage.sucursales + (includeNew.sucursales || 0);
 
   if (empleadoLimit !== null && nextEmpleados > empleadoLimit) {
-    const error = new Error(`Limite de empleados del plan alcanzado (${empleadoLimit})`);
+    const error = new Error(`Límite de empleados alcanzado. Debe elegir un nuevo plan para poder acceder a los beneficios del sistema.`);
     error.statusCode = 409;
     throw error;
   }
 
   if (sucursalLimit !== null && nextSucursales > sucursalLimit) {
-    const error = new Error(`Limite de sucursales del plan alcanzado (${sucursalLimit})`);
+    const error = new Error(`Límite de sucursales alcanzado. Debe elegir un nuevo plan para poder acceder a los beneficios del sistema.`);
     error.statusCode = 409;
     throw error;
   }
