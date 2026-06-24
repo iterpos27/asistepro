@@ -50,7 +50,9 @@ test('auditLogger guarda metadata util y redacta campos sensibles', async () => 
   const metadata = JSON.parse(queryValues[10]);
   assert.equal(queryValues[0], 'empresa-a');
   assert.equal(queryValues[1], 'usuario-a');
+  assert.equal(queryValues[2], 'Creación de Empleados');
   assert.equal(queryValues[4], null);
+  assert.equal(queryValues[6], 'Gestión de Empleados');
   assert.equal(metadata.body.nombres, 'Ana');
   assert.equal(metadata.body.password_acceso, '[redacted]');
   assert.equal(metadata.body.nested.refreshToken, '[redacted]');
