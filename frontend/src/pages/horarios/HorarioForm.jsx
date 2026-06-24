@@ -6,10 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 const dias = [
   { value: 1, label: 'Lun' },
   { value: 2, label: 'Mar' },
-  { value: 3, label: 'Mie' },
+  { value: 3, label: 'Mié' },
   { value: 4, label: 'Jue' },
   { value: 5, label: 'Vie' },
-  { value: 6, label: 'Sab' },
+  { value: 6, label: 'Sáb' },
   { value: 7, label: 'Dom' },
 ];
 
@@ -17,7 +17,7 @@ const horarioSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido'),
   descripcion: z.string().optional(),
   sucursal_id: z.string().optional(),
-  dias_semana: z.array(z.string()).min(1, 'Selecciona al menos un dia'),
+  dias_semana: z.array(z.string()).min(1, 'Selecciona al menos un día'),
   hora_inicio: z.string().min(1, 'Hora entrada requerida'),
   hora_fin: z.string().min(1, 'Hora salida requerida'),
   tolerancia_minutos: z.coerce.number().int().min(0, 'No puede ser negativa'),
@@ -100,7 +100,7 @@ export default function HorarioForm({ horario, sucursales, loading, onCancel, on
           </select>
         </label>
         <label className="wide-field">
-          Descripcion
+          Descripción
           <input {...register('descripcion')} placeholder="Horario regular administrativo" />
         </label>
         <label>
@@ -124,7 +124,7 @@ export default function HorarioForm({ horario, sucursales, loading, onCancel, on
           {errors.descanso_minutos && <small>{errors.descanso_minutos.message}</small>}
         </label>
         <div className="wide-field">
-          <span className="field-label">Dias laborales</span>
+          <span className="field-label">Días laborales</span>
           <div className="day-picker">
             {dias.map((dia) => (
               <label key={dia.value}>

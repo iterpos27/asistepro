@@ -8,9 +8,9 @@ const facturaSchema = z.object({
   suscripcion_id: z.string().optional(),
   numero: z.string().optional(),
   concepto: z.string().min(1, 'Concepto requerido'),
-  subtotal: z.coerce.number().min(0, 'Subtotal invalido'),
-  impuesto: z.coerce.number().min(0, 'Impuesto invalido'),
-  total: z.coerce.number().min(0, 'Total invalido'),
+  subtotal: z.coerce.number().min(0, 'Subtotal inválido'),
+  impuesto: z.coerce.number().min(0, 'Impuesto inválido'),
+  total: z.coerce.number().min(0, 'Total inválido'),
   estado: z.enum(['pendiente', 'pagada', 'vencida']),
   fecha_emision: z.string().min(1, 'Fecha requerida'),
   fecha_vencimiento: z.string().optional(),
@@ -148,9 +148,9 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
           {errors.empresa_id && <small>{errors.empresa_id.message}</small>}
         </label>
         <label>
-          Suscripcion
+          Suscripción
           <select {...register('suscripcion_id')}>
-            <option value="">Sin suscripcion</option>
+            <option value="">Sin suscripción</option>
             {availableSuscripciones.map((suscripcion) => (
               <option key={suscripcion.id} value={suscripcion.id}>
                 {suscripcion.empresa_nombre} - {suscripcion.plan_nombre}
@@ -159,8 +159,8 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
           </select>
         </label>
         <label>
-          Numero
-          <input {...register('numero')} placeholder="Automatico" disabled={Boolean(factura)} />
+          Número
+          <input {...register('numero')} placeholder="Automático" disabled={Boolean(factura)} />
         </label>
         <label>
           Estado
@@ -188,7 +188,7 @@ export default function FacturaForm({ factura, empresas, suscripciones, loading,
           <input {...register('total')} type="number" min="0" step="0.01" />
         </label>
         <label>
-          Emision
+          Emisión
           <input {...register('fecha_emision')} type="date" />
           {errors.fecha_emision && <small>{errors.fecha_emision.message}</small>}
         </label>

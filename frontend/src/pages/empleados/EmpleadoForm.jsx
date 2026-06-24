@@ -8,7 +8,7 @@ const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesi
 
 const empleadoSchema = z
   .object({
-    codigo: z.string().min(1, 'Codigo requerido'),
+    codigo: z.string().min(1, 'Código requerido'),
     nombres: z.string().min(1, 'Nombres requeridos'),
     apellidos: z.string().min(1, 'Apellidos requeridos'),
     email: z.union([z.string().email('Email invalido'), z.literal('')]).optional(),
@@ -43,7 +43,7 @@ const empleadoSchema = z
       context.addIssue({
         code: 'custom',
         path: ['password_acceso'],
-        message: 'Minimo 8 caracteres',
+        message: 'Mínimo 8 caracteres',
       });
     }
   });
@@ -159,7 +159,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
     <form className="module-form" onSubmit={handleSubmit(submit)}>
       <div className="form-grid">
         <label>
-          Codigo
+          Código
           <input {...register('codigo')} placeholder="EMP001" />
           {errors.codigo && <small>{errors.codigo.message}</small>}
         </label>
@@ -187,7 +187,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           {errors.email && <small>{errors.email.message}</small>}
         </label>
         <label>
-          Telefono
+          Teléfono
           <input {...register('telefono')} placeholder="+593..." />
         </label>
         <label>
@@ -230,7 +230,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           {errors.salario_base && <small>{errors.salario_base.message}</small>}
         </label>
         <label>
-          Area estructurada
+          Área estructurada
           <select {...register('area_estructura_id')}>
             <option value="">Sin asignar</option>
             {areaOptions.map((item) => (
@@ -294,12 +294,12 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
                     <option value="EMPLEADO">Empleado</option>
                     <option value="RRHH">RRHH</option>
                   </select>
-                  <small>RRHH podra administrar asistencia segun permisos asignados en Ajustes.</small>
+                  <small>RRHH podrá administrar asistencia según permisos asignados en Ajustes.</small>
                 </label>
                 <label>
-                  Password temporal
+                  Contraseña temporal
                   <div className="input-action-row">
-                    <input {...register('password_acceso')} type="text" placeholder="Minimo 8 caracteres" />
+                    <input {...register('password_acceso')} type="text" placeholder="Mínimo 8 caracteres" />
                     <button className="outline-button" type="button" onClick={generateAccessPassword}>
                       Generar
                     </button>

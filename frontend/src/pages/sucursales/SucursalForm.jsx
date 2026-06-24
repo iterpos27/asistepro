@@ -7,12 +7,12 @@ import { ExternalLink, LocateFixed, MapPin } from 'lucide-react';
 const coordinateField = (label, min, max) =>
   z.preprocess(
     (value) => (value === '' || value === null ? undefined : value),
-    z.coerce.number({ message: `${label} requerida` }).refine((value) => value >= min && value <= max, `${label} invalida`),
+    z.coerce.number({ message: `${label} requerida` }).refine((value) => value >= min && value <= max, `${label} inválida`),
   );
 
 const sucursalSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido'),
-  codigo: z.string().min(1, 'Codigo requerido'),
+  codigo: z.string().min(1, 'Código requerido'),
   direccion: z.string().optional(),
   ciudad: z.string().optional(),
   latitud: coordinateField('Latitud', -90, 90),
@@ -94,7 +94,7 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
     setGeoMessage('');
 
     if (!navigator.geolocation) {
-      setGeoMessage('Este navegador no permite obtener la ubicacion.');
+      setGeoMessage('Este navegador no permite obtener la ubicación.');
       return;
     }
 
@@ -104,12 +104,12 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
         applyCoordinates(
           position.coords.latitude,
           position.coords.longitude,
-          `Ubicacion obtenida con precision aproximada de ${Math.round(position.coords.accuracy)} m.`,
+          `Ubicación obtenida con precisión aproximada de ${Math.round(position.coords.accuracy)} m.`,
         );
         setGeoLoading(false);
       },
       () => {
-        setGeoMessage('No se pudo obtener la ubicacion. Revisa permisos del navegador o pega un enlace del mapa.');
+        setGeoMessage('No se pudo obtener la ubicación. Revisa permisos del navegador o pega un enlace del mapa.');
         setGeoLoading(false);
       },
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 12000 },
@@ -141,7 +141,7 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
   function applyMapInput() {
     const coordinates = parseMapCoordinates(mapInput);
     if (!coordinates) {
-      setGeoMessage('No encontre coordenadas validas en el texto ingresado.');
+      setGeoMessage('No encontré coordenadas válidas en el texto ingresado.');
       return;
     }
 
@@ -157,12 +157,12 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
           {errors.nombre && <small>{errors.nombre.message}</small>}
         </label>
         <label>
-          Codigo
+          Código
           <input {...register('codigo')} placeholder="MAT" />
           {errors.codigo && <small>{errors.codigo.message}</small>}
         </label>
         <label className="wide-field">
-          Direccion
+          Dirección
           <input {...register('direccion')} placeholder="Av. principal y calle secundaria" />
         </label>
         <label>
@@ -190,7 +190,7 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
               <MapPin size={18} />
             </span>
             <div>
-              <strong>Ubicacion geografica</strong>
+              <strong>Ubicación geográfica</strong>
               <span>Usa GPS o pega coordenadas/enlace del mapa.</span>
             </div>
           </div>

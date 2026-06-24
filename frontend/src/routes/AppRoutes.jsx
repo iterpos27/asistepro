@@ -10,6 +10,7 @@ import ProtectedRoute from './ProtectedRoute';
 const Login = lazy(() => import('../pages/auth/Login'));
 const Register = lazy(() => import('../pages/auth/Register'));
 const Checkout = lazy(() => import('../pages/auth/Checkout'));
+const Landing = lazy(() => import('../pages/Landing'));
 
 function PageLoader() {
   return (
@@ -23,11 +24,18 @@ function PageLoader() {
 }
 
 export default function AppRoutes({ auth }) {
-  const homeRoute = auth.bootstrapping || auth.isAuthenticated ? getDefaultRoute(auth.user?.rol) : '/login';
-
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={homeRoute} replace />} />
+      <Route
+        path="/"
+        element={
+          auth.bootstrapping || auth.isAuthenticated ? (
+            <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
+          ) : (
+            <Suspense fallback={<PageLoader />}><Landing /></Suspense>
+          )
+        }
+      />
       <Route
         path="/login"
         element={

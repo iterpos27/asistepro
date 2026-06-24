@@ -7,7 +7,7 @@ const numberField = z.coerce.number().min(0, 'No puede ser negativo');
 const optionalLimit = z.union([z.coerce.number().int().min(0), z.literal('')]).optional();
 
 const planSchema = z.object({
-  codigo: z.string().min(1, 'Codigo requerido'),
+  codigo: z.string().min(1, 'Código requerido'),
   nombre: z.string().min(1, 'Nombre requerido'),
   descripcion: z.string().optional(),
   precio_mensual: numberField,
@@ -67,7 +67,7 @@ export default function PlanForm({ plan, loading, onCancel, onSubmit }) {
     <form className="module-form" onSubmit={handleSubmit(submit)}>
       <div className="form-grid">
         <label>
-          Codigo
+          Código
           <input {...register('codigo')} placeholder="pyme" />
           {errors.codigo && <small>{errors.codigo.message}</small>}
         </label>
@@ -77,7 +77,7 @@ export default function PlanForm({ plan, loading, onCancel, onSubmit }) {
           {errors.nombre && <small>{errors.nombre.message}</small>}
         </label>
         <label className="wide-field">
-          Descripcion
+          Descripción
           <input {...register('descripcion')} placeholder="Plan para equipos en crecimiento" />
         </label>
         <label>
@@ -86,12 +86,12 @@ export default function PlanForm({ plan, loading, onCancel, onSubmit }) {
           {errors.precio_mensual && <small>{errors.precio_mensual.message}</small>}
         </label>
         <label>
-          Limite empleados
-          <input {...register('limite_empleados')} type="number" min="0" placeholder="Sin limite" />
+          Límite empleados
+          <input {...register('limite_empleados')} type="number" min="0" placeholder="Sin límite" />
         </label>
         <label>
-          Limite sucursales
-          <input {...register('limite_sucursales')} type="number" min="0" placeholder="Sin limite" />
+          Límite sucursales
+          <input {...register('limite_sucursales')} type="number" min="0" placeholder="Sin límite" />
         </label>
         <label className="checkbox-field">
           <input {...register('activo')} type="checkbox" />

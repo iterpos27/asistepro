@@ -7,13 +7,13 @@ import { generateTemporaryPassword } from '../../utils/password';
 const empresaSchema = z.object({
   nombre: z.string().min(1, 'Nombre requerido'),
   identificacion_fiscal: z.string().optional(),
-  email: z.union([z.string().email('Email invalido'), z.literal('')]).optional(),
+  email: z.union([z.string().email('Email inválido'), z.literal('')]).optional(),
   telefono: z.string().optional(),
   direccion: z.string().optional(),
   estado: z.enum(['activa', 'suspendida', 'cancelada']),
   admin_nombre: z.string().optional(),
   admin_apellido: z.string().optional(),
-  admin_email: z.union([z.string().email('Email invalido'), z.literal('')]).optional(),
+  admin_email: z.union([z.string().email('Email inválido'), z.literal('')]).optional(),
   admin_telefono: z.string().optional(),
   admin_password: z.string().optional(),
   admin_confirm_password: z.string().optional(),
@@ -25,7 +25,7 @@ const empresaSchema = z.object({
   }
 
   if (!values.admin_password || values.admin_password.length < 8) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Minimo 8 caracteres', path: ['admin_password'] });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Mínimo 8 caracteres', path: ['admin_password'] });
   }
 
   if (values.admin_password !== values.admin_confirm_password) {
@@ -112,7 +112,7 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
           {errors.nombre && <small>{errors.nombre.message}</small>}
         </label>
         <label>
-          Identificacion fiscal
+          Identificación fiscal
           <input {...register('identificacion_fiscal')} placeholder="RUC / RFC / NIT" />
         </label>
         <label>
@@ -121,12 +121,12 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
           {errors.email && <small>{errors.email.message}</small>}
         </label>
         <label>
-          Telefono
+          Teléfono
           <input {...register('telefono')} placeholder="+593..." />
         </label>
         <label className="wide-field">
-          Direccion
-          <input {...register('direccion')} placeholder="Direccion principal" />
+          Dirección
+          <input {...register('direccion')} placeholder="Dirección principal" />
         </label>
         <label>
           Estado
@@ -141,7 +141,7 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
         <div className="form-section">
           <div className="form-section-title">
             <strong>Administrador de la empresa</strong>
-            <span>Este usuario podra entrar al panel y crear accesos para RRHH y empleados.</span>
+            <span>Este usuario podrá entrar al panel y crear accesos para RRHH y empleados.</span>
           </div>
           <div className="form-grid">
             <label>
@@ -158,13 +158,13 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
               {errors.admin_email && <small>{errors.admin_email.message}</small>}
             </label>
             <label>
-              Telefono admin
+              Teléfono admin
               <input {...register('admin_telefono')} placeholder="+593..." />
             </label>
             <label>
               Contraseña inicial
               <div className="input-action-row">
-                <input {...register('admin_password')} type="text" placeholder="Minimo 8 caracteres" />
+                <input {...register('admin_password')} type="text" placeholder="Mínimo 8 caracteres" />
                 <button className="outline-button" type="button" onClick={generateAdminPassword}>
                   Generar
                 </button>

@@ -140,7 +140,7 @@ export default function SuscripcionForm({ suscripcion, empresas, planes, loading
         </label>
         <label>
           Monto mensual
-          <input {...register('monto_mensual')} type="number" min="0" step="0.01" placeholder="Segun plan" />
+          <input {...register('monto_mensual')} type="number" min="0" step="0.01" placeholder="Según plan" />
           {errors.monto_mensual && <small>{errors.monto_mensual.message}</small>}
         </label>
         <label>
@@ -159,7 +159,7 @@ export default function SuscripcionForm({ suscripcion, empresas, planes, loading
           Cancelar
         </button>
         <button className="primary-button compact" disabled={loading}>
-          {loading ? 'Guardando...' : suscripcion ? 'Actualizar' : 'Crear suscripcion'}
+          {loading ? 'Guardando...' : suscripcion ? 'Actualizar' : 'Crear suscripción'}
         </button>
       </div>
     </form>
