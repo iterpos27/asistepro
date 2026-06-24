@@ -13,7 +13,7 @@ const correctionSchema = z.object({
 });
 
 const body = z.object({
-  empleado_id: maybeUuid('empleado_id'),
+  empleado_id: maybeUuid('empleado_id').optional(),
   tipo: z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion']),
   fecha_inicio: isoDate('fecha_inicio'),
   fecha_fin: isoDate('fecha_fin'),
@@ -43,7 +43,7 @@ const createSolicitudSchema = z.object({ body, query: emptyQuery, params: emptyP
 const listSolicitudesSchema = z.object({ body: emptyBody, params: emptyParams, query: paginationQuery.extend({
   estado: preprocessEmpty(z.enum(['pendiente', 'aprobada', 'rechazada', 'cancelada'])),
   tipo: preprocessEmpty(z.enum(['vacaciones', 'permiso', 'incapacidad', 'ausencia', 'correccion_marcacion'])),
-  empleado_id: maybeUuid('empleado_id'),
+  empleado_id: maybeUuid('empleado_id').optional(),
 }) });
 const reviewSolicitudSchema = z.object({ body: z.object({ decision: z.enum(['aprobar', 'rechazar']), comentario: z.string().trim().max(1000).optional().nullable() }), query: emptyQuery, params: idParams });
 const idSolicitudSchema = z.object({ body: emptyBody, query: emptyQuery, params: idParams });
