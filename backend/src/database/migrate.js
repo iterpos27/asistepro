@@ -34,6 +34,7 @@ const migrations = [
   '027_seed_essart.sql',
   '028_solicitudes_comprobantes.sql',
   '029_update_duenas.sql',
+  '030_sanitize_audit_logs.sql',
 ];
 
 async function runMigrations() {

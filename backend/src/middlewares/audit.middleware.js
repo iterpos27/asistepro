@@ -150,7 +150,10 @@ function getFriendlyRouteAndAction(req, cleanRuta, method, entidad) {
   
   let friendlyAction = '';
   const methodUpper = (method || '').toUpperCase();
-  const entidadName = entidad || firstSegment || 'recurso';
+  let entidadName = entidad || firstSegment || 'recurso';
+  if (UUID_REGEX.test(entidadName)) {
+    entidadName = firstSegment || 'recurso';
+  }
   const entidadCapitalized = entidadName.charAt(0).toUpperCase() + entidadName.slice(1);
 
   if (cleanRuta.includes('/auth/login')) {
@@ -249,4 +252,6 @@ function auditLogger(req, res, next) {
 
 module.exports = {
   auditLogger,
+  getFriendlyRouteAndAction,
+  sanitizeValue,
 };
