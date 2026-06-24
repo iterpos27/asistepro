@@ -4411,22 +4411,39 @@ tbody tr:hover {
 }
 
 /* Centered Login Styles */
+/* Centered Login Styles */
 .login-screen-centered {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #0b1528 0%, #0f172a 100%);
+  background-color: #090e1a;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(15, 23, 42, 0.95) 0px, #090e1a 100%),
+    linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  overflow: hidden;
   padding: 20px;
 }
 
 .login-card-centered {
   width: 100%;
   max-width: 440px;
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.05),
+    0 25px 50px -12px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4);
   padding: 48px 40px;
+  z-index: 10;
 }
 
 .login-logo-centered {
@@ -4485,8 +4502,8 @@ tbody tr:hover {
   width: 100%;
   min-height: 46px;
   padding: 0 14px;
-  border: 1px solid #d9e2ef;
-  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   color: #0f172a;
   background: #ffffff;
   outline: none;
@@ -4495,27 +4512,28 @@ tbody tr:hover {
 
 .login-input-centered:focus {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .password-row-centered {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  border: 1px solid #d9e2ef;
-  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   background: #ffffff;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .password-row-centered:focus-within {
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .password-row-centered .login-input-centered {
   border: none;
   min-height: 44px;
+  background: transparent;
 }
 
 .password-row-centered .icon-button {
@@ -4539,20 +4557,29 @@ tbody tr:hover {
   background: #16a34a;
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background-color 160ms ease;
+  transition: all 0.2s ease;
   margin-top: 12px;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
 }
 
 .primary-button-centered:hover {
   background: #15803d;
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.3);
+  transform: translateY(-1px);
+}
+
+.primary-button-centered:active {
+  transform: translateY(0);
 }
 
 .primary-button-centered:disabled {
   background: #86efac;
+  box-shadow: none;
+  transform: none;
   cursor: not-allowed;
 }
 
