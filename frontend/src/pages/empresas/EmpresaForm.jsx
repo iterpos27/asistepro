@@ -29,7 +29,7 @@ const empresaSchema = z.object({
   }
 
   if (values.admin_password !== values.admin_confirm_password) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Las contrasenas no coinciden', path: ['admin_confirm_password'] });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Las contraseñas no coinciden', path: ['admin_confirm_password'] });
   }
 });
 
@@ -162,7 +162,7 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
               <input {...register('admin_telefono')} placeholder="+593..." />
             </label>
             <label>
-              Contrasena inicial
+              Contraseña inicial
               <div className="input-action-row">
                 <input {...register('admin_password')} type="text" placeholder="Minimo 8 caracteres" />
                 <button className="outline-button" type="button" onClick={generateAdminPassword}>
@@ -172,8 +172,8 @@ export default function EmpresaForm({ empresa, loading, onCancel, onSubmit }) {
               {errors.admin_password && <small>{errors.admin_password.message}</small>}
             </label>
             <label>
-              Confirmar contrasena
-              <input {...register('admin_confirm_password')} type="password" placeholder="Repite la contrasena" />
+              Confirmar contraseña
+              <input {...register('admin_confirm_password')} type="password" placeholder="Repite la contraseña" />
               {errors.admin_confirm_password && <small>{errors.admin_confirm_password.message}</small>}
             </label>
           </div>

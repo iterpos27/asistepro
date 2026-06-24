@@ -11,7 +11,7 @@ import { toast } from '../../services/toastService';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalido'),
-  password: z.string().min(1, 'Password requerido'),
+  password: z.string().min(1, 'Contraseña requerida'),
 });
 
 export default function Login() {
