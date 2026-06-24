@@ -29,7 +29,9 @@ export default function AppRoutes({ auth }) {
       <Route
         path="/"
         element={
-          auth.bootstrapping || auth.isAuthenticated ? (
+          auth.bootstrapping ? (
+            <PageLoader />
+          ) : auth.isAuthenticated ? (
             <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
           ) : (
             <Suspense fallback={<PageLoader />}><Landing /></Suspense>
@@ -39,7 +41,9 @@ export default function AppRoutes({ auth }) {
       <Route
         path="/login"
         element={
-          auth.bootstrapping || auth.isAuthenticated ? (
+          auth.bootstrapping ? (
+            <PageLoader />
+          ) : auth.isAuthenticated ? (
             <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
           ) : (
             <Suspense fallback={<PageLoader />}><AuthLayout><Login /></AuthLayout></Suspense>
@@ -49,7 +53,9 @@ export default function AppRoutes({ auth }) {
       <Route
         path="/register"
         element={
-          auth.bootstrapping || auth.isAuthenticated ? (
+          auth.bootstrapping ? (
+            <PageLoader />
+          ) : auth.isAuthenticated ? (
             <Navigate to={getDefaultRoute(auth.user?.rol)} replace />
           ) : (
             <Suspense fallback={<PageLoader />}><AuthLayout><Register /></AuthLayout></Suspense>
