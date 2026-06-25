@@ -10,6 +10,7 @@ import * as empresaService from '../../services/empresaService';
 import { toast } from '../../services/toastService';
 import * as facturacionService from '../../services/facturacionService';
 import * as suscripcionService from '../../services/suscripcionService';
+import * as planService from '../../services/planService';
 import { ROLES } from '../../utils/roles';
 import FacturaForm from './FacturaForm';
 import Pagos from './Pagos';
@@ -36,6 +37,9 @@ export default function Facturas({ defaultTab = 'facturas' }) {
   const [facturas, setFacturas] = useState([]);
   const [suscripciones, setSuscripciones] = useState([]);
   const [empresas, setEmpresas] = useState([]);
+  const [planes, setPlanes] = useState([]);
+  const [upgradePlanTarget, setUpgradePlanTarget] = useState(null);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [estado, setEstado] = useState('');
   const [empresaId, setEmpresaId] = useState('');
   const [selectedFacturaId, setSelectedFacturaId] = useState('');
@@ -54,6 +58,39 @@ export default function Facturas({ defaultTab = 'facturas' }) {
     () => suscripciones.find((suscripcion) => suscripcion.estado === 'activa') || suscripciones[0],
     [suscripciones],
   );
+
+  const currentPlanCodigo = activeSubscription?.plan_codigo;
+  const availableUpgrades = useMemo(() => {
+    if (!planes.length) return [];
+    const currentPrice = Number(activeSubscription?.monto_mensual || 0);
+    return planes.filter(
+      (plan) =>
+        plan.activo &&
+        plan.codigo !== 'starter' &&
+        plan.codigo !== currentPlanCodigo &&
+        Number(plan.precio_mensual) > currentPrice
+    );
+  }, [planes, activeSubscription, currentPlanCodigo]);
+
+  async function handleConfirmUpgrade() {
+    if (!upgradePlanTarget) return;
+    setUpgradeLoading(true);
+    try {
+      const result = await suscripcionService.solicitarUpgrade(upgradePlanTarget.id);
+      toast.success('Solicitud de cambio de plan registrada.');
+      setUpgradePlanTarget(null);
+      if (result?.factura_id) {
+        window.location.href = `/checkout?factura_id=${result.factura_id}`;
+      } else {
+        await loadFacturas();
+        await loadCatalogs();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'No se pudo solicitar el cambio de plan');
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
 
   const totals = useMemo(
     () =>
@@ -92,12 +129,14 @@ export default function Facturas({ defaultTab = 'facturas' }) {
 
   async function loadCatalogs() {
     try {
-      const [empresasResult, suscripcionesResult] = await Promise.all([
+      const [empresasResult, suscripcionesResult, planesResult] = await Promise.all([
         isSuperAdmin ? empresaService.listEmpresas({ limit: 100 }) : Promise.resolve({ items: [] }),
         suscripcionService.listSuscripciones({ limit: 100 }),
+        isSuperAdmin ? Promise.resolve({ items: [] }) : planService.listPlanes()
       ]);
       setEmpresas(empresasResult.items || []);
       setSuscripciones(suscripcionesResult.items || []);
+      setPlanes(planesResult?.items || []);
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'No se pudieron cargar los catalogos de facturacion');
     }
@@ -305,6 +344,99 @@ export default function Facturas({ defaultTab = 'facturas' }) {
         )}
       </div>
 
+      {!isSuperAdmin && availableUpgrades.length > 0 ? (
+        <div className="panel" style={{
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.08))',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+          backdropFilter: 'blur(8px)',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '24px'
+        }}>
+          <PanelTitle title="Mejorar Suscripción" subtitle="Elige un plan superior para aumentar tus límites" />
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '20px' }}>
+            {availableUpgrades.map((plan) => (
+              <div key={plan.id} style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '12px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                transition: 'all 0.3s ease',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.border = '1px solid rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+              }}>
+                <div>
+                  <h4 style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff', marginBottom: '8px' }}>Plan {plan.nombre}</h4>
+                  <p style={{ color: '#9ca3af', fontSize: '0.875rem', marginBottom: '16px', minHeight: '40px' }}>{plan.descripcion}</p>
+                  
+                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#fff', marginBottom: '20px' }}>
+                    ${Number(plan.precio_mensual).toFixed(2)}
+                    <span style={{ fontSize: '0.875rem', color: '#9ca3af', fontWeight: 'normal' }}> / mes</span>
+                  </div>
+                  
+                  <ul style={{ padding: 0, listStyle: 'none', margin: '0 0 24px 0', fontSize: '0.9rem', color: '#d1d5db' }}>
+                    <li style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#10b981' }}>✓</span> {plan.limite_empleados ? `Hasta ${plan.limite_empleados} empleados` : 'Empleados ilimitados'}
+                    </li>
+                    <li style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#10b981' }}>✓</span> {plan.limite_sucursales ? `Hasta ${plan.limite_sucursales} sucursales` : 'Sucursales ilimitadas'}
+                    </li>
+                    <li style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#10b981' }}>✓</span> Soporte técnico prioritario
+                    </li>
+                  </ul>
+                </div>
+                
+                <button 
+                  className="primary-button" 
+                  style={{ width: '100%', marginTop: 'auto' }}
+                  onClick={() => setUpgradePlanTarget(plan)}
+                >
+                  Adquirir Plan {plan.nombre}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
+            borderRadius: '8px',
+            padding: '16px',
+            marginTop: '24px',
+            color: '#bfdbfe'
+          }}>
+            <h5 style={{ fontWeight: 'bold', color: '#fff', marginBottom: '8px', fontSize: '0.95rem' }}>Métodos de Pago & Activación:</h5>
+            <p style={{ fontSize: '0.875rem', lineHeight: '1.5', margin: '0 0 12px 0' }}>
+              Los pagos se realizan mediante <strong>Transferencia o Depósito Bancario</strong>. Al adquirir un plan superior, el sistema generará una factura pendiente y le redirigirá para que pueda subir el comprobante. Once verificado por nuestro equipo, su plan se activará de inmediato.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '0.85rem', color: '#d1d5db', background: 'rgba(0, 0, 0, 0.2)', padding: '12px', borderRadius: '6px' }}>
+              <div><strong>Banco:</strong> Banco Pichincha</div>
+              <div><strong>Tipo de Cuenta:</strong> Corriente</div>
+              <div><strong>Número de Cuenta:</strong> 2100256841</div>
+              <div><strong>Titular:</strong> ESSART SISTEMAS S.A.</div>
+              <div><strong>RUC:</strong> 1391917711001</div>
+              <div><strong>Email:</strong> administracion@essart.com.ec</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="panel">
         <PanelTitle title="Filtros" subtitle="Filtra facturas por empresa y estado" />
         <div className="toolbar-grid">
@@ -356,6 +488,16 @@ export default function Facturas({ defaultTab = 'facturas' }) {
           setCancelReason('');
         }}
         onConfirm={() => cancelFactura(cancelTarget)}
+      />
+
+      <ActionDialog
+        open={Boolean(upgradePlanTarget)}
+        title="Confirmar solicitud de cambio de plan"
+        message={`¿Estás seguro de que deseas solicitar la mejora al Plan ${upgradePlanTarget?.nombre || ''}? Esto generará una factura pendiente y se te guiará para registrar el pago.`}
+        confirmLabel="Confirmar y continuar"
+        cancelLabel="Cancelar"
+        onCancel={() => setUpgradePlanTarget(null)}
+        onConfirm={handleConfirmUpgrade}
       />
 
       {showForm && isSuperAdmin ? (

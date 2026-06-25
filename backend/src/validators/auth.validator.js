@@ -29,6 +29,8 @@ const registerTenantSchema = z.object({
     admin_apellido: z.string().min(1, 'El apellido del administrador es requerido'),
     admin_email: z.string().email('El email del administrador no es valido'),
     admin_password: z.string().min(8, 'La contrasena debe tener al menos 8 caracteres'),
+    admin_cedula: z.string().min(1, 'La cedula del administrador es requerida').max(20),
+    admin_username: z.string().min(3, 'El nombre de usuario debe tener al menos 3 caracteres').max(100).regex(/^[a-zA-Z0-9_.]+$/, 'El nombre de usuario solo puede contener letras, números, puntos y guiones bajos').optional().nullable(),
   }),
   query: emptyQuery,
   params: emptyParams,

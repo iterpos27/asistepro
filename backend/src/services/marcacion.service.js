@@ -262,6 +262,42 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
     throw error;
   }
 
+  // Buddy punching control: only enforced for self-markings by EMPLEADO role
+  if (auth.rol === 'EMPLEADO') {
+    const devUuid = payload.dispositivo_uuid?.trim();
+    if (!devUuid) {
+      const error = new Error('El identificador único de dispositivo es requerido para marcar asistencia');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 1. Check if this device is already registered to another employee in the company
+    const deviceOwnerRes = await pool.query(
+      'SELECT id, nombres, apellidos FROM empleados WHERE empresa_id = $1 AND dispositivo_uuid = $2 AND id <> $3 LIMIT 1',
+      [empresaId, devUuid, empleado.id]
+    );
+    if (deviceOwnerRes.rows.length) {
+      const otherEmp = deviceOwnerRes.rows[0];
+      const error = new Error(`Este dispositivo ya está registrado para otro empleado (${otherEmp.nombres} ${otherEmp.apellidos})`);
+      error.statusCode = 403;
+      throw error;
+    }
+
+    // 2. Lock device UUID on first clock-in
+    if (!empleado.dispositivo_uuid) {
+      await pool.query(
+        'UPDATE empleados SET dispositivo_uuid = $1, actualizado_en = NOW() WHERE id = $2',
+        [devUuid, empleado.id]
+      );
+      empleado.dispositivo_uuid = devUuid; // update local object reference
+    } else if (empleado.dispositivo_uuid !== devUuid) {
+      // 3. Reject if device doesn't match
+      const error = new Error('Este usuario tiene otro dispositivo móvil registrado para marcar asistencia. No se permite marcar desde un equipo diferente.');
+      error.statusCode = 403;
+      throw error;
+    }
+  }
+
   const distancia = calculateDistanceMeters(
     { latitud: payload.latitud, longitud: payload.longitud },
     { latitud: sucursal.latitud, longitud: sucursal.longitud },

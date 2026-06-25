@@ -4,6 +4,7 @@ import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as sucursalService from '../../services/sucursalService';
+import { listEmpleados } from '../../services/empleadoService';
 import { toast } from '../../services/toastService';
 import SucursalForm from './SucursalForm';
 import SucursalQR from './SucursalQR';
@@ -16,6 +17,7 @@ function statusClass(estado) {
 
 export default function SucursalesList() {
   const [sucursales, setSucursales] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [estado, setEstado] = useState('');
@@ -44,8 +46,18 @@ export default function SucursalesList() {
     }
   }
 
+  async function loadEmployees() {
+    try {
+      const data = await listEmpleados({ estado: 'activo', limit: 500 });
+      setEmployees(data.items || []);
+    } catch (err) {
+      console.error('Error loading employees:', err);
+    }
+  }
+
   useEffect(() => {
     loadSucursales();
+    loadEmployees();
   }, []);
 
   function openCreateForm() {
@@ -206,7 +218,7 @@ export default function SucursalesList() {
         <div className="modal-backdrop" onClick={closeForm}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
             <PanelTitle title={selectedSucursal ? 'Editar sucursal' : 'Nueva sucursal'} subtitle="Direccion, coordenadas, radio y estado" />
-            <SucursalForm sucursal={selectedSucursal} loading={formLoading} onCancel={closeForm} onSubmit={saveSucursal} />
+            <SucursalForm sucursal={selectedSucursal} employees={employees} loading={formLoading} onCancel={closeForm} onSubmit={saveSucursal} />
           </div>
         </div>
       ) : null}
@@ -226,6 +238,7 @@ export default function SucursalesList() {
               <tr>
                 <th>Nombre</th>
                 <th>Codigo</th>
+                <th>Jefe de Almacén</th>
                 <th>Ciudad</th>
                 <th>Radio</th>
                 <th>Estado</th>
@@ -238,6 +251,7 @@ export default function SucursalesList() {
                   <tr key={sucursal.id}>
                     <td>{sucursal.nombre}</td>
                     <td>{sucursal.codigo}</td>
+                    <td>{sucursal.jefe_nombres ? `${sucursal.jefe_nombres} ${sucursal.jefe_apellidos}` : 'Sin asignar'}</td>
                     <td>{sucursal.ciudad || '-'}</td>
                     <td>{sucursal.radio_metros} m</td>
                     <td>

@@ -373,6 +373,28 @@ async function checkSubscriptionExpirations() {
       });
       count++;
     }
+
+    // Notify all active Super Admins so they can generate invoices
+    const superAdmins = await pool.query(
+      `
+        SELECT u.id
+        FROM usuarios u
+        INNER JOIN roles r ON r.id = u.rol_id
+        WHERE r.codigo = 'SUPER_ADMIN'
+          AND u.estado = 'activo'
+      `
+    );
+
+    for (const sa of superAdmins.rows) {
+      await notificacionService.createNotificacion({
+        empresaId: row.empresa_id,
+        usuarioId: sa.id,
+        titulo: `Suscripción por vencer: ${row.empresa_nombre}`,
+        mensaje: `La suscripción al plan "${row.plan_nombre}" de la empresa "${row.empresa_nombre}" vencerá el ${formattedDate}. Por favor, genere la factura para el siguiente periodo.`,
+        tipo: 'factura',
+      });
+      count++;
+    }
   }
 
   return count;
@@ -445,6 +467,113 @@ async function runDatabaseCleanupAndSuspensions() {
     client.release();
   }
 }
+async function solicitarUpgrade({ empresaId, planId }) {
+  // 1. Get the target plan
+  const planResult = await pool.query(
+    'SELECT * FROM planes WHERE id = $1 AND activo = TRUE LIMIT 1',
+    [planId]
+  );
+  if (!planResult.rows.length) {
+    const error = new Error('El plan seleccionado no existe o no esta activo');
+    error.statusCode = 400;
+    throw error;
+  }
+  const plan = planResult.rows[0];
+
+  // 2. Fetch the company to make sure it exists
+  const companyResult = await pool.query(
+    'SELECT id, nombre FROM empresas WHERE id = $1 LIMIT 1',
+    [empresaId]
+  );
+  if (!companyResult.rows.length) {
+    const error = new Error('La empresa no existe');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // 3. Assert capacity
+  await tenantService.assertPlanCapacity({
+    empresaId,
+    plan,
+  });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 4. Create a subscription in 'suspendida' state (which acts as a pending subscription).
+    // It will be activated when the invoice is paid and approved.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const offset = end.getTimezoneOffset();
+    const localEnd = new Date(end.getTime() - offset * 60 * 1000);
+    const endStr = localEnd.toISOString().slice(0, 10);
+
+    const subRes = await client.query(
+      `
+        INSERT INTO suscripciones (
+          empresa_id,
+          plan_id,
+          estado,
+          fecha_inicio,
+          fecha_fin,
+          monto_mensual
+        ) VALUES ($1, $2, 'suspendida', $3, $4, $5)
+        RETURNING *
+      `,
+      [
+        empresaId,
+        plan.id,
+        todayStr,
+        endStr,
+        plan.precio_mensual,
+      ]
+    );
+    const subscription = subRes.rows[0];
+
+    // 5. Create a pending invoice (factura) linked to this new subscription
+    const invoiceNum = 'FAC-UPG-' + Date.now();
+    const invoiceRes = await client.query(
+      `
+        INSERT INTO facturas (
+          empresa_id,
+          suscripcion_id,
+          numero,
+          concepto,
+          subtotal,
+          impuesto,
+          total,
+          estado,
+          fecha_emision,
+          fecha_vencimiento
+        ) VALUES ($1, $2, $3, $4, $5, 0, $5, 'pendiente', $6, $7)
+        RETURNING *
+      `,
+      [
+        empresaId,
+        subscription.id,
+        invoiceNum,
+        `Cambio de plan mensual - Plan ${plan.nombre}`,
+        plan.precio_mensual,
+        todayStr,
+        endStr,
+      ]
+    );
+    const invoice = invoiceRes.rows[0];
+
+    await client.query('COMMIT');
+
+    return {
+      suscripcion: subscription,
+      factura: invoice,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 module.exports = {
   listSuscripciones,
@@ -455,4 +584,5 @@ module.exports = {
   checkSubscriptionExpirations,
   validateSuscripcionPayload,
   runDatabaseCleanupAndSuspensions,
+  solicitarUpgrade,
 };

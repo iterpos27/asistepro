@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlarmClock, CalendarX, Clock3, Download, Lock, TimerReset, Unlock, DollarSign } from 'lucide-react';
+import { AlarmClock, CalendarX, Clock3, Download, Lock, TimerReset, Unlock, DollarSign, Star } from 'lucide-react';
 import MetricCard from '../../components/cards/MetricCard';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -77,6 +77,8 @@ export default function CalculoLaboral() {
       <MetricCard label="Horas extra" value={hours(data.resumen.minutos_extra)} icon={TimerReset} tone="success" />
       <MetricCard label="Atrasos" value={hours(data.resumen.minutos_atraso)} icon={AlarmClock} tone="warning" />
       <MetricCard label="Ausencias" value={data.resumen.ausencias || 0} icon={CalendarX} tone="accent" />
+      {(data.resumen.feriados > 0) && <MetricCard label="Feriados" value={data.resumen.feriados || 0} icon={Star} />}
+      {(data.resumen.ausencias_justificadas > 0) && <MetricCard label="Justificadas" value={data.resumen.ausencias_justificadas || 0} icon={CalendarX} tone="success" />}
     </section>
 
     <div className="tabs-container" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
@@ -185,7 +187,20 @@ export default function CalculoLaboral() {
                   <td>{hours(item.minutos_trabajados)}</td>
                   <td>{hours(item.minutos_extra)}</td>
                   <td>{item.minutos_atraso} min</td>
-                  <td><span className={`status-pill ${item.estado === 'ausente' ? 'danger' : item.estado === 'incompleta' ? 'warning' : ''}`}>{item.estado}</span></td>
+                  <td>
+                    <span className={`status-pill ${
+                      item.estado === 'ausente' ? 'danger' :
+                      item.estado === 'incompleta' ? 'warning' :
+                      item.estado === 'feriado' ? 'info' :
+                      item.estado === 'justificada' ? 'success' :
+                      ''
+                    }`} style={
+                      item.estado === 'feriado' ? { background: '#dbeafe', color: '#1d4ed8', borderColor: '#93c5fd' } :
+                      item.estado === 'justificada' ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' } : {}
+                    }>
+                      {item.estado}{item.justificacion ? ` (${item.justificacion})` : ''}
+                    </span>
+                  </td>
                 </tr>
               )) : (
                 <tr>

@@ -35,6 +35,8 @@ function sanitizeUser(user) {
     modulos,
     permisos,
     rol_personalizado: user.rol_personalizado_nombre || null,
+    cedula: user.cedula || null,
+    username: user.username || null,
   };
 }
 
@@ -50,6 +52,8 @@ async function findUserByEmail(email) {
         u.email,
         u.password_hash,
         u.estado,
+        u.cedula,
+        u.username,
         u.configuracion_modulos AS usuario_configuracion_modulos,
         u.configuracion_permisos AS usuario_configuracion_permisos,
         r.codigo AS rol_codigo,
@@ -61,7 +65,7 @@ async function findUserByEmail(email) {
       INNER JOIN roles r ON r.id = u.rol_id
       LEFT JOIN empresas e ON e.id = u.empresa_id
       LEFT JOIN roles_personalizados rp ON rp.id = u.rol_personalizado_id AND rp.activo = TRUE
-      WHERE LOWER(u.email) = LOWER($1)
+      WHERE LOWER(u.email) = LOWER($1) OR LOWER(u.username) = LOWER($1)
       LIMIT 1
     `,
     [email],
@@ -81,6 +85,8 @@ async function findUserById(id) {
         u.apellido,
         u.email,
         u.estado,
+        u.cedula,
+        u.username,
         u.configuracion_modulos AS usuario_configuracion_modulos,
         u.configuracion_permisos AS usuario_configuracion_permisos,
         r.codigo AS rol_codigo,
@@ -331,8 +337,10 @@ async function registerTenant(payload) {
           email,
           password_hash,
           telefono,
+          cedula,
+          username,
           estado
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'activo')
         RETURNING *
       `,
       [
@@ -343,6 +351,8 @@ async function registerTenant(payload) {
         payload.admin_email.trim().toLowerCase(),
         passwordHash,
         payload.admin_telefono?.trim() || payload.telefono || null,
+        payload.admin_cedula?.trim() || null,
+        payload.admin_username?.trim().toLowerCase() || null,
       ]
     );
     const user = userRes.rows[0];

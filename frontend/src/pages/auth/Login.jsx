@@ -10,7 +10,7 @@ import { getDefaultRoute } from '../../utils/roles';
 import { toast } from '../../services/toastService';
 
 const loginSchema = z.object({
-  email: z.string().email('Email invalido'),
+  email: z.string().min(1, 'Usuario o email requerido'),
   password: z.string().min(1, 'Contraseña requerida'),
 });
 
@@ -56,12 +56,12 @@ export default function Login() {
             <p>Accede con tu cuenta corporativa.</p>
           </div>
           <label className="login-label-centered">
-            Email
+            Usuario o Email
             <input
               {...register('email')}
-              type="email"
-              autoComplete="email"
-              placeholder="tu@empresa.com"
+              type="text"
+              autoComplete="username"
+              placeholder="juan.perez o tu@empresa.com"
               className="login-input-centered"
             />
             {errors.email && <small className="field-error">{errors.email.message}</small>}

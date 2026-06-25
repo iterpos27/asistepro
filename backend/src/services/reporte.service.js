@@ -354,7 +354,7 @@ async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleado
           EXTRACT(
             EPOCH FROM (
               (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
-              - (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+              - (h.hora_inicio + (LEAST(10, h.tolerancia_minutos) || ' minutes')::interval)
             )
           ) / 60
         )::int AS minutos_atraso,
@@ -365,7 +365,7 @@ async function atrasos({ empresaId, fechaDesde, fechaHasta, sucursalId, empleado
       INNER JOIN horarios h ON h.id = m.horario_id
       WHERE ${filters.join(' AND ')}
         AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
-          > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+          > (h.hora_inicio + (LEAST(10, h.tolerancia_minutos) || ' minutes')::interval)
       ORDER BY m.marcado_en DESC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
@@ -449,7 +449,7 @@ async function resumenEjecutivo({ empresaId, fechaDesde, fechaHasta, sucursalId,
               WHEN m.tipo = 'entrada'
                 AND m.horario_id IS NOT NULL
                 AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::time
-                  > (h.hora_inicio + (h.tolerancia_minutos || ' minutes')::interval)
+                  > (h.hora_inicio + (LEAST(10, h.tolerancia_minutos) || ' minutes')::interval)
               THEN 1
               ELSE 0
             END

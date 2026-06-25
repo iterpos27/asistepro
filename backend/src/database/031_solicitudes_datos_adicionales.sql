@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE empleados
+  ADD COLUMN IF NOT EXISTS cedula VARCHAR(20);
+
+ALTER TABLE solicitudes
+  ADD COLUMN IF NOT EXISTS datos_adicionales JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+COMMIT;

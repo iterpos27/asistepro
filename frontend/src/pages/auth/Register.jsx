@@ -36,6 +36,7 @@ export default function Register() {
     admin_nombre: '',
     admin_apellido: '',
     admin_email: '',
+    admin_cedula: '',
     admin_password: '',
     confirm_password: ''
   });
@@ -124,6 +125,10 @@ export default function Register() {
       toast.error('El email del administrador no es válido.');
       return;
     }
+    if (!formData.admin_cedula.trim()) {
+      toast.error('La cédula del administrador es requerida.');
+      return;
+    }
     if (formData.admin_password.length < 8) {
       toast.error('La contraseña debe tener al menos 8 caracteres.');
       return;
@@ -149,6 +154,7 @@ export default function Register() {
         admin_nombre: formData.admin_nombre,
         admin_apellido: formData.admin_apellido,
         admin_email: formData.admin_email,
+        admin_cedula: formData.admin_cedula,
         admin_password: formData.admin_password,
       };
 
@@ -354,6 +360,21 @@ export default function Register() {
                           name="admin_email" 
                           placeholder="admin@empresa.com" 
                           value={formData.admin_email}
+                          onChange={handleInputChange}
+                          required 
+                        />
+                      </div>
+                    </label>
+
+                    <label>
+                      <span className="label-text">Número de Cédula *</span>
+                      <div className="input-with-icon">
+                        <User className="input-icon" size={18} />
+                        <input 
+                          type="text" 
+                          name="admin_cedula" 
+                          placeholder="Ej. 1792948271" 
+                          value={formData.admin_cedula}
                           onChange={handleInputChange}
                           required 
                         />

@@ -7,10 +7,6 @@ const EMPLEADO_ROLES_ACCESO = ['EMPLEADO', 'RRHH'];
 function validateEmpleadoPayload(payload, { partial = false } = {}) {
   const errors = [];
 
-  if (!partial || payload.codigo !== undefined) {
-    if (!payload.codigo?.trim()) errors.push('codigo es requerido');
-  }
-
   if (!partial || payload.nombres !== undefined) {
     if (!payload.nombres?.trim()) errors.push('nombres es requerido');
   }
@@ -169,8 +165,9 @@ async function createUsuarioAcceso(client, empresaId, payload) {
         email,
         password_hash,
         telefono,
+        username,
         estado
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'activo')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'activo')
       RETURNING id
     `,
     [
@@ -181,6 +178,7 @@ async function createUsuarioAcceso(client, empresaId, payload) {
       payload.email.trim().toLowerCase(),
       passwordHash,
       payload.telefono?.trim() || null,
+      payload.username?.trim().toLowerCase() || null,
     ],
   );
 
@@ -247,6 +245,7 @@ async function listEmpleados({
         e.*,
         s.nombre AS sucursal_habitual_nombre,
         u.email AS usuario_email,
+        u.username AS usuario_username,
         area.nombre AS area_nombre,
         cargo_org.nombre AS cargo_estructura_nombre,
         centro.nombre AS centro_costo_nombre,
@@ -284,6 +283,7 @@ async function findEmpleadoById(empresaId, id) {
         e.*,
         s.nombre AS sucursal_habitual_nombre,
         u.email AS usuario_email,
+        u.username AS usuario_username,
         area.nombre AS area_nombre,
         cargo_org.nombre AS cargo_estructura_nombre,
         centro.nombre AS centro_costo_nombre,
@@ -323,6 +323,21 @@ async function createEmpleado(empresaId, payload) {
     await client.query('BEGIN');
     const usuarioId = payload.crear_usuario ? await createUsuarioAcceso(client, empresaId, payload) : payload.usuario_id || null;
 
+    let codigo;
+    let attempts = 0;
+    while (attempts < 10) {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      codigo = `EMP-${randomDigits}`;
+      const existing = await client.query(
+        'SELECT id FROM empleados WHERE empresa_id = $1 AND codigo = $2 LIMIT 1',
+        [empresaId, codigo]
+      );
+      if (!existing.rows.length) {
+        break;
+      }
+      attempts++;
+    }
+
     const result = await client.query(
       `
         INSERT INTO empleados (
@@ -330,6 +345,7 @@ async function createEmpleado(empresaId, payload) {
           usuario_id,
           sucursal_habitual_id,
           codigo,
+          cedula,
           nombres,
           apellidos,
           email,
@@ -343,15 +359,17 @@ async function createEmpleado(empresaId, payload) {
           tipo_contrato,
           salario_base,
           fecha_ingreso,
-          estado
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          estado,
+          dispositivo_uuid
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         RETURNING id
       `,
       [
         empresaId,
         usuarioId,
         payload.sucursal_habitual_id || null,
-        payload.codigo.trim().toUpperCase(),
+        codigo,
+        payload.cedula?.trim() || null,
         payload.nombres.trim(),
         payload.apellidos.trim(),
         payload.email?.trim().toLowerCase() || null,
@@ -366,9 +384,9 @@ async function createEmpleado(empresaId, payload) {
         payload.salario_base !== undefined && payload.salario_base !== null ? Number(payload.salario_base) : null,
         payload.fecha_ingreso || null,
         payload.estado || 'activo',
+        payload.dispositivo_uuid?.trim() || null,
       ],
     );
-
     await client.query('COMMIT');
     return findEmpleadoById(empresaId, result.rows[0].id);
   } catch (error) {
@@ -398,7 +416,7 @@ async function updateEmpleado(empresaId, id, payload) {
       payload.sucursal_habitual_id !== undefined
         ? payload.sucursal_habitual_id || null
         : current.sucursal_habitual_id,
-    codigo: payload.codigo !== undefined ? payload.codigo.trim().toUpperCase() : current.codigo,
+    codigo: current.codigo,
     nombres: payload.nombres !== undefined ? payload.nombres.trim() : current.nombres,
     apellidos: payload.apellidos !== undefined ? payload.apellidos.trim() : current.apellidos,
     email: payload.email !== undefined ? payload.email?.trim().toLowerCase() || null : current.email,
@@ -426,6 +444,8 @@ async function updateEmpleado(empresaId, id, payload) {
         : current.salario_base,
     fecha_ingreso: payload.fecha_ingreso !== undefined ? payload.fecha_ingreso || null : current.fecha_ingreso,
     estado: payload.estado !== undefined ? payload.estado : current.estado,
+    cedula: payload.cedula !== undefined ? payload.cedula?.trim() || null : current.cedula,
+    dispositivo_uuid: payload.dispositivo_uuid !== undefined ? payload.dispositivo_uuid?.trim() || null : current.dispositivo_uuid,
   };
 
   await assertSucursalInTenant(empresaId, next.sucursal_habitual_id);
@@ -463,6 +483,8 @@ async function updateEmpleado(empresaId, id, payload) {
             salario_base = $17,
             fecha_ingreso = $18,
             estado = $19,
+            cedula = $20,
+            dispositivo_uuid = $21,
             actualizado_en = NOW()
         WHERE empresa_id = $1
           AND id = $2
@@ -487,8 +509,17 @@ async function updateEmpleado(empresaId, id, payload) {
         next.salario_base,
         next.fecha_ingreso,
         next.estado,
+        next.cedula,
+        next.dispositivo_uuid,
       ],
     );
+
+    if (usuarioId && payload.username !== undefined) {
+      await client.query(
+        'UPDATE usuarios SET username = $1, actualizado_en = NOW() WHERE id = $2',
+        [payload.username?.trim().toLowerCase() || null, usuarioId]
+      );
+    }
 
     await client.query('COMMIT');
     return findEmpleadoById(empresaId, id);

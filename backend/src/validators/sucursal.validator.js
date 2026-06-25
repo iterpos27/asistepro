@@ -22,6 +22,7 @@ const sucursalBodySchema = z.object({
   }),
   radio_metros: z.coerce.number().int().positive('radio_metros debe ser mayor a cero').optional(),
   estado: z.enum(['activa', 'inactiva', 'mantenimiento']).optional(),
+  jefe_empleado_id: z.string().uuid('jefe_empleado_id invalido').optional().nullable(),
 });
 
 const listSucursalesSchema = z.object({

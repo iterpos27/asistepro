@@ -116,7 +116,7 @@ async function calcularMes({ empresaId, mes }) {
   const range = monthRange(mes);
   const today = localToday();
   const maximumDate = mes > today.slice(0, 7) ? `${mes}-00` : mes === today.slice(0, 7) ? today : range.last;
-  const [employeesResult, schedulesResult, marksResult, requestsResult] = await Promise.all([
+  const [employeesResult, schedulesResult, marksResult, requestsResult, feriadosResult] = await Promise.all([
     pool.query(
       `SELECT id, codigo, nombres, apellidos, sucursal_habitual_id, salario_base FROM empleados WHERE empresa_id = $1 AND estado = 'activo' ORDER BY codigo`,
       [empresaId],
@@ -149,6 +149,10 @@ async function calcularMes({ empresaId, mes }) {
          AND fecha_inicio <= $3::date AND fecha_fin >= $2::date`,
       [empresaId, range.first, range.last],
     ),
+    pool.query(
+      `SELECT fecha::text FROM feriados WHERE empresa_id = $1 AND fecha BETWEEN $2::date AND $3::date`,
+      [empresaId, range.first, range.last],
+    ),
   ]);
 
   const schedulesByEmployee = new Map();
@@ -162,6 +166,7 @@ async function calcularMes({ empresaId, mes }) {
     if (!requestsByEmployee.has(request.empleado_id)) requestsByEmployee.set(request.empleado_id, []);
     requestsByEmployee.get(request.empleado_id).push(request);
   }
+  const feriadosSet = new Set(feriadosResult.rows.map((row) => row.fecha));
 
   const items = [];
   for (const employee of employeesResult.rows) {
@@ -182,7 +187,8 @@ async function calcularMes({ empresaId, mes }) {
       const lateMinutes = entry !== null && scheduledStart !== null
         ? Math.max(0, entry - scheduledStart - Number(schedule?.tolerancia_minutos || 0))
         : 0;
-      const status = request ? 'justificada' : !schedule ? 'sin_horario' : !mark ? 'ausente' : !mark.entrada || !mark.salida ? 'incompleta' : 'completa';
+      const isFeriado = feriadosSet.has(date.value);
+      const status = isFeriado ? 'feriado' : request ? 'justificada' : !schedule ? 'sin_horario' : !mark ? 'ausente' : !mark.entrada || !mark.salida ? 'incompleta' : 'completa';
 
       items.push({
         fecha: date.value,
@@ -212,14 +218,16 @@ async function calcularMes({ empresaId, mes }) {
     acc.jornadas_completas += item.estado === 'completa' ? 1 : 0;
     acc.jornadas_incompletas += item.estado === 'incompleta' ? 1 : 0;
     acc.ausencias += item.estado === 'ausente' ? 1 : 0;
-    acc.ausencias_justificadas += item.estado === 'justificada' ? 1 : 0;
+    acc.ausencias_justificadas += (item.estado === 'justificada' || item.estado === 'feriado') ? 1 : 0;
+    acc.feriados += item.estado === 'feriado' ? 1 : 0;
     return acc;
-  }, { empleados: employeesResult.rows.length, minutos_programados: 0, minutos_trabajados: 0, minutes_ordinarios: 0, minutos_ordinarios: 0, minutos_extra: 0, minutos_atraso: 0, jornadas_completas: 0, jornadas_incompletas: 0, ausencias: 0, ausencias_justificadas: 0 });
+  }, { empleados: employeesResult.rows.length, minutos_programados: 0, minutos_trabajados: 0, minutes_ordinarios: 0, minutos_ordinarios: 0, minutos_extra: 0, minutos_atraso: 0, jornadas_completas: 0, jornadas_incompletas: 0, ausencias: 0, ausencias_justificadas: 0, feriados: 0 });
 
   const prenomina = [];
   for (const employee of employeesResult.rows) {
     const empItems = items.filter((item) => item.empleado_id === employee.id);
     const salarioBase = Number(employee.salario_base || 0);
+    // Only truly unexcused absences are penalized; feriados and justified days are excluded
     const ausencias = empItems.filter((item) => item.estado === 'ausente').length;
     const minutosAtraso = empItems.reduce((acc, item) => acc + item.minutos_atraso, 0);
     const minutosExtra = empItems.reduce((acc, item) => acc + item.minutos_extra, 0);

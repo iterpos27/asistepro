@@ -20,7 +20,7 @@ const horarioSchema = z.object({
   dias_semana: z.array(z.string()).min(1, 'Selecciona al menos un día'),
   hora_inicio: z.string().min(1, 'Hora entrada requerida'),
   hora_fin: z.string().min(1, 'Hora salida requerida'),
-  tolerancia_minutos: z.coerce.number().int().min(0, 'No puede ser negativa'),
+  tolerancia_minutos: z.coerce.number().int().min(0, 'No puede ser negativa').max(10, 'Máximo 10 minutos'),
   descanso_minutos: z.coerce.number().int().min(0, 'No puede ser negativo'),
   activo: z.boolean(),
 });
@@ -114,8 +114,8 @@ export default function HorarioForm({ horario, sucursales, loading, onCancel, on
           {errors.hora_fin && <small>{errors.hora_fin.message}</small>}
         </label>
         <label>
-          Tolerancia minutos
-          <input {...register('tolerancia_minutos')} type="number" min="0" />
+          Tolerancia minutos <small style={{ color: 'var(--text-muted)' }}>(máx. 10)</small>
+          <input {...register('tolerancia_minutos')} type="number" min="0" max="10" />
           {errors.tolerancia_minutos && <small>{errors.tolerancia_minutos.message}</small>}
         </label>
         <label>

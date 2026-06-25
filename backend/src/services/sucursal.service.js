@@ -83,21 +83,21 @@ function buildDynamicQrPayload(sucursal, dynamicToken) {
 }
 
 async function listSucursales({ empresaId, search, estado, limit = 20, offset = 0 }) {
-  const filters = ['empresa_id = $1'];
+  const filters = ['s.empresa_id = $1'];
   const values = [empresaId];
 
   if (search) {
     values.push(`%${search.toLowerCase()}%`);
     filters.push(`(
-      LOWER(nombre) LIKE $${values.length}
-      OR LOWER(codigo) LIKE $${values.length}
-      OR LOWER(COALESCE(ciudad, '')) LIKE $${values.length}
+      LOWER(s.nombre) LIKE $${values.length}
+      OR LOWER(s.codigo) LIKE $${values.length}
+      OR LOWER(COALESCE(s.ciudad, '')) LIKE $${values.length}
     )`);
   }
 
   if (estado) {
     values.push(estado);
-    filters.push(`estado = $${values.length}`);
+    filters.push(`s.estado = $${values.length}`);
   }
 
   values.push(limit);
@@ -107,10 +107,14 @@ async function listSucursales({ empresaId, search, estado, limit = 20, offset = 
 
   const result = await pool.query(
     `
-      SELECT *, COUNT(*) OVER() AS total
-      FROM sucursales
+      SELECT s.*, 
+             e.nombres AS jefe_nombres, 
+             e.apellidos AS jefe_apellidos,
+             COUNT(*) OVER() AS total
+      FROM sucursales s
+      LEFT JOIN empleados e ON e.id = s.jefe_empleado_id
       WHERE ${filters.join(' AND ')}
-      ORDER BY creado_en DESC
+      ORDER BY s.creado_en DESC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
     `,
@@ -144,6 +148,18 @@ async function createSucursal(empresaId, payload) {
   validateSucursalPayload(payload);
   const sucursal = normalizeSucursalPayload(payload);
 
+  if (payload.jefe_empleado_id) {
+    const employeeCheck = await pool.query(
+      'SELECT id FROM empleados WHERE id = $1 AND empresa_id = $2 LIMIT 1',
+      [payload.jefe_empleado_id, empresaId]
+    );
+    if (!employeeCheck.rows.length) {
+      const error = new Error('El jefe de almacén indicado no pertenece a la empresa');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
   const result = await pool.query(
     `
       INSERT INTO sucursales (
@@ -156,8 +172,9 @@ async function createSucursal(empresaId, payload) {
         longitud,
         radio_metros,
         qr_token,
-        estado
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        estado,
+        jefe_empleado_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `,
     [
@@ -171,6 +188,7 @@ async function createSucursal(empresaId, payload) {
       sucursal.radio_metros,
       generateQrToken(),
       sucursal.estado,
+      payload.jefe_empleado_id || null,
     ],
   );
 
@@ -179,6 +197,19 @@ async function createSucursal(empresaId, payload) {
 
 async function updateSucursal(empresaId, id, payload) {
   validateSucursalPayload(payload, { partial: true });
+
+  if (payload.jefe_empleado_id) {
+    const employeeCheck = await pool.query(
+      'SELECT id FROM empleados WHERE id = $1 AND empresa_id = $2 LIMIT 1',
+      [payload.jefe_empleado_id, empresaId]
+    );
+    if (!employeeCheck.rows.length) {
+      const error = new Error('El jefe de almacén indicado no pertenece a la empresa');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
   const current = await findSucursalById(empresaId, id);
 
   if (!current) return null;
@@ -193,6 +224,7 @@ async function updateSucursal(empresaId, id, payload) {
     radio_metros:
       payload.radio_metros !== undefined ? Number.parseInt(payload.radio_metros, 10) : current.radio_metros,
     estado: payload.estado !== undefined ? payload.estado : current.estado,
+    jefe_empleado_id: payload.jefe_empleado_id !== undefined ? payload.jefe_empleado_id : current.jefe_empleado_id,
   };
 
   const result = await pool.query(
@@ -206,6 +238,7 @@ async function updateSucursal(empresaId, id, payload) {
           longitud = $8,
           radio_metros = $9,
           estado = $10,
+          jefe_empleado_id = $11,
           actualizado_en = NOW()
       WHERE empresa_id = $1
         AND id = $2
@@ -222,6 +255,7 @@ async function updateSucursal(empresaId, id, payload) {
       next.longitud,
       next.radio_metros,
       next.estado,
+      next.jefe_empleado_id || null,
     ],
   );
 

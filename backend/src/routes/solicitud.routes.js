@@ -10,6 +10,6 @@ router.use(authGuard, roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH', 'EMPLEA
 router.get('/catalogos', permissionGuard('solicitudes', 'crear'), controller.catalogs);
 router.get('/', permissionGuard('solicitudes', 'ver'), validateSchema(listSolicitudesSchema), controller.list);
 router.post('/', permissionGuard('solicitudes', 'crear'), validateSchema(createSolicitudSchema), controller.create);
-router.post('/:id/revisar', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH']), permissionGuard('solicitudes', 'aprobar'), validateSchema(reviewSolicitudSchema), controller.review);
+router.post('/:id/revisar', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA', 'RRHH', 'EMPLEADO']), permissionGuard('solicitudes', 'aprobar'), validateSchema(reviewSolicitudSchema), controller.review);
 router.delete('/:id', validateSchema(idSolicitudSchema), controller.cancel);
 module.exports = router;

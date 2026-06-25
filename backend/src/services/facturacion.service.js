@@ -248,6 +248,8 @@ async function recalculateFacturaEstado(client, facturaId) {
       SELECT
         f.total,
         f.estado,
+        f.suscripcion_id,
+        f.empresa_id,
         COALESCE(SUM(p.monto) FILTER (WHERE p.estado = 'registrado'), 0)::numeric AS total_pagado
       FROM facturas f
       LEFT JOIN pagos p ON p.factura_id = f.id
@@ -274,6 +276,53 @@ async function recalculateFacturaEstado(client, facturaId) {
     `,
     [facturaId, nextEstado],
   );
+
+  if (nextEstado === 'pagada' && factura.suscripcion_id) {
+    const subResult = await client.query(
+      `SELECT id, estado, plan_id FROM suscripciones WHERE id = $1 LIMIT 1`,
+      [factura.suscripcion_id]
+    );
+    const subscription = subResult.rows[0];
+    if (subscription && subscription.estado !== 'activa') {
+      // 1. Cancel all other active subscriptions for this empresa
+      await client.query(
+        `
+          UPDATE suscripciones
+          SET estado = 'cancelada',
+              fecha_fin = COALESCE(fecha_fin, CURRENT_DATE),
+              actualizado_en = NOW()
+          WHERE empresa_id = $1
+            AND estado = 'activa'
+            AND id <> $2
+        `,
+        [factura.empresa_id, subscription.id],
+      );
+
+      // 2. Mark this subscription as 'activa'
+      await client.query(
+        `
+          UPDATE suscripciones
+          SET estado = 'activa',
+              fecha_inicio = CURRENT_DATE,
+              fecha_fin = CURRENT_DATE + INTERVAL '30 days',
+              actualizado_en = NOW()
+          WHERE id = $1
+        `,
+        [subscription.id],
+      );
+
+      // 3. Update the empresa's active plan
+      await client.query(
+        `
+          UPDATE empresas
+          SET plan_id = $2,
+              actualizado_en = NOW()
+          WHERE id = $1
+        `,
+        [factura.empresa_id, subscription.plan_id],
+      );
+    }
+  }
 }
 
 async function updateFactura(id, payload) {

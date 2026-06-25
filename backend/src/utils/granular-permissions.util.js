@@ -75,6 +75,9 @@ function hasPermission(auth, resource, action) {
 
 function permissionGuard(resource, action) {
   return (req, res, next) => {
+    if (req.auth?.rol === 'EMPLEADO' && resource === 'solicitudes' && action === 'aprobar') {
+      return next();
+    }
     if (!hasPermission(req.auth, resource, action)) {
       return res.status(403).json({ ok: false, message: `No tiene permiso para ${action} ${resource}` });
     }

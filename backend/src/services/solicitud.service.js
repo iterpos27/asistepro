@@ -77,10 +77,10 @@ async function createSolicitud({ empresaId, auth, payload }) {
     const result = await client.query(
       `INSERT INTO solicitudes (
         id, empresa_id, empleado_id, solicitado_por, tipo, fecha_inicio, fecha_fin,
-        hora_inicio, hora_fin, motivo, datos_correccion,
+        hora_inicio, hora_fin, motivo, datos_correccion, datos_adicionales,
         comprobante_storage_provider, comprobante_storage_bucket, comprobante_storage_key, comprobante_storage_url
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16) RETURNING *`,
       [
         solicitudId,
         empresaId,
@@ -93,6 +93,7 @@ async function createSolicitud({ empresaId, auth, payload }) {
         payload.hora_fin || null,
         payload.motivo,
         payload.datos_correccion ? JSON.stringify(payload.datos_correccion) : null,
+        payload.datos_adicionales ? JSON.stringify(payload.datos_adicionales) : '{}',
         fileData.provider,
         fileData.bucket,
         fileData.key,
@@ -105,16 +106,46 @@ async function createSolicitud({ empresaId, auth, payload }) {
 
 async function listSolicitudes({ empresaId, auth, estado, tipo, empleadoId, limit, offset }) {
   const filters = ['s.empresa_id = $1']; const values = [empresaId];
-  if (auth.rol === 'EMPLEADO') { values.push(auth.usuario_id); filters.push(`e.usuario_id = $${values.length}`); }
+  if (auth.rol === 'EMPLEADO') {
+    const managerBranchesRes = await pool.query(
+      `
+        SELECT id FROM sucursales
+        WHERE empresa_id = $1
+          AND jefe_empleado_id = (
+            SELECT id FROM empleados WHERE empresa_id = $1 AND usuario_id = $2 LIMIT 1
+          )
+      `,
+      [empresaId, auth.usuario_id]
+    );
+
+    if (managerBranchesRes.rows.length > 0) {
+      const branchIds = managerBranchesRes.rows.map(r => r.id);
+      values.push(auth.usuario_id);
+      const userIndex = values.length;
+      values.push(branchIds);
+      const branchesIndex = values.length;
+
+      filters.push(`(e.usuario_id = $${userIndex} OR e.sucursal_habitual_id = ANY($${branchesIndex}))`);
+    } else {
+      values.push(auth.usuario_id);
+      filters.push(`e.usuario_id = $${values.length}`);
+    }
+  }
   else if (empleadoId) { values.push(empleadoId); filters.push(`s.empleado_id = $${values.length}`); }
   if (estado) { values.push(estado); filters.push(`s.estado = $${values.length}`); }
   if (tipo) { values.push(tipo); filters.push(`s.tipo = $${values.length}`); }
   values.push(limit); const limitIndex = values.length; values.push(offset); const offsetIndex = values.length;
   const result = await pool.query(
     `SELECT s.*, e.codigo AS empleado_codigo, e.nombres AS empleado_nombres, e.apellidos AS empleado_apellidos,
+            e.cargo AS empleado_cargo, e.departamento AS empleado_departamento, e.cedula AS empleado_cedula,
+            suc.nombre AS empleado_sucursal,
             solicitante.nombre AS solicitante_nombre, revisor.nombre AS revisor_nombre, COUNT(*) OVER() AS total
-     FROM solicitudes s INNER JOIN empleados e ON e.id = s.empleado_id INNER JOIN usuarios solicitante ON solicitante.id = s.solicitado_por
-     LEFT JOIN usuarios revisor ON revisor.id = s.revisado_por WHERE ${filters.join(' AND ')}
+     FROM solicitudes s 
+     INNER JOIN empleados e ON e.id = s.empleado_id 
+     INNER JOIN usuarios solicitante ON solicitante.id = s.solicitado_por
+     LEFT JOIN usuarios revisor ON revisor.id = s.revisado_por 
+     LEFT JOIN sucursales suc ON suc.id = e.sucursal_habitual_id
+     WHERE ${filters.join(' AND ')}
      ORDER BY s.creado_en DESC LIMIT $${limitIndex} OFFSET $${offsetIndex}`, values);
   return { items: result.rows.map(({ total, ...row }) => row), total: Number(result.rows[0]?.total || 0), limit, offset };
 }
@@ -122,12 +153,24 @@ async function listSolicitudes({ empresaId, auth, estado, tipo, empleadoId, limi
 async function getCatalogs({ empresaId, auth }) {
   const employeeFilter = auth.rol === 'EMPLEADO' ? 'AND e.usuario_id = $2' : '';
   const values = auth.rol === 'EMPLEADO' ? [empresaId, auth.usuario_id] : [empresaId];
-  const [branches, employees, marks] = await Promise.all([
+  const [branches, employees, marks, currentEmployee] = await Promise.all([
     pool.query(`SELECT id,nombre,codigo FROM sucursales WHERE empresa_id=$1 AND estado='activa' ORDER BY nombre`, [empresaId]),
-    pool.query(`SELECT e.id,e.codigo,e.nombres,e.apellidos FROM empleados e WHERE e.empresa_id=$1 AND e.estado='activo' ${employeeFilter} ORDER BY e.codigo`, values),
+    pool.query(`SELECT e.id,e.codigo,e.nombres,e.apellidos,e.cedula,e.usuario_id FROM empleados e WHERE e.empresa_id=$1 AND e.estado='activo' ORDER BY e.codigo`, [empresaId]),
     pool.query(`SELECT m.id,m.empleado_id,m.tipo,m.marcado_en,m.sucursal_id,s.nombre AS sucursal_nombre FROM marcaciones m INNER JOIN empleados e ON e.id=m.empleado_id INNER JOIN sucursales s ON s.id=m.sucursal_id WHERE m.empresa_id=$1 AND m.anulada=FALSE ${employeeFilter} ORDER BY m.marcado_en DESC LIMIT 200`, values),
+    auth.rol === 'EMPLEADO'
+      ? pool.query(`
+          SELECT e.id,e.codigo,e.nombres,e.apellidos,e.cedula,e.usuario_id,
+                 (SELECT EXISTS(SELECT 1 FROM sucursales s WHERE s.empresa_id = e.empresa_id AND s.jefe_empleado_id = e.id)) AS es_jefe
+          FROM empleados e 
+          WHERE e.empresa_id=$1 AND e.usuario_id=$2 AND e.estado='activo' LIMIT 1`, [empresaId, auth.usuario_id])
+      : Promise.resolve({ rows: [] })
   ]);
-  return { sucursales: branches.rows, empleados: employees.rows, marcaciones: marks.rows };
+  return {
+    sucursales: branches.rows,
+    empleados: employees.rows,
+    marcaciones: marks.rows,
+    empleado_actual: currentEmployee.rows[0] || null
+  };
 }
 
 async function applyCorrection(client, request) {
@@ -153,19 +196,87 @@ async function applyCorrection(client, request) {
   }
 }
 
-async function reviewSolicitud({ empresaId, solicitudId, reviewerId, decision, comentario }) {
+async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decision, comentario, datos_adicionales }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await client.query(`SELECT * FROM solicitudes WHERE empresa_id=$1 AND id=$2 FOR UPDATE`, [empresaId, solicitudId]);
     const request = result.rows[0]; if (!request) { const error = new Error('Solicitud no encontrada'); error.statusCode = 404; throw error; }
     if (request.estado !== 'pendiente') { const error = new Error('La solicitud ya fue procesada'); error.statusCode = 409; throw error; }
+
+    // Enforce Jefe de Almacén rule if reviewer has role EMPLEADO
+    if (auth && auth.rol === 'EMPLEADO') {
+      // 1. Get reviewer's employee record
+      const reviewerEmpRes = await client.query(
+        'SELECT id FROM empleados WHERE empresa_id = $1 AND usuario_id = $2 LIMIT 1',
+        [empresaId, auth.usuario_id]
+      );
+      if (!reviewerEmpRes.rows.length) {
+        const error = new Error('No tiene permisos para aprobar esta solicitud (revisor no es empleado)');
+        error.statusCode = 403;
+        throw error;
+      }
+      const reviewerEmpId = reviewerEmpRes.rows[0].id;
+
+      // 2. A jefe de almacén cannot validate their own requests
+      if (reviewerEmpId === request.empleado_id) {
+        const error = new Error('Un jefe de almacén no puede aprobar sus propias solicitudes');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // 3. Get applicant's sucursal_habitual_id
+      const applicantEmpRes = await client.query(
+        'SELECT sucursal_habitual_id FROM empleados WHERE id = $1 LIMIT 1',
+        [request.empleado_id]
+      );
+      if (!applicantEmpRes.rows.length) {
+        const error = new Error('Empleado solicitante no encontrado');
+        error.statusCode = 404;
+        throw error;
+      }
+      const applicantSucursalId = applicantEmpRes.rows[0].sucursal_habitual_id;
+      if (!applicantSucursalId) {
+        const error = new Error('El empleado solicitante no está asignado a ninguna sucursal');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // 4. Verify if the reviewer is the jefe of that sucursal
+      const sucursalRes = await client.query(
+        'SELECT jefe_empleado_id FROM sucursales WHERE id = $1 AND empresa_id = $2 LIMIT 1',
+        [applicantSucursalId, empresaId]
+      );
+      if (!sucursalRes.rows.length || sucursalRes.rows[0].jefe_empleado_id !== reviewerEmpId) {
+        const error = new Error('Solo el jefe de almacén asignado a la sucursal del empleado puede aprobar esta solicitud');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
     if (decision === 'aprobar') {
       await laboralService.assertPeriodoAbierto(empresaId, request.fecha_inicio, client);
       await laboralService.assertPeriodoAbierto(empresaId, request.fecha_fin, client);
       if (request.tipo === 'correccion_marcacion') await applyCorrection(client, request);
     }
-    const updated = await client.query(`UPDATE solicitudes SET estado=$3,revisado_por=$4,revisado_en=NOW(),comentario_revision=$5,actualizado_en=NOW() WHERE empresa_id=$1 AND id=$2 RETURNING *`, [empresaId, solicitudId, decision === 'aprobar' ? 'aprobada' : 'rechazada', reviewerId, comentario || null]);
+    const updated = await client.query(
+      `UPDATE solicitudes SET 
+        estado=$3,
+        revisado_por=$4,
+        revisado_en=NOW(),
+        comentario_revision=$5,
+        datos_adicionales=COALESCE(datos_adicionales, '{}'::jsonb) || $6::jsonb,
+        actualizado_en=NOW() 
+       WHERE empresa_id=$1 AND id=$2 RETURNING *`,
+      [
+        empresaId,
+        solicitudId,
+        decision === 'aprobar' ? 'aprobada' : 'rechazada',
+        reviewerId,
+        comentario || null,
+        datos_adicionales ? JSON.stringify(datos_adicionales) : '{}'
+      ]
+    );
     await client.query('COMMIT'); return updated.rows[0];
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }

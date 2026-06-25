@@ -8,11 +8,14 @@ const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesi
 
 const empleadoSchema = z
   .object({
-    codigo: z.string().min(1, 'Código requerido'),
+    codigo: z.string().optional(),
     nombres: z.string().min(1, 'Nombres requeridos'),
     apellidos: z.string().min(1, 'Apellidos requeridos'),
     email: z.union([z.string().email('Email invalido'), z.literal('')]).optional(),
     telefono: z.string().optional(),
+    cedula: z.string().optional(),
+    username: z.union([z.string().regex(/^[a-z0-9._-]+$/, 'Solo letras minúsculas, números, puntos, guiones').min(3).max(30), z.literal('')]).optional(),
+    dispositivo_uuid: z.string().optional(),
     cargo: z.string().optional(),
     departamento: z.string().optional(),
     sucursal_habitual_id: z.string().optional(),
@@ -54,6 +57,9 @@ const defaultValues = {
   apellidos: '',
   email: '',
   telefono: '',
+  cedula: '',
+  username: '',
+  dispositivo_uuid: '',
   cargo: '',
   departamento: '',
   sucursal_habitual_id: '',
@@ -101,6 +107,9 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
             apellidos: empleado.apellidos || '',
             email: empleado.email || '',
             telefono: empleado.telefono || '',
+            cedula: empleado.cedula || '',
+            username: empleado.username || '',
+            dispositivo_uuid: empleado.dispositivo_uuid || '',
             cargo: empleado.cargo || '',
             departamento: empleado.departamento || '',
             sucursal_habitual_id: empleado.sucursal_habitual_id || '',
@@ -129,9 +138,12 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
   function submit(values) {
     onSubmit({
       ...values,
-      codigo: values.codigo.toUpperCase(),
+      codigo: empleado ? values.codigo : undefined,
       email: values.email || null,
       telefono: values.telefono || null,
+      cedula: values.cedula || null,
+      username: values.username || null,
+      dispositivo_uuid: values.dispositivo_uuid || null,
       cargo: values.cargo || null,
       departamento: values.departamento || null,
       sucursal_habitual_id: values.sucursal_habitual_id || null,
@@ -160,8 +172,12 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
       <div className="form-grid">
         <label>
           Código
-          <input {...register('codigo')} placeholder="EMP001" />
-          {errors.codigo && <small>{errors.codigo.message}</small>}
+          <input 
+            {...register('codigo')} 
+            placeholder={empleado ? undefined : 'Se generará automáticamente'} 
+            readOnly 
+            style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+          />
         </label>
         <label>
           Estado
@@ -181,6 +197,39 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           <input {...register('apellidos')} placeholder="Perez Mora" />
           {errors.apellidos && <small>{errors.apellidos.message}</small>}
         </label>
+        <label>
+          Cédula / C.I.
+          <input {...register('cedula')} placeholder="Ej. 1792948271" />
+        </label>
+        <label>
+          Username (para login)
+          <input {...register('username')} placeholder="juan.perez" style={{ textTransform: 'lowercase' }} />
+          {errors.username && <small>{errors.username.message}</small>}
+          <small style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>Solo letras minúsculas, números, puntos y guiones. Mín. 3 caracteres.</small>
+        </label>
+        {empleado && (
+          <label className="wide-field">
+            Bloqueo de Dispositivo (UUID)
+            <div className="input-action-row" style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <input 
+                {...register('dispositivo_uuid')} 
+                readOnly 
+                placeholder="Sin registrar (se vinculará automáticamente en la primera marcación)" 
+                style={{ background: '#f1f5f9', cursor: 'not-allowed', flexGrow: 1 }}
+              />
+              {watch('dispositivo_uuid') && (
+                <button 
+                  className="outline-button" 
+                  type="button" 
+                  onClick={() => setValue('dispositivo_uuid', '', { shouldDirty: true, shouldValidate: true })}
+                  style={{ whiteSpace: 'nowrap', color: '#dc2626', borderColor: '#fca5a5' }}
+                >
+                  Liberar Dispositivo
+                </button>
+              )}
+            </div>
+          </label>
+        )}
         <label>
           Correo
           <input {...register('email')} type="email" placeholder="empleado@empresa.com" />

@@ -11,7 +11,7 @@ const horarioBody = z.object({
   dias_semana: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'dias_semana es requerido'),
   hora_inicio: time('hora_inicio'),
   hora_fin: time('hora_fin'),
-  tolerancia_minutos: z.coerce.number().int().min(0).max(240).optional(),
+  tolerancia_minutos: z.coerce.number().int().min(0).max(10, 'La tolerancia máxima permitida es de 10 minutos').optional(),
   descanso_minutos: z.coerce.number().int().min(0).max(720).optional(),
   activo: z.coerce.boolean().optional(),
 });

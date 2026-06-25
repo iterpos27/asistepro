@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, Plus, RotateCcw, X, FileUp, FileText } from 'lucide-react';
+import { Check, Plus, RotateCcw, X, FileUp, FileText, Printer } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import { useAuthContext } from '../../context/AuthContext';
@@ -21,7 +20,20 @@ const initialForm = {
   tipo_marcacion: 'entrada',
   marcado_en: '',
   sucursal_id: '',
-  duracion_tipo: 'dias'
+  duracion_tipo: 'dias',
+  destinatario: 'Unidad de Administración de Talento Humano',
+  periodo: `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`,
+  cedula: '',
+  reemplazo_empleado_id: ''
+};
+
+const getDiasSolicitados = (inicio, fin) => {
+  if (!inicio || !fin) return 0;
+  const d1 = new Date(inicio + 'T00:00:00');
+  const d2 = new Date(fin + 'T00:00:00');
+  const diffTime = Math.abs(d2 - d1);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  return diffDays;
 };
 
 const timeOptions = [];
@@ -52,7 +64,8 @@ function toBase64(file) {
 
 export default function SolicitudesList() {
   const { user } = useAuthContext();
-  const canReview = user?.permisos?.solicitudes?.aprobar === true;
+  const [currentEmployee, setCurrentEmployee] = useState(null);
+  const canReview = user?.permisos?.solicitudes?.aprobar === true || Boolean(currentEmployee?.es_jefe);
   const isEmployee = user?.rol === ROLES.EMPLEADO;
   
   const [items, setItems] = useState([]);
@@ -67,6 +80,15 @@ export default function SolicitudesList() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // Custom states for printing and reviewing
+  const [printItem, setPrintItem] = useState(null);
+  const [reviewItem, setReviewItem] = useState(null);
+  const [reviewDecision, setReviewDecision] = useState(null);
+  const [reviewComment, setReviewComment] = useState('');
+  const [saldoAnterior, setSaldoAnterior] = useState('');
+  const [saldoActual, setSaldoActual] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
   const correction = form.tipo === 'correccion_marcacion';
 
   async function load() {
@@ -84,12 +106,26 @@ export default function SolicitudesList() {
     setBranches(data.sucursales || []);
     setMarks(data.marcaciones || []);
     setEmployees(data.empleados || []);
+    if (data.empleado_actual) {
+      setCurrentEmployee(data.empleado_actual);
+    }
   }
 
   useEffect(() => {
     load();
     loadCatalogs().catch(() => {});
   }, [filters.estado, filters.tipo]);
+
+  // Autofill current logged-in employee when modal opens
+  useEffect(() => {
+    if (isEmployee && currentEmployee && open) {
+      setForm(curr => ({
+        ...curr,
+        empleado_id: currentEmployee.id,
+        cedula: currentEmployee.cedula || ''
+      }));
+    }
+  }, [currentEmployee, isEmployee, open]);
 
   const visibleMarks = useMemo(() => 
     form.empleado_id ? marks.filter(mark => mark.empleado_id === form.empleado_id) : marks,
@@ -159,6 +195,15 @@ export default function SolicitudesList() {
         };
       }
 
+      if (form.tipo === 'vacaciones' || form.tipo === 'permiso') {
+        payload.datos_adicionales = {
+          destinatario: form.destinatario || 'Unidad de Administración de Talento Humano',
+          periodo: form.periodo || '',
+          cedula: form.cedula || '',
+          reemplazo_empleado_id: form.reemplazo_empleado_id || null
+        };
+      }
+
       await solicitudService.createSolicitud(payload);
       toast.success('Solicitud registrada');
       setOpen(false);
@@ -173,12 +218,52 @@ export default function SolicitudesList() {
     }
   }
 
-  async function review(item, decision) {
-    const comentario = window.prompt(decision === 'aprobar' ? 'Comentario de aprobacion (opcional)' : 'Motivo del rechazo') || '';
-    await solicitudService.reviewSolicitud(item.id, decision, comentario);
-    toast.success(decision === 'aprobar' ? 'Solicitud aprobada' : 'Solicitud rechazada');
-    await load();
-  }
+  const startReviewApprove = (item) => {
+    setReviewItem(item);
+    setReviewDecision('aprobar');
+    setReviewComment('');
+    setSaldoAnterior('');
+    setSaldoActual('');
+  };
+
+  const startReviewReject = (item) => {
+    setReviewItem(item);
+    setReviewDecision('rechazar');
+    setReviewComment('');
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    setReviewSubmitting(true);
+    try {
+      let datos_adicionales = null;
+      if (reviewDecision === 'aprobar' && reviewItem.tipo === 'vacaciones') {
+        const otorgados = getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin);
+        datos_adicionales = {
+          saldo_anterior: parseFloat(saldoAnterior) || 0,
+          dias_otorgados: otorgados,
+          saldo_actual: parseFloat(saldoActual) || 0
+        };
+      }
+      await solicitudService.reviewSolicitud(reviewItem.id, reviewDecision, reviewComment, datos_adicionales);
+      toast.success(reviewDecision === 'aprobar' ? 'Solicitud aprobada' : 'Solicitud rechazada');
+      setReviewItem(null);
+      await load();
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || 'No se pudo procesar la revisión';
+      toast.error(errorMsg);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handlePrint = (item) => {
+    setPrintItem(item);
+    setTimeout(() => {
+      window.print();
+      setPrintItem(null);
+    }, 150);
+  };
 
   return (
     <>
@@ -223,7 +308,16 @@ export default function SolicitudesList() {
                 {!isEmployee && (
                   <label>
                     Empleado
-                    <select required value={form.empleado_id} onChange={e => change('empleado_id', e.target.value)}>
+                    <select required value={form.empleado_id} onChange={e => {
+                      const empId = e.target.value;
+                      change('empleado_id', empId);
+                      const emp = employees.find(item => item.id === empId);
+                      if (emp) {
+                        change('cedula', emp.cedula || '');
+                      } else {
+                        change('cedula', '');
+                      }
+                    }}>
                       <option value="">Seleccionar</option>
                       {employees.map(item => (
                         <option key={item.id} value={item.id}>{item.codigo} - {item.nombres} {item.apellidos}</option>
@@ -239,6 +333,57 @@ export default function SolicitudesList() {
                     ))}
                   </select>
                 </label>
+                {(form.tipo === 'vacaciones' || form.tipo === 'permiso') && (
+                  <>
+                    <label>
+                      Cédula / C.I.
+                      <input 
+                        required 
+                        type="text" 
+                        value={form.cedula || ''} 
+                        onChange={e => change('cedula', e.target.value)} 
+                        placeholder="Ej. 1312345678" 
+                        maxLength={20}
+                      />
+                    </label>
+                    <label>
+                      Destinatario
+                      <input 
+                        required 
+                        type="text" 
+                        value={form.destinatario || ''} 
+                        onChange={e => change('destinatario', e.target.value)} 
+                        placeholder="Ej. Unidad de Talento Humano" 
+                      />
+                    </label>
+                    <label>
+                      Período Correspondiente
+                      <input 
+                        required 
+                        type="text" 
+                        value={form.periodo || ''} 
+                        onChange={e => change('periodo', e.target.value)} 
+                        placeholder="Ej. 2025-2026" 
+                      />
+                    </label>
+                    <label>
+                      Empleado Reemplazo
+                      <select 
+                        value={form.reemplazo_empleado_id || ''} 
+                        onChange={e => change('reemplazo_empleado_id', e.target.value)}
+                      >
+                        <option value="">Ninguno</option>
+                        {employees
+                          .filter(emp => emp.id !== form.empleado_id)
+                          .map(item => (
+                            <option key={item.id} value={item.id}>
+                              {item.codigo} - {item.nombres} {item.apellidos}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </>
+                )}
                 {!correction && (
                   <label>
                     Duración
@@ -378,7 +523,7 @@ export default function SolicitudesList() {
                 <th>Estado</th>
                 <th>Revision</th>
                 <th>Adjunto</th>
-                {canReview && <th>Acciones</th>}
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -406,29 +551,506 @@ export default function SolicitudesList() {
                         '-'
                       )}
                     </td>
-                    {canReview && (
-                      <td>
-                        <div className="row-actions">
-                          {item.estado === 'pendiente' && (
-                            <>
-                              <button className="icon-button" aria-label="Aprobar" onClick={() => review(item, 'aprobar')}><Check size={16} /></button>
-                              <button className="icon-button danger" aria-label="Rechazar" onClick={() => review(item, 'rechazar')}><X size={16}/></button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    )}
+                    <td>
+                      <div className="row-actions">
+                        {item.estado === 'pendiente' && canReview && item.empleado_id !== currentEmployee?.id && (
+                          <>
+                            <button className="icon-button" title="Aprobar" onClick={() => startReviewApprove(item)}><Check size={16} /></button>
+                            <button className="icon-button danger" title="Rechazar" onClick={() => startReviewReject(item)}><X size={16}/></button>
+                          </>
+                        )}
+                        {item.estado === 'aprobada' && (
+                          <button 
+                            className="icon-button" 
+                            title="Imprimir solicitud (PDF)" 
+                            onClick={() => handlePrint(item)}
+                            style={{ color: '#1e3a8a' }}
+                          >
+                            <Printer size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={canReview ? 8 : 7}>No hay solicitudes.</td>
+                  <td colSpan={8}>No hay solicitudes.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Review Modal */}
+      {reviewItem && (
+        <div className="modal-backdrop" onClick={() => setReviewItem(null)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <PanelTitle 
+              title={reviewDecision === 'aprobar' ? 'Aprobar Solicitud' : 'Rechazar Solicitud'} 
+              subtitle={`Solicitante: ${reviewItem.empleado_nombres} ${reviewItem.empleado_apellidos}`} 
+            />
+            <form className="module-form" onSubmit={handleReviewSubmit}>
+              <div className="form-grid" style={{ gridTemplateColumns: '1fr', gap: '16px' }}>
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', border: '1px solid #e2e8f0' }}>
+                  <p style={{ margin: '0 0 6px 0' }}><strong>Tipo:</strong> {typeLabels[reviewItem.tipo]}</p>
+                  <p style={{ margin: '0 0 6px 0' }}>
+                    <strong>Fechas:</strong> {reviewItem.fecha_inicio} a {reviewItem.fecha_fin} 
+                    ({getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin)} días)
+                  </p>
+                  <p style={{ margin: 0 }}><strong>Motivo:</strong> {reviewItem.motivo}</p>
+                </div>
+
+                {reviewDecision === 'aprobar' && reviewItem.tipo === 'vacaciones' && (
+                  <div style={{ border: '1px solid #cbd5e1', padding: '14px', borderRadius: '8px', background: '#f0fdf4' }}>
+                    <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#166534', fontWeight: '700' }}>Control de Saldos (Talento Humano)</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <label style={{ margin: 0 }}>
+                        Saldo Anterior (días)
+                        <input 
+                          required 
+                          type="number" 
+                          step="0.5" 
+                          min="0" 
+                          value={saldoAnterior} 
+                          onChange={e => {
+                            setSaldoAnterior(e.target.value);
+                            const prev = parseFloat(e.target.value);
+                            if (!isNaN(prev)) {
+                              const reqDays = getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin);
+                              setSaldoActual(Math.max(0, prev - reqDays));
+                            }
+                          }} 
+                          placeholder="Ej. 15" 
+                        />
+                      </label>
+                      <label style={{ margin: 0 }}>
+                        Días Otorgados
+                        <input 
+                          readOnly 
+                          type="number" 
+                          value={getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin)} 
+                          style={{ background: '#e2e8f0', cursor: 'not-allowed' }}
+                        />
+                      </label>
+                      <label style={{ margin: '0', gridColumn: 'span 2' }}>
+                        Saldo Actual (días)
+                        <input 
+                          required 
+                          type="number" 
+                          step="0.5" 
+                          min="0" 
+                          value={saldoActual} 
+                          onChange={e => setSaldoActual(e.target.value)} 
+                          placeholder="Ej. 10" 
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <label style={{ margin: 0 }}>
+                  {reviewDecision === 'aprobar' ? 'Comentario de aprobación (opcional)' : 'Motivo del rechazo'}
+                  <textarea 
+                    required={reviewDecision === 'rechazar'} 
+                    value={reviewComment} 
+                    onChange={e => setReviewComment(e.target.value)} 
+                    placeholder={reviewDecision === 'aprobar' ? 'Ingresa comentarios u observaciones' : 'Ingresa la razón del rechazo'} 
+                    style={{ minHeight: '80px' }}
+                  />
+                </label>
+              </div>
+
+              <div className="form-actions" style={{ marginTop: '20px' }}>
+                <button type="button" className="outline-button" onClick={() => setReviewItem(null)} disabled={reviewSubmitting}>Cancelar</button>
+                <button 
+                  className={`primary-button compact ${reviewDecision === 'rechazar' ? 'danger' : ''}`} 
+                  disabled={reviewSubmitting}
+                >
+                  {reviewSubmitting ? 'Procesando...' : reviewDecision === 'aprobar' ? 'Aprobar' : 'Rechazar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden Print Template */}
+      {printItem && (
+        <div className="print-document-container">
+          <div className="print-card">
+            <div className="print-header">
+              <div className="print-logo-box">
+                <div className="print-company-title">ASISTEPRO - SISTEMA DE CONTROL DE ASISTENCIA Y PERSONAL</div>
+              </div>
+              <div className="print-form-id">F-TH-02</div>
+            </div>
+            
+            <div className="print-title-box">
+              <h2>FORMULARIO DE SOLICITUD DE VACACIONES Y LICENCIAS</h2>
+              <div className="print-date">Portoviejo, {new Date(printItem.creado_en).toLocaleDateString('es-EC', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+            </div>
+
+            <table className="print-meta-table">
+              <tbody>
+                <tr>
+                  <td className="print-lbl"><strong>PARA:</strong></td>
+                  <td>{printItem.datos_adicionales?.destinatario || 'Unidad de Administración de Talento Humano'}</td>
+                </tr>
+                <tr>
+                  <td className="print-lbl"><strong>DE:</strong></td>
+                  <td>{printItem.empleado_nombres} {printItem.empleado_apellidos}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 className="print-section-title">1. DATOS GENERALES DEL SERVIDOR</h3>
+            <table className="print-info-table">
+              <tbody>
+                <tr>
+                  <th>Cédula / C.I.</th>
+                  <td>{printItem.datos_adicionales?.cedula || printItem.empleado_cedula || '-'}</td>
+                  <th>Sucursal / Unidad</th>
+                  <td>{printItem.empleado_sucursal || 'Matriz'}</td>
+                </tr>
+                <tr>
+                  <th>Cargo</th>
+                  <td>{printItem.empleado_cargo || '-'}</td>
+                  <th>Departamento</th>
+                  <td>{printItem.empleado_departamento || '-'}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3 className="print-section-title">2. DETALLE DE LA SOLICITUD</h3>
+            <table className="print-info-table">
+              <tbody>
+                <tr>
+                  <th>Tipo de Trámite</th>
+                  <td>{typeLabels[printItem.tipo] || printItem.tipo}</td>
+                  <th>Período Correspondiente</th>
+                  <td>{printItem.datos_adicionales?.periodo || '-'}</td>
+                </tr>
+                <tr>
+                  <th>Fecha de Salida</th>
+                  <td>{new Date(printItem.fecha_inicio + 'T00:00:00').toLocaleDateString('es-EC')}</td>
+                  <th>Fecha de Retorno</th>
+                  <td>{new Date(printItem.fecha_fin + 'T00:00:00').toLocaleDateString('es-EC')}</td>
+                </tr>
+                <tr>
+                  <th>Duración Solicitada</th>
+                  <td colSpan={3}>
+                    {getDiasSolicitados(printItem.fecha_inicio, printItem.fecha_fin)} día(s)
+                    {printItem.hora_inicio && ` (Por horas: ${printItem.hora_inicio} - ${printItem.hora_fin})`}
+                  </td>
+                </tr>
+                <tr>
+                  <th>Motivo / Justificación</th>
+                  <td colSpan={3}>{printItem.motivo}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {printItem.datos_adicionales?.reemplazo_empleado_id && (() => {
+              const replacement = employees.find(emp => emp.id === printItem.datos_adicionales.reemplazo_empleado_id);
+              if (!replacement) return null;
+              return (
+                <>
+                  <h3 className="print-section-title">3. DESIGNACIÓN DE REEMPLAZO</h3>
+                  <div className="print-reemplazo-box">
+                    Por medio de la presente, se deja constancia que el/la servidor/a <strong>{replacement.nombres} {replacement.apellidos}</strong> con C.I. <strong>{replacement.cedula || '-'}</strong> asumirá las funciones inherentes a mi puesto durante el período antes detallado.
+                  </div>
+                </>
+              );
+            })()}
+
+            {printItem.tipo === 'vacaciones' && printItem.datos_adicionales?.saldo_anterior !== undefined && (
+              <>
+                <h3 className="print-section-title">4. CONTROL DE VACACIONES - TALENTO HUMANO (Uso Interno)</h3>
+                <table className="print-ledger-table">
+                  <thead>
+                    <tr>
+                      <th>Saldo de Vacaciones Anterior</th>
+                      <th>Días Otorgados en esta Solicitud</th>
+                      <th>Saldo de Vacaciones Actual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{printItem.datos_adicionales.saldo_anterior} día(s)</td>
+                      <td>{printItem.datos_adicionales.dias_otorgados} día(s)</td>
+                      <td>{printItem.datos_adicionales.saldo_actual} día(s)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            <h3 className="print-section-title">5. FIRMAS DE RESPONSABILIDAD Y APROBACIÓN</h3>
+            <div className="print-signatures-grid">
+              <div className="print-signature-card">
+                <div className="print-sig-space">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=ASISTEPRO-VALIDACION-SOLICITANTE-${printItem.id}-${printItem.datos_adicionales?.cedula || printItem.empleado_cedula}`} 
+                    alt="QR" 
+                    className="print-qr-img" 
+                  />
+                  <div className="print-sig-status">FIRMADO DIGITALMENTE</div>
+                </div>
+                <div className="print-sig-name">{printItem.empleado_nombres} {printItem.empleado_apellidos}</div>
+                <div className="print-sig-title">C.I.: {printItem.datos_adicionales?.cedula || printItem.empleado_cedula || '-'}</div>
+                <div className="print-sig-role">SOLICITANTE</div>
+              </div>
+
+              <div className="print-signature-card">
+                <div className="print-sig-space">
+                  <div className="print-stamp aprobado">APROBADO</div>
+                  <div className="print-sig-status">APROBADO POR SISTEMA</div>
+                  <div className="print-sig-date">{printItem.revisado_en ? new Date(printItem.revisado_en).toLocaleString('es-EC') : '-'}</div>
+                </div>
+                <div className="print-sig-name">{printItem.revisor_nombre || 'Jefe Inmediato'}</div>
+                <div className="print-sig-title">Validación Electrónica</div>
+                <div className="print-sig-role">JEFE INMEDIATO</div>
+              </div>
+
+              <div className="print-signature-card">
+                <div className="print-sig-space">
+                  <div className="print-stamp registrado">REGISTRADO</div>
+                  <div className="print-sig-status">APROBADO POR SISTEMA</div>
+                  <div className="print-sig-date">{printItem.revisado_en ? new Date(printItem.revisado_en).toLocaleString('es-EC') : '-'}</div>
+                </div>
+                <div className="print-sig-name">Talento Humano</div>
+                <div className="print-sig-title">Validación Electrónica</div>
+                <div className="print-sig-role">TALENTO HUMANO</div>
+              </div>
+            </div>
+            
+            <div className="print-footer-note">
+              Este documento cuenta con validez legal electrónica bajo el amparo de la Ley de Comercio Electrónico, Firmas Electrónicas y Mensajes de Datos de la República del Ecuador.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .print-document-container {
+          width: 100%;
+          color: #000;
+          background: #fff;
+          font-family: 'Inter', Arial, sans-serif;
+        }
+        .print-card {
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 10px;
+        }
+        .print-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 2px solid #000;
+          padding-bottom: 10px;
+          margin-bottom: 20px;
+        }
+        .print-logo-box {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+        .print-company-title {
+          font-size: 14px;
+          font-weight: 800;
+          line-height: 1.2;
+          max-width: 500px;
+          text-transform: uppercase;
+        }
+        .print-form-id {
+          font-size: 12px;
+          font-weight: 700;
+          border: 1px solid #000;
+          padding: 4px 8px;
+        }
+        .print-title-box {
+          text-align: center;
+          margin-bottom: 20px;
+        }
+        .print-title-box h2 {
+          font-size: 16px;
+          font-weight: 800;
+          margin: 0 0 5px 0;
+          text-transform: uppercase;
+        }
+        .print-date {
+          font-size: 12px;
+          color: #333;
+        }
+        .print-meta-table {
+          width: 100%;
+          margin-bottom: 20px;
+          border-collapse: collapse;
+        }
+        .print-meta-table td {
+          padding: 6px 0;
+          font-size: 13px;
+        }
+        .print-lbl {
+          width: 120px;
+        }
+        .print-section-title {
+          font-size: 12px;
+          font-weight: 800;
+          background: #f1f5f9;
+          padding: 6px 10px;
+          margin: 15px 0 10px 0;
+          border-left: 4px solid #000;
+          text-transform: uppercase;
+        }
+        .print-info-table, .print-ledger-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+        }
+        .print-info-table th, .print-info-table td, .print-ledger-table th, .print-ledger-table td {
+          border: 1px solid #cbd5e1;
+          padding: 8px 10px;
+          font-size: 12px;
+          text-align: left;
+        }
+        .print-info-table th {
+          background: #f8fafc;
+          font-weight: 700;
+          width: 150px;
+        }
+        .print-reemplazo-box {
+          font-size: 12px;
+          line-height: 1.5;
+          padding: 10px;
+          border: 1px dashed #cbd5e1;
+          background: #f8fafc;
+          border-radius: 4px;
+        }
+        .print-ledger-table th {
+          background: #f8fafc;
+          font-weight: 700;
+          text-align: center;
+        }
+        .print-ledger-table td {
+          text-align: center;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .print-signatures-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 15px;
+          margin-top: 20px;
+        }
+        .print-signature-card {
+          border: 1px solid #cbd5e1;
+          padding: 15px 10px;
+          text-align: center;
+          border-radius: 6px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 180px;
+        }
+        .print-sig-space {
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 10px;
+          width: 100%;
+        }
+        .print-qr-img {
+          width: 80px;
+          height: 80px;
+          margin-bottom: 5px;
+        }
+        .print-sig-status {
+          font-size: 9px;
+          color: #475569;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+        .print-sig-date {
+          font-size: 9px;
+          color: #64748b;
+          margin-top: 2px;
+        }
+        .print-stamp {
+          font-size: 12px;
+          font-weight: 900;
+          border: 2px double;
+          padding: 4px 10px;
+          transform: rotate(-10deg);
+          border-radius: 4px;
+          margin-bottom: 8px;
+          display: inline-block;
+        }
+        .print-stamp.aprobado {
+          color: #15803d;
+          border-color: #15803d;
+        }
+        .print-stamp.registrado {
+          color: #1d4ed8;
+          border-color: #1d4ed8;
+        }
+        .print-sig-name {
+          font-size: 11px;
+          font-weight: 700;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 5px;
+          width: 90%;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .print-sig-title {
+          font-size: 9px;
+          color: #64748b;
+        }
+        .print-sig-role {
+          font-size: 10px;
+          font-weight: 800;
+          color: #0f172a;
+          margin-top: 2px;
+        }
+        .print-footer-note {
+          font-size: 10px;
+          color: #64748b;
+          text-align: center;
+          margin-top: 25px;
+          line-height: 1.4;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 10px;
+        }
+
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          .print-document-container, .print-document-container * {
+            visibility: visible !important;
+          }
+          .print-document-container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            display: block !important;
+          }
+        }
+        @media screen {
+          .print-document-container {
+            display: none !important;
+          }
+        }
+      `}</style>
     </>
   );
 }

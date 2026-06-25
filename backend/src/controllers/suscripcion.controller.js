@@ -91,6 +91,25 @@ async function cancelSuscripcion(req, res, next) {
     return next(error);
   }
 }
+async function solicitarUpgrade(req, res, next) {
+  try {
+    const { plan_id } = req.body;
+    const empresaId = req.auth.empresa_id;
+
+    if (!empresaId) {
+      return res.status(400).json({ ok: false, message: 'La empresa_id no esta disponible en el token' });
+    }
+
+    const result = await suscripcionService.solicitarUpgrade({
+      empresaId,
+      planId: plan_id,
+    });
+
+    return res.status(201).json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
 
 module.exports = {
   listSuscripciones,
@@ -98,4 +117,5 @@ module.exports = {
   createSuscripcion,
   updateSuscripcion,
   cancelSuscripcion,
+  solicitarUpgrade,
 };

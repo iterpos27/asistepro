@@ -18,6 +18,7 @@ const marcacionSchema = z.object({
     }),
     precision_gps: z.coerce.number().nonnegative('precision_gps invalida').optional(),
     accuracy: z.coerce.number().nonnegative('accuracy invalida').optional(),
+    dispositivo_uuid: z.string().trim().optional(),
     motivo_novedad: z
       .enum(['Reemplazo', 'Apoyo temporal', 'Emergencia', 'Autorizacion supervisor', 'Otro'])
       .optional(),

@@ -19,6 +19,7 @@ const sucursalSchema = z.object({
   longitud: coordinateField('Longitud', -180, 180),
   radio_metros: z.coerce.number().int().min(1, 'Radio requerido'),
   estado: z.enum(['activa', 'inactiva', 'mantenimiento']),
+  jefe_empleado_id: z.string().optional().nullable(),
 });
 
 const defaultValues = {
@@ -30,9 +31,10 @@ const defaultValues = {
   longitud: '',
   radio_metros: 100,
   estado: 'activa',
+  jefe_empleado_id: '',
 };
 
-export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) {
+export default function SucursalForm({ sucursal, employees = [], loading, onCancel, onSubmit }) {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoMessage, setGeoMessage] = useState('');
   const [mapInput, setMapInput] = useState('');
@@ -70,6 +72,7 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
             longitud: Number(sucursal.longitud || 0),
             radio_metros: Number(sucursal.radio_metros || 100),
             estado: sucursal.estado || 'activa',
+            jefe_empleado_id: sucursal.jefe_empleado_id || '',
           }
         : defaultValues,
     );
@@ -81,6 +84,7 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
       codigo: values.codigo.toUpperCase(),
       direccion: values.direccion || null,
       ciudad: values.ciudad || null,
+      jefe_empleado_id: values.jefe_empleado_id || null,
     });
   }
 
@@ -216,6 +220,17 @@ export default function SucursalForm({ sucursal, loading, onCancel, onSubmit }) 
           </div>
           {geoMessage ? <small className="location-status">{geoMessage}</small> : null}
         </div>
+        <label>
+          Jefe de Almacén
+          <select {...register('jefe_empleado_id')}>
+            <option value="">Sin jefe asignado</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.codigo} - {emp.nombres} {emp.apellidos}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           Estado
           <select {...register('estado')}>

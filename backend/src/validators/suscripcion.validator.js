@@ -38,10 +38,18 @@ const idParamSchema = z.object({
   query: emptyQuery,
   params: idParams,
 });
+const upgradeSuscripcionSchema = z.object({
+  body: z.object({
+    plan_id: uuid('plan_id'),
+  }),
+  query: emptyQuery,
+  params: emptyParams,
+});
 
 module.exports = {
   createSuscripcionSchema,
   idParamSchema,
   listSuscripcionesSchema,
   updateSuscripcionSchema,
+  upgradeSuscripcionSchema,
 };

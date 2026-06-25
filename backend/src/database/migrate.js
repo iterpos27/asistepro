@@ -35,6 +35,9 @@ const migrations = [
   '028_solicitudes_comprobantes.sql',
   '029_update_duenas.sql',
   '030_sanitize_audit_logs.sql',
+  '031_solicitudes_datos_adicionales.sql',
+  '032_sucursales_jefe_y_dispositivo_uuid.sql',
+  '033_feriados_and_username.sql',
 ];
 
 async function runMigrations() {

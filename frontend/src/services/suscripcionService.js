@@ -26,3 +26,8 @@ export async function deleteSuscripcion(id) {
   const response = await api.delete(`/suscripciones/${id}`);
   return response.data.data;
 }
+
+export async function solicitarUpgrade(planId) {
+  const response = await api.post('/suscripciones/upgrade', { plan_id: planId });
+  return response.data.data;
+}

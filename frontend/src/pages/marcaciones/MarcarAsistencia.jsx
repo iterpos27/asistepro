@@ -204,8 +204,17 @@ export default function MarcarAsistencia() {
   async function registerMarcacion(payload, { allowNovedadPrompt = true } = {}) {
     setSubmitting(true);
 
+    const deviceUuid = localStorage.getItem('asistepro_device_uuid') || (() => {
+      const newUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Math.random().toString(36).substring(2) + Date.now().toString(36));
+      localStorage.setItem('asistepro_device_uuid', newUuid);
+      return newUuid;
+    })();
+
     try {
-      const response = await marcacionService.registrarMarcacion(payload);
+      const response = await marcacionService.registrarMarcacion({
+        ...payload,
+        dispositivo_uuid: deviceUuid
+      });
       if (response.marcacion?.estado === 'rechazada') {
         toast.warning(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada con advertencia');
       } else {

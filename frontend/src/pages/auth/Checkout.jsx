@@ -170,6 +170,29 @@ export default function Checkout() {
             <h3>Transferencia o deposito</h3>
             <p>Registra los datos exactos del comprobante emitido por tu entidad financiera.</p>
           </div>
+
+          <div className="bank-details-box" style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '20px',
+            fontSize: '0.9rem',
+            color: '#d1d5db'
+          }}>
+            <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Landmark size={16} className="text-primary" /> Datos de Transferencia / Depósito
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div><strong>Banco:</strong> Banco Pichincha</div>
+              <div><strong>Tipo:</strong> Cuenta Corriente</div>
+              <div><strong>Número:</strong> 2100256841</div>
+              <div><strong>Titular:</strong> ESSART SISTEMAS S.A.</div>
+              <div><strong>RUC:</strong> 1391917711001</div>
+              <div><strong>Email:</strong> administracion@essart.com.ec</div>
+            </div>
+          </div>
+
           <form className="checkout-form" onSubmit={submit}>
             <label>
               <span>Método</span>

@@ -17,6 +17,7 @@ import {
   UserCog,
   BriefcaseBusiness,
   DatabaseZap,
+  Star,
 } from 'lucide-react';
 import { ROLES } from '../utils/roles';
 
@@ -39,6 +40,7 @@ export const navSections = [
       { title: 'Suscripciones', href: '/suscripciones', icon: ShieldCheck },
       { title: 'Facturacion', href: '/facturacion', icon: CreditCard },
       { title: 'SaaS y cobranza', href: '/saas-control', icon: DatabaseZap, permission: ['saas_consumo', 'ver'] },
+      { title: 'Auditoría', href: '/auditoria', icon: ScrollText },
     ],
   },
   {
@@ -51,6 +53,7 @@ export const navSections = [
       { title: 'Empleados', href: '/empleados', icon: Users, feature: 'empleados' },
       { title: 'Estructura', href: '/organizacion', icon: BriefcaseBusiness, feature: 'organizacion', permission: ['organizacion', 'ver'] },
       { title: 'Horarios', href: '/horarios', icon: CalendarClock, feature: 'horarios' },
+      { title: 'Feriados', href: '/feriados', icon: Star, feature: 'horarios' },
       { title: 'Reemplazos', href: '/reemplazos', icon: Repeat2, feature: 'reemplazos' },
     ],
   },
@@ -64,7 +67,6 @@ export const navSections = [
       { title: 'Solicitudes', href: '/solicitudes', icon: ClipboardCheck, permission: ['solicitudes', 'ver'] },
       { title: 'Calculo laboral', href: '/calculo-laboral', icon: Calculator, permission: ['calculo_laboral', 'ver'] },
       { title: 'Reportes', href: '/reportes', icon: FileBarChart, feature: 'reportes_avanzados', permission: ['reportes', 'ver'] },
-      { title: 'Auditoria', href: '/auditoria', icon: ScrollText, permission: ['auditoria', 'ver'] },
     ],
   },
   {

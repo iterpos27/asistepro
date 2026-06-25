@@ -8,12 +8,14 @@ const {
   idParamSchema,
   listSuscripcionesSchema,
   updateSuscripcionSchema,
+  upgradeSuscripcionSchema,
 } = require('../validators/suscripcion.validator');
 
 const router = Router();
 
 router.use(authGuard);
 
+router.post('/upgrade', roleGuard(['ADMIN_EMPRESA']), validateSchema(upgradeSuscripcionSchema), suscripcionController.solicitarUpgrade);
 router.get('/', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(listSuscripcionesSchema), suscripcionController.listSuscripciones);
 router.post('/', roleGuard(['SUPER_ADMIN']), validateSchema(createSuscripcionSchema), suscripcionController.createSuscripcion);
 router.get('/:id', roleGuard(['SUPER_ADMIN', 'ADMIN_EMPRESA']), validateSchema(idParamSchema), suscripcionController.getSuscripcion);

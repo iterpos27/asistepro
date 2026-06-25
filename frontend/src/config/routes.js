@@ -6,6 +6,7 @@ const EmpleadosList = lazy(() => import('../pages/empleados/EmpleadosList'));
 const EmpresasList = lazy(() => import('../pages/empresas/EmpresasList'));
 const Facturas = lazy(() => import('../pages/facturacion/Facturas'));
 const HorariosList = lazy(() => import('../pages/horarios/HorariosList'));
+const FeriadosList = lazy(() => import('../pages/horarios/FeriadosList'));
 const HistorialMarcaciones = lazy(() => import('../pages/marcaciones/HistorialMarcaciones'));
 const MarcarAsistencia = lazy(() => import('../pages/marcaciones/MarcarAsistencia'));
 const PlanesList = lazy(() => import('../pages/planes/PlanesList'));
@@ -58,6 +59,12 @@ export const privateRoutes = [
   {
     path: '/horarios',
     element: HorariosList,
+    roles: routeRoles.rrhh,
+    feature: 'horarios',
+  },
+  {
+    path: '/feriados',
+    element: FeriadosList,
     roles: routeRoles.rrhh,
     feature: 'horarios',
   },
@@ -122,7 +129,7 @@ export const privateRoutes = [
     path: '/calculo-laboral', element: CalculoLaboral, roles: routeRoles.rrhh, permission: ['calculo_laboral', 'ver'],
   },
   {
-    path: '/auditoria', element: Auditoria, roles: routeRoles.rrhh, permission: ['auditoria', 'ver'],
+    path: '/auditoria', element: Auditoria, roles: routeRoles.superAdmin,
   },
   {
     path: '/roles-permisos', element: RolesPermisos, roles: routeRoles.adminEmpresa,
