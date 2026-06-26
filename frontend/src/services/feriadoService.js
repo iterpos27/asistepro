@@ -2,6 +2,7 @@ import { api } from './api';
 
 export async function listFeriados(params = {}) {
   const response = await api.get('/feriados', { params });
+  // Backend returns { ok: true, data: { items: [], total: N } }
   return response.data.data;
 }
 

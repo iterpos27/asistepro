@@ -1,12 +1,17 @@
 const { pool } = require('../config/database');
 
-async function listFeriados({ empresaId, activo, limit = 100, offset = 0 }) {
+async function listFeriados({ empresaId, activo, anio, limit = 200, offset = 0 }) {
   const filters = ['empresa_id = $1'];
   const values = [empresaId];
 
   if (activo !== undefined) {
     values.push(activo === 'true');
     filters.push(`activo = $${values.length}`);
+  }
+
+  if (anio) {
+    values.push(parseInt(anio, 10));
+    filters.push(`EXTRACT(YEAR FROM fecha) = $${values.length}`);
   }
 
   values.push(limit);
@@ -19,7 +24,7 @@ async function listFeriados({ empresaId, activo, limit = 100, offset = 0 }) {
       SELECT *, COUNT(*) OVER() AS total
       FROM feriados
       WHERE ${filters.join(' AND ')}
-      ORDER BY fecha DESC
+      ORDER BY fecha ASC
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
     `,
@@ -56,14 +61,15 @@ async function createFeriado(empresaId, payload) {
 
   const result = await pool.query(
     `
-      INSERT INTO feriados (empresa_id, nombre, fecha, activo)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO feriados (empresa_id, nombre, fecha, descripcion, activo)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `,
     [
       empresaId,
       payload.nombre.trim(),
       payload.fecha,
+      payload.descripcion?.trim() || null,
       payload.activo !== undefined ? payload.activo : true,
     ],
   );

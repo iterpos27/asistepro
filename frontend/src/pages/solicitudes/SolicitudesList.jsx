@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Check, Plus, RotateCcw, X, FileUp, FileText, Printer } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';

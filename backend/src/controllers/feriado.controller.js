@@ -7,6 +7,7 @@ async function list(req, res, next) {
     const data = await service.listFeriados({
       empresaId: req.tenant.empresa_id,
       activo: req.query.activo,
+      anio: req.query.anio,
       limit: page.limit,
       offset: page.offset,
     });

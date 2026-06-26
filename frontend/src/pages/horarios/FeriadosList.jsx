@@ -66,7 +66,8 @@ export default function FeriadosList() {
     setLoading(true);
     try {
       const result = await service.listFeriados({ anio: year });
-      setFeriados(Array.isArray(result) ? result : result?.items || []);
+      // API returns { items: [], total: N }
+      setFeriados(result?.items || (Array.isArray(result) ? result : []));
     } catch {
       toast.error('No se pudieron cargar los feriados');
     } finally {

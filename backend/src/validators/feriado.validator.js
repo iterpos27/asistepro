@@ -4,6 +4,7 @@ const { emptyBody, emptyParams, idParams, paginationQuery } = require('./common.
 const feriadoBody = z.object({
   nombre: z.string().trim().min(1, 'El nombre del feriado es requerido').max(160),
   fecha: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe estar en formato YYYY-MM-DD'),
+  descripcion: z.string().trim().max(500).optional().nullable(),
   activo: z.coerce.boolean().optional(),
 });
 
