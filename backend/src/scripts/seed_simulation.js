@@ -237,34 +237,34 @@ async function run() {
     };
 
     // June 22, 2026 (Monday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-22', '07:58:12', '17:02:44');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-22', '07:59:00', '17:00:30');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-22', '08:01:00', '17:03:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-22', '07:54:00', '17:00:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-22', '07:50:00', '17:10:00');
-    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-22', '08:15:00', '17:02:00', 'Llegada tarde a oficina');
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-22', '07:55:00', '17:01:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-22', '07:54:00', '17:00:00');
+    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
+    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-22', '08:00:00', '18:00:00');
+    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-22', '08:00:00', '16:00:00');
+    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
+    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-22', '07:55:00', '18:30:00');
+    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-22', '08:15:00', '17:00:00', 'Llegada tarde a oficina');
+    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
+    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-22', '08:00:00', '14:00:00');
 
     // June 24, 2026 (Wednesday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-24', '08:03:00', '17:05:15');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-24', '08:12:00', '17:04:10', 'Atraso menor en transporte');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-24', '07:58:00', '17:02:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-24', '07:57:00', '17:06:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-24', '07:55:00', '17:05:00');
+    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
+    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-24', '08:12:00', '18:30:00', 'Atraso menor en transporte');
+    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-24', '08:00:00', '15:30:00');
+    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
+    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-24', '07:58:00', '19:00:00');
     // Ariel Valdiviezo has APPROVED vacation on June 24 (no marcaciones)
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-24', '07:58:00', '17:03:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-24', '07:56:00', '17:02:00');
+    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
+    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-24', '08:00:00', '13:30:00');
 
     // June 25, 2026 (Thursday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-25', '07:55:00', '17:01:00');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-25', '07:56:00', '17:01:25');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-25', '08:02:00', '17:04:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-25', '07:53:00', '17:02:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-25', '08:05:00', '17:00:00');
-    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-25', '08:00:00', '17:05:00');
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-25', '07:59:00', '17:01:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-25', '07:55:00', '17:00:00');
+    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
+    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-25', '08:00:00', '19:00:00');
+    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-25', '08:00:00', '16:30:00');
+    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
+    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-25', '07:57:00', '18:00:00');
+    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-25', '08:00:00', '15:00:00');
+    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
+    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-25', '08:00:00', '14:30:00');
 
     console.log('Marcaciones creadas exitosamente.');
 
