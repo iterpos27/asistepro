@@ -12,6 +12,7 @@ const RESOURCES = [
   { key: 'sucursales', label: 'Sucursales', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'horarios', label: 'Horarios', actions: ['ver', 'crear', 'editar', 'eliminar'] },
   { key: 'reportes', label: 'Reportes', actions: ['ver', 'exportar'] },
+  { key: 'vacaciones', label: 'Vacaciones', actions: ['ver', 'editar'] },
 ];
 
 function defaultsForRole(role) {

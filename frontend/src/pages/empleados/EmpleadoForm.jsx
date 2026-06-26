@@ -27,6 +27,7 @@ const empleadoSchema = z
     supervisor_empleado_id: z.string().optional(),
     tipo_contrato: z.string().optional(),
     salario_base: z.union([z.coerce.number().min(0, 'Salario no puede ser negativo'), z.literal('')]).optional(),
+    saldo_vacaciones_inicial: z.union([z.coerce.number().min(0, 'Saldo no puede ser negativo'), z.literal('')]).optional(),
     crear_usuario: z.boolean().optional(),
     rol_acceso: z.enum(['EMPLEADO', 'RRHH']).optional(),
     password_acceso: z.string().optional(),
@@ -71,6 +72,7 @@ const defaultValues = {
   supervisor_empleado_id: '',
   tipo_contrato: '',
   salario_base: '',
+  saldo_vacaciones_inicial: '',
   crear_usuario: false,
   rol_acceso: 'EMPLEADO',
   password_acceso: '',
@@ -121,6 +123,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
             supervisor_empleado_id: empleado.supervisor_empleado_id || '',
             tipo_contrato: empleado.tipo_contrato || '',
             salario_base: empleado.salario_base ?? '',
+            saldo_vacaciones_inicial: '',
             crear_usuario: false,
             rol_acceso: 'EMPLEADO',
             password_acceso: '',
@@ -154,6 +157,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
       supervisor_empleado_id: values.supervisor_empleado_id || null,
       tipo_contrato: values.tipo_contrato || null,
       salario_base: values.salario_base === '' || values.salario_base === null || values.salario_base === undefined ? null : Number(values.salario_base),
+      saldo_vacaciones_inicial: values.saldo_vacaciones_inicial === '' || values.saldo_vacaciones_inicial === null || values.saldo_vacaciones_inicial === undefined ? null : Number(values.saldo_vacaciones_inicial),
       crear_usuario: hasLinkedUser ? false : Boolean(values.crear_usuario),
       rol_acceso: values.crear_usuario ? values.rol_acceso || 'EMPLEADO' : undefined,
       password_acceso: values.crear_usuario ? values.password_acceso : undefined,
@@ -282,6 +286,13 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           <input {...register('salario_base')} type="number" min="0" step="0.01" placeholder="0.00" />
           {errors.salario_base && <small>{errors.salario_base.message}</small>}
         </label>
+        {!empleado && (
+          <label>
+            Vacaciones acumuladas (días)
+            <input {...register('saldo_vacaciones_inicial')} type="number" min="0" placeholder="0" />
+            {errors.saldo_vacaciones_inicial && <small>{errors.saldo_vacaciones_inicial.message}</small>}
+          </label>
+        )}
         <label>
           Área estructurada
           <select {...register('area_estructura_id')}>

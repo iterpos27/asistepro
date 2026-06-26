@@ -22,6 +22,7 @@ const laboralRoutes = require('./laboral.routes');
 const solicitudRoutes = require('./solicitud.routes');
 const auditoriaRoutes = require('./auditoria.routes');
 const feriadoRoutes = require('./feriado.routes');
+const vacacionesRoutes = require('./vacaciones.routes');
 
 const router = Router();
 
@@ -47,5 +48,6 @@ router.use('/laboral', laboralRoutes);
 router.use('/solicitudes', solicitudRoutes);
 router.use('/auditoria', auditoriaRoutes);
 router.use('/feriados', feriadoRoutes);
+router.use('/vacaciones', vacacionesRoutes);
 
 module.exports = router;

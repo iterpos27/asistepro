@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
+const vacacionesService = require('./vacaciones.service');
 
 const EMPLEADO_ESTADOS = ['activo', 'inactivo', 'suspendido'];
 const EMPLEADO_ROLES_ACCESO = ['EMPLEADO', 'RRHH'];
@@ -387,6 +388,11 @@ async function createEmpleado(empresaId, payload) {
         payload.dispositivo_uuid?.trim() || null,
       ],
     );
+    // Register initial vacation balance if provided
+    const saldoInicial = payload.saldo_vacaciones_inicial;
+    if (saldoInicial !== undefined && saldoInicial !== null && saldoInicial !== '') {
+      await vacacionesService.setSaldoInicial(empresaId, result.rows[0].id, Number(saldoInicial), client);
+    }
     await client.query('COMMIT');
     return findEmpleadoById(empresaId, result.rows[0].id);
   } catch (error) {

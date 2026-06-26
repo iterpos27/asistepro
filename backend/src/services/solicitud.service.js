@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { pool } = require('../config/database');
 const laboralService = require('./laboral.service');
+const vacacionesService = require('./vacaciones.service');
 const { putObject } = require('./storage.service');
 
 function getComprobanteBase64(comprobante) {
@@ -277,7 +278,21 @@ async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decis
         datos_adicionales ? JSON.stringify(datos_adicionales) : '{}'
       ]
     );
-    await client.query('COMMIT'); return updated.rows[0];
+      // If vacation is approved, update the vacation balance
+      if (decision === 'aprobar' && request.tipo === 'vacaciones') {
+        const mergedAdicionales = {
+          ...(request.datos_adicionales || {}),
+          ...(datos_adicionales || {}),
+        };
+        await vacacionesService.registrarVacacionesAprobadas(
+          empresaId,
+          request.empleado_id,
+          request,
+          mergedAdicionales,
+          client
+        );
+      }
+      await client.query('COMMIT'); return updated.rows[0];
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
 

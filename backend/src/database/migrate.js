@@ -39,6 +39,7 @@ const migrations = [
   '032_sucursales_jefe_y_dispositivo_uuid.sql',
   '033_feriados_and_username.sql',
   '034_feriados_descripcion.sql',
+  '035_vacaciones_saldo.sql',
 ];
 
 async function runMigrations() {

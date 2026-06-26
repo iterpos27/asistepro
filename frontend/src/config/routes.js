@@ -22,6 +22,7 @@ const RolesPermisos = lazy(() => import('../pages/settings/RolesPermisos'));
 const EstructuraOrganizacional = lazy(() => import('../pages/organizacion/EstructuraOrganizacional'));
 const SaasControl = lazy(() => import('../pages/saas/SaasControl'));
 const AppMovil = lazy(() => import('../pages/app/AppMovil'));
+const VacacionesSaldo = lazy(() => import('../pages/vacaciones/VacacionesSaldo'));
 
 export const privateRoutes = [
   {
@@ -127,6 +128,9 @@ export const privateRoutes = [
   },
   {
     path: '/calculo-laboral', element: CalculoLaboral, roles: routeRoles.rrhh, permission: ['calculo_laboral', 'ver'],
+  },
+  {
+    path: '/vacaciones', element: VacacionesSaldo, roles: routeRoles.rrhh, permission: ['vacaciones', 'ver'],
   },
   {
     path: '/auditoria', element: Auditoria, roles: routeRoles.superAdmin,
