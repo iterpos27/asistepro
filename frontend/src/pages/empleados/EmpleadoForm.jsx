@@ -197,16 +197,20 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           <input {...register('apellidos')} placeholder="Perez Mora" />
           {errors.apellidos && <small>{errors.apellidos.message}</small>}
         </label>
-        <label>
-          Cédula / C.I.
-          <input {...register('cedula')} placeholder="Ej. 1792948271" />
-        </label>
-        <label>
-          Username (para login)
-          <input {...register('username')} placeholder="juan.perez" style={{ textTransform: 'lowercase' }} />
-          {errors.username && <small>{errors.username.message}</small>}
-          <small style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>Solo letras minúsculas, números, puntos y guiones. Mín. 3 caracteres.</small>
-        </label>
+        <div style={{ display: 'contents' }}>
+          <label style={{ alignSelf: 'start' }}>
+            Cédula / C.I.
+            <input {...register('cedula')} placeholder="Ej. 1792948271" />
+          </label>
+          <label style={{ alignSelf: 'start' }}>
+            Username <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(para iniciar sesión)</small>
+            <input {...register('username')} placeholder="ej: juan.perez" style={{ textTransform: 'lowercase' }} />
+            {errors.username
+              ? <small style={{ color: 'var(--danger-color)' }}>{errors.username.message}</small>
+              : <small style={{ color: 'var(--text-muted)' }}>Minúsculas, números, puntos o guiones · mín. 3 caracteres</small>
+            }
+          </label>
+        </div>
         {empleado && (
           <label className="wide-field">
             Bloqueo de Dispositivo (UUID)
