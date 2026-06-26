@@ -304,7 +304,6 @@ export default function EmpleadosList() {
                     <td>{empleado.codigo}</td>
                     <td>
                       <strong>{`${empleado.nombres} ${empleado.apellidos}`}</strong>
-                      <span className="table-subtext">{empleado.email || empleado.usuario_email || '-'}</span>
                     </td>
                     <td>
                       {empleado.tipo_contrato || '-'}

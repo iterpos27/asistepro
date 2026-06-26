@@ -665,7 +665,6 @@ export default function HorariosList() {
                     <tr key={empleado.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '12px', fontWeight: '500' }}>
                         <div>{empleado.nombres} {empleado.apellidos}</div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Cód: {empleado.codigo}</div>
                       </td>
                       {weekDates.map((date, idx) => {
                         const cellData = getScheduleForDate(empleado.id, date);

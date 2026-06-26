@@ -239,7 +239,6 @@ export default function VacacionesSaldo() {
                   <tr key={item.id}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{item.empleado_nombres} {item.empleado_apellidos}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.empleado_codigo}</div>
                     </td>
                     <td>{item.cargo || '-'}</td>
                     <td>{item.fecha_ingreso ? new Date(item.fecha_ingreso + 'T12:00:00').toLocaleDateString('es-EC') : '-'}</td>
