@@ -37,6 +37,17 @@ const getDiasSolicitados = (inicio, fin) => {
   return diffDays;
 };
 
+const getStatusClass = (status) => {
+  switch (status) {
+    case 'pendiente': return 'warning';
+    case 'validada': return 'accent';
+    case 'aprobada': return 'success';
+    case 'rechazada': return 'danger';
+    case 'cancelada': return 'muted';
+    default: return '';
+  }
+};
+
 const timeOptions = [];
 for (let h = 0; h < 24; h++) {
   const hh = String(h).padStart(2, '0');
@@ -69,6 +80,29 @@ export default function SolicitudesList() {
   const canReview = user?.permisos?.solicitudes?.aprobar === true || Boolean(currentEmployee?.es_jefe);
   const isEmployee = user?.rol === ROLES.EMPLEADO;
   
+  const canUserReview = (item) => {
+    if (!canReview) return false;
+    if (item.empleado_id === currentEmployee?.id) return false;
+    
+    const isJefe = user?.rol === ROLES.EMPLEADO && currentEmployee?.es_jefe;
+    const isHR = user?.rol === ROLES.ADMIN_EMPRESA || user?.rol === ROLES.RRHH || user?.permisos?.solicitudes?.aprobar === true;
+    
+    if (isJefe) {
+      return item.estado === 'pendiente';
+    }
+    
+    if (isHR) {
+      const isVacOrPermit = item.tipo === 'vacaciones' || item.tipo === 'permiso';
+      if (isVacOrPermit) {
+        return item.estado === 'validada';
+      } else {
+        return item.estado === 'pendiente' || item.estado === 'validada';
+      }
+    }
+    
+    return false;
+  };
+  
   const [items, setItems] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -89,6 +123,7 @@ export default function SolicitudesList() {
   const [saldoAnterior, setSaldoAnterior] = useState('');
   const [saldoActual, setSaldoActual] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reemplazoEmpleadoId, setReemplazoEmpleadoId] = useState('');
 
   const correction = form.tipo === 'correccion_marcacion';
 
@@ -225,6 +260,7 @@ export default function SolicitudesList() {
     setReviewComment('');
     setSaldoAnterior('');
     setSaldoActual('');
+    setReemplazoEmpleadoId('');
   };
 
   const startReviewReject = (item) => {
@@ -238,7 +274,7 @@ export default function SolicitudesList() {
     setReviewSubmitting(true);
     try {
       let datos_adicionales = null;
-      if (reviewDecision === 'aprobar' && reviewItem.tipo === 'vacaciones') {
+      if (reviewDecision === 'aprobar' && reviewItem.tipo === 'vacaciones' && user?.rol !== ROLES.EMPLEADO) {
         const otorgados = getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin);
         datos_adicionales = {
           saldo_anterior: parseFloat(saldoAnterior) || 0,
@@ -246,8 +282,17 @@ export default function SolicitudesList() {
           saldo_actual: parseFloat(saldoActual) || 0
         };
       }
-      await solicitudService.reviewSolicitud(reviewItem.id, reviewDecision, reviewComment, datos_adicionales);
-      toast.success(reviewDecision === 'aprobar' ? 'Solicitud aprobada' : 'Solicitud rechazada');
+      await solicitudService.reviewSolicitud(reviewItem.id, reviewDecision, reviewComment, datos_adicionales, reemplazoEmpleadoId || null);
+      
+      const isJefe = user?.rol === ROLES.EMPLEADO;
+      let successMsg = '';
+      if (reviewDecision === 'aprobar') {
+        successMsg = isJefe ? 'Solicitud validada y reemplazo designado' : 'Solicitud aprobada con éxito';
+      } else {
+        successMsg = 'Solicitud rechazada';
+      }
+      toast.success(successMsg);
+      
       setReviewItem(null);
       await load();
     } catch (err) {
@@ -539,9 +584,24 @@ export default function SolicitudesList() {
                     </td>
                     <td>{item.motivo}</td>
                     <td>
-                      <span className={`status-pill ${item.estado === 'rechazada' ? 'danger' : item.estado === 'pendiente' ? 'warning' : ''}`}>{item.estado}</span>
+                      <span className={`status-pill ${getStatusClass(item.estado)}`}>{item.estado}</span>
                     </td>
-                    <td>{item.comentario_revision || '-'}</td>
+                    <td>
+                      {item.validador_nombre && (
+                        <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                          <span style={{ color: '#0284c7', fontWeight: '700' }}>[Validado]</span> por {item.validador_nombre}
+                          {item.reemplazo_nombres && <span style={{ display: 'block', color: '#475569', fontSize: '11px', fontWeight: '600' }}>Reemplazo: {item.reemplazo_nombres} {item.reemplazo_apellidos}</span>}
+                          {item.comentario_validacion && <span style={{ display: 'block', fontStyle: 'italic', color: '#64748b' }}>"{item.comentario_validacion}"</span>}
+                        </div>
+                      )}
+                      {item.revisor_nombre && (
+                        <div style={{ fontSize: '12px' }}>
+                          <span style={{ color: '#16a34a', fontWeight: '700' }}>[Aprobado]</span> por {item.revisor_nombre}
+                          {item.comentario_revision && <span style={{ display: 'block', fontStyle: 'italic', color: '#64748b' }}>"{item.comentario_revision}"</span>}
+                        </div>
+                      )}
+                      {!item.validador_nombre && !item.revisor_nombre && '-'}
+                    </td>
                     <td>
                       {item.comprobante_storage_url ? (
                         <a href={item.comprobante_storage_url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16a34a', fontWeight: '700', textDecoration: 'none' }} title="Descargar/Ver archivo adjunto">
@@ -554,10 +614,22 @@ export default function SolicitudesList() {
                     </td>
                     <td>
                       <div className="row-actions">
-                        {item.estado === 'pendiente' && canReview && item.empleado_id !== currentEmployee?.id && (
+                        {canUserReview(item) && (
                           <>
-                            <button className="icon-button" title="Aprobar" onClick={() => startReviewApprove(item)}><Check size={16} /></button>
-                            <button className="icon-button danger" title="Rechazar" onClick={() => startReviewReject(item)}><X size={16}/></button>
+                            <button 
+                              className="icon-button" 
+                              title={user?.rol === ROLES.EMPLEADO ? "Validar y Designar Reemplazo" : "Aprobar finalmente"} 
+                              onClick={() => startReviewApprove(item)}
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button 
+                              className="icon-button danger" 
+                              title="Rechazar" 
+                              onClick={() => startReviewReject(item)}
+                            >
+                              <X size={16}/>
+                            </button>
                           </>
                         )}
                         {item.estado === 'aprobada' && (
@@ -600,10 +672,35 @@ export default function SolicitudesList() {
                     <strong>Fechas:</strong> {reviewItem.fecha_inicio} a {reviewItem.fecha_fin} 
                     ({getDiasSolicitados(reviewItem.fecha_inicio, reviewItem.fecha_fin)} días)
                   </p>
+                  {reviewItem.reemplazo_nombres && (
+                    <p style={{ margin: '0 0 6px 0' }}>
+                      <strong>Reemplazo designado:</strong> {reviewItem.reemplazo_nombres} {reviewItem.reemplazo_apellidos}
+                    </p>
+                  )}
                   <p style={{ margin: 0 }}><strong>Motivo:</strong> {reviewItem.motivo}</p>
                 </div>
 
-                {reviewDecision === 'aprobar' && reviewItem.tipo === 'vacaciones' && (
+                {reviewDecision === 'aprobar' && user?.rol === ROLES.EMPLEADO && (reviewItem.tipo === 'vacaciones' || reviewItem.tipo === 'permiso') && (
+                  <label style={{ margin: 0 }}>
+                    Designar Empleado de Reemplazo (Obligatorio)
+                    <select 
+                      required 
+                      value={reemplazoEmpleadoId} 
+                      onChange={e => setReemplazoEmpleadoId(e.target.value)}
+                    >
+                      <option value="">Selecciona un empleado de reemplazo...</option>
+                      {employees
+                        .filter(emp => emp.id !== reviewItem.empleado_id)
+                        .map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.nombres} {emp.apellidos} ({emp.codigo})
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+
+                {reviewDecision === 'aprobar' && user?.rol !== ROLES.EMPLEADO && reviewItem.tipo === 'vacaciones' && (
                   <div style={{ border: '1px solid #cbd5e1', padding: '14px', borderRadius: '8px', background: '#f0fdf4' }}>
                     <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#166534', fontWeight: '700' }}>Control de Saldos (Talento Humano)</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

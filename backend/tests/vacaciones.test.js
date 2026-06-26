@@ -98,13 +98,17 @@ test('Integration tests for vacation balance system', async () => {
   const solicitud = solRes.rows[0];
   assert.ok(solicitud.id);
 
-  // Approve request using solicitudService
+  // Set status to 'validada' to simulate supervisor validation
+  await db.query("UPDATE solicitudes SET estado = 'validada' WHERE id = $1", [solicitud.id]);
+
+  // Approve request using solicitudService as Admin_Empresa
   // July 1st to July 5th (inclusive) is 5 days.
   // We'll approve it without additional metadata first.
   await solicitudService.reviewSolicitud({
     empresaId,
     solicitudId: solicitud.id,
     reviewerId: regResult.user.id,
+    auth: { rol: 'ADMIN_EMPRESA', usuario_id: regResult.user.id },
     decision: 'aprobar',
     comentario: 'Disfruta tus vacaciones',
   });

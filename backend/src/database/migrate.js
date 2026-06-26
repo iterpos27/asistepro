@@ -40,6 +40,7 @@ const migrations = [
   '033_feriados_and_username.sql',
   '034_feriados_descripcion.sql',
   '035_vacaciones_saldo.sql',
+  '036_solicitudes_flujo_dos_pasos.sql',
 ];
 
 async function runMigrations() {

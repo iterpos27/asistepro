@@ -87,50 +87,131 @@ async function run() {
 
     console.log(`Empleados listos: ${Object.keys(employees).length}`);
 
-    // 4. Update Cargos and Supervisors
-    console.log('Actualizando cargos, supervisores y asignaciones...');
+    // Helper to ensure organizational structure nodes exist
+    const ensureStructure = async (tipo, codigo, nombre, descripcion, responsableEmail = null, parentCodigo = null) => {
+      let responsableId = null;
+      if (responsableEmail) {
+        responsableId = getEmpId(responsableEmail);
+      }
+
+      let parentId = null;
+      if (parentCodigo) {
+        const parentRes = await client.query("SELECT id FROM estructuras_organizacionales WHERE empresa_id = $1 AND codigo = $2 LIMIT 1", [empresaId, parentCodigo]);
+        parentId = parentRes.rows[0]?.id;
+      }
+
+      const existing = await client.query("SELECT id FROM estructuras_organizacionales WHERE empresa_id = $1 AND tipo = $2 AND codigo = $3 LIMIT 1", [empresaId, tipo, codigo]);
+      if (existing.rows.length) {
+        const structId = existing.rows[0].id;
+        await client.query(`
+          UPDATE estructuras_organizacionales 
+          SET nombre = $1, descripcion = $2, responsable_empleado_id = $3, parent_id = $4, actualizado_en = NOW() 
+          WHERE id = $5
+        `, [nombre, descripcion, responsableId, parentId, structId]);
+        return structId;
+      }
+
+      const result = await client.query(`
+        INSERT INTO estructuras_organizacionales (empresa_id, tipo, codigo, nombre, descripcion, responsable_empleado_id, parent_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
+      `, [empresaId, tipo, codigo, nombre, descripcion, responsableId, parentId]);
+      return result.rows[0].id;
+    };
+
+    console.log('Seeding structures in estructuras_organizacionales table...');
+    // Create Departments
+    const depContId = await ensureStructure('departamento', 'DEP-CONT', 'Contabilidad', 'Departamento de Contabilidad y Auditoría Financiera', 'juan.duenas@essart.com.ec');
+    const depRrhhId = await ensureStructure('departamento', 'DEP-RRHH', 'Recursos Humanos', 'Departamento de Talento Humano y Gestión de Personal', 'gianella.herrera@essart.com.ec');
+    const depBodId = await ensureStructure('departamento', 'DEP-BOD', 'Bodega y Almacén', 'Departamento de Logística y Control de Inventarios');
+
+    // Create Positions (Cargos)
+    const cargJContId = await ensureStructure('cargo', 'CARG-JCONT', 'Jefe de Contabilidad', 'Dirección del área contable y tributaria', 'juan.duenas@essart.com.ec', 'DEP-CONT');
+    const cargErrhhId = await ensureStructure('cargo', 'CARG-ERRHH', 'Encargado de RRHH', 'Control de nómina, asistencia y personal', 'gianella.herrera@essart.com.ec', 'DEP-RRHH');
+    const cargJalmId = await ensureStructure('cargo', 'CARG-JALM', 'Jefe de Almacén', 'Administración de bodega y despacho de inventario', null, 'DEP-BOD');
+    const cargAalmId = await ensureStructure('cargo', 'CARG-AALM', 'Asistente de Almacén', 'Apoyo operativo en despacho y picking', null, 'DEP-BOD');
+    const cargAsisId = await ensureStructure('cargo', 'CARG-ASIS', 'Asistente General', 'Tareas operativas generales');
+
+    // Create Cost Centers
+    const ccMatId = await ensureStructure('centro_costo', 'CC-MAT', 'Matriz', 'Centro de costo de la oficina matriz');
+    const ccPv01Id = await ensureStructure('centro_costo', 'CC-PV01', 'Portoviejo 01', 'Centro de costo de la sucursal Portoviejo 01');
+    const ccPv02Id = await ensureStructure('centro_costo', 'CC-PV02', 'Portoviejo 02', 'Centro de costo de la sucursal Portoviejo 02');
+    const ccPv03Id = await ensureStructure('centro_costo', 'CC-PV03', 'Portoviejo 03', 'Centro de costo de la sucursal Portoviejo 03');
+    const ccMan01Id = await ensureStructure('centro_costo', 'CC-MAN01', 'Manta 01', 'Centro de costo de la sucursal Manta 01');
+
+    // 4. Update Cargos, Supervisors, Areas and Cost Centers on Employees
+    console.log('Actualizando cargos, estructuras y supervisores en empleados...');
 
     const albertoId = getEmpId('alberto.chinga@essart.com.ec');
     const aminId = getEmpId('amin.alarcon@essart.com.ec');
 
     // Juan Dueñas - Jefe de contabilidad
-    await client.query("UPDATE empleados SET cargo = 'Jefe de contabilidad' WHERE id = $1", [getEmpId('juan.duenas@essart.com.ec')]);
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'Jefe de contabilidad', area_estructura_id = $1, cargo_estructura_id = $2, centro_costo_estructura_id = $3 
+      WHERE id = $4
+    `, [depContId, cargJContId, ccMatId, getEmpId('juan.duenas@essart.com.ec')]);
 
     // Gianella Herrera - RRHH
-    await client.query("UPDATE empleados SET cargo = 'RRHH' WHERE id = $1", [getEmpId('gianella.herrera@essart.com.ec')]);
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'RRHH', area_estructura_id = $1, cargo_estructura_id = $2, centro_costo_estructura_id = $3 
+      WHERE id = $4
+    `, [depRrhhId, cargErrhhId, ccMatId, getEmpId('gianella.herrera@essart.com.ec')]);
 
     // Alberto Chinga - Jefe de almacén (PORTOVIEJO02)
-    await client.query("UPDATE empleados SET cargo = 'Jefe de almacén' WHERE id = $1", [albertoId]);
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'Jefe de almacén', area_estructura_id = $1, cargo_estructura_id = $2, centro_costo_estructura_id = $3 
+      WHERE id = $4
+    `, [depBodId, cargJalmId, ccPv02Id, albertoId]);
     if (sucursales['PORTOVIEJO02']) {
       await client.query("UPDATE sucursales SET jefe_empleado_id = $1 WHERE id = $2", [albertoId, sucursales['PORTOVIEJO02'].id]);
     }
 
     // Amin Alarcon - Jefe de almacén (MATRIZ)
-    await client.query("UPDATE empleados SET cargo = 'Jefe de almacén' WHERE id = $1", [aminId]);
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'Jefe de almacén', area_estructura_id = $1, cargo_estructura_id = $2, centro_costo_estructura_id = $3 
+      WHERE id = $4
+    `, [depBodId, cargJalmId, ccMatId, aminId]);
     if (sucursales['MATRIZ']) {
       await client.query("UPDATE sucursales SET jefe_empleado_id = $1 WHERE id = $2", [aminId, sucursales['MATRIZ'].id]);
     }
 
-    // Ariel Valdiviezo & Ramiro Muentes -> supervisor = Alberto, cargo = Asistente de almacén
+    // Ariel Valdiviezo -> supervisor = Alberto, cargo = Asistente de almacén, cc = Portoviejo 02
     await client.query(`
       UPDATE empleados 
-      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1 
-      WHERE id IN ($2, $3)
-    `, [albertoId, getEmpId('ariel.valdiviezo@essart.com.ec'), getEmpId('ramiro.muentes@essart.com.ec')]);
+      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1, area_estructura_id = $2, cargo_estructura_id = $3, centro_costo_estructura_id = $4 
+      WHERE id = $5
+    `, [albertoId, depBodId, cargAalmId, ccPv02Id, getEmpId('ariel.valdiviezo@essart.com.ec')]);
 
-    // Johan Garcia & Jonathan Roldan -> supervisor = Amin, cargo = Asistente de almacén
+    // Ramiro Muentes -> supervisor = Alberto, cargo = Asistente de almacén, cc = Portoviejo 01
     await client.query(`
       UPDATE empleados 
-      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1 
-      WHERE id IN ($2, $3)
-    `, [aminId, getEmpId('johan.garcia@essart.com.ec'), getEmpId('jonathan.roldan@essart.com.ec')]);
+      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1, area_estructura_id = $2, cargo_estructura_id = $3, centro_costo_estructura_id = $4 
+      WHERE id = $5
+    `, [albertoId, depBodId, cargAalmId, ccPv01Id, getEmpId('ramiro.muentes@essart.com.ec')]);
 
-    // Set other employees cargos
+    // Johan Garcia -> supervisor = Amin, cargo = Asistente de almacén, cc = Portoviejo 03
     await client.query(`
       UPDATE empleados 
-      SET cargo = 'Asistente' 
-      WHERE empresa_id = $1 AND cargo IS NULL
-    `, [empresaId]);
+      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1, area_estructura_id = $2, cargo_estructura_id = $3, centro_costo_estructura_id = $4 
+      WHERE id = $5
+    `, [aminId, depBodId, cargAalmId, ccPv03Id, getEmpId('johan.garcia@essart.com.ec')]);
+
+    // Jonathan Roldan -> supervisor = Amin, cargo = Asistente de almacén, cc = Portoviejo 03
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'Asistente de almacén', supervisor_empleado_id = $1, area_estructura_id = $2, cargo_estructura_id = $3, centro_costo_estructura_id = $4 
+      WHERE id = $5
+    `, [aminId, depBodId, cargAalmId, ccPv03Id, getEmpId('jonathan.roldan@essart.com.ec')]);
+
+    // Set other employees default cargo, CC and department
+    await client.query(`
+      UPDATE empleados 
+      SET cargo = 'Asistente', area_estructura_id = $1, cargo_estructura_id = $2, centro_costo_estructura_id = $3
+      WHERE empresa_id = $4 AND area_estructura_id IS NULL
+    `, [depBodId, cargAsisId, ccMatId, empresaId]);
 
     // 5. Create or Find Horario
     console.log('Configurando horario estándar...');

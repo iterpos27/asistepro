@@ -140,11 +140,16 @@ async function listSolicitudes({ empresaId, auth, estado, tipo, empleadoId, limi
     `SELECT s.*, e.codigo AS empleado_codigo, e.nombres AS empleado_nombres, e.apellidos AS empleado_apellidos,
             e.cargo AS empleado_cargo, e.departamento AS empleado_departamento, e.cedula AS empleado_cedula,
             suc.nombre AS empleado_sucursal,
-            solicitante.nombre AS solicitante_nombre, revisor.nombre AS revisor_nombre, COUNT(*) OVER() AS total
+            solicitante.nombre AS solicitante_nombre, revisor.nombre AS revisor_nombre,
+            validador.nombre AS validador_nombre,
+            reemplazo.nombres AS reemplazo_nombres, reemplazo.apellidos AS reemplazo_apellidos,
+            COUNT(*) OVER() AS total
      FROM solicitudes s 
      INNER JOIN empleados e ON e.id = s.empleado_id 
      INNER JOIN usuarios solicitante ON solicitante.id = s.solicitado_por
      LEFT JOIN usuarios revisor ON revisor.id = s.revisado_por 
+     LEFT JOIN usuarios validador ON validador.id = s.validado_por
+     LEFT JOIN empleados reemplazo ON reemplazo.id = s.reemplazo_empleado_id
      LEFT JOIN sucursales suc ON suc.id = e.sucursal_habitual_id
      WHERE ${filters.join(' AND ')}
      ORDER BY s.creado_en DESC LIMIT $${limitIndex} OFFSET $${offsetIndex}`, values);
@@ -197,16 +202,30 @@ async function applyCorrection(client, request) {
   }
 }
 
-async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decision, comentario, datos_adicionales }) {
+async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decision, comentario, datos_adicionales, reemplazo_empleado_id }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await client.query(`SELECT * FROM solicitudes WHERE empresa_id=$1 AND id=$2 FOR UPDATE`, [empresaId, solicitudId]);
     const request = result.rows[0]; if (!request) { const error = new Error('Solicitud no encontrada'); error.statusCode = 404; throw error; }
-    if (request.estado !== 'pendiente') { const error = new Error('La solicitud ya fue procesada'); error.statusCode = 409; throw error; }
+    
+    if (request.estado !== 'pendiente' && request.estado !== 'validada') {
+      const error = new Error('La solicitud ya fue procesada');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const isSupervisor = auth && auth.rol === 'EMPLEADO';
+    let nextEstado;
 
     // Enforce Jefe de Almacén rule if reviewer has role EMPLEADO
-    if (auth && auth.rol === 'EMPLEADO') {
+    if (isSupervisor) {
+      if (request.estado !== 'pendiente') {
+        const error = new Error('Un supervisor solo puede validar solicitudes en estado pendiente');
+        error.statusCode = 409;
+        throw error;
+      }
+
       // 1. Get reviewer's employee record
       const reviewerEmpRes = await client.query(
         'SELECT id FROM empleados WHERE empresa_id = $1 AND usuario_id = $2 LIMIT 1',
@@ -253,46 +272,71 @@ async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decis
         error.statusCode = 403;
         throw error;
       }
+
+      nextEstado = decision === 'aprobar' ? 'validada' : 'rechazada';
+    } else {
+      // HR / Admin
+      const isVacOrPermit = request.tipo === 'vacaciones' || request.tipo === 'permiso';
+      if (isVacOrPermit && decision === 'aprobar' && request.estado !== 'validada') {
+        const error = new Error('La solicitud debe ser validada por un supervisor antes de su aprobación final');
+        error.statusCode = 403;
+        throw error;
+      }
+      nextEstado = decision === 'aprobar' ? 'aprobada' : 'rechazada';
     }
 
-    if (decision === 'aprobar') {
+    if (decision === 'aprobar' && nextEstado === 'aprobada') {
       await laboralService.assertPeriodoAbierto(empresaId, request.fecha_inicio, client);
       await laboralService.assertPeriodoAbierto(empresaId, request.fecha_fin, client);
       if (request.tipo === 'correccion_marcacion') await applyCorrection(client, request);
     }
-    const updated = await client.query(
-      `UPDATE solicitudes SET 
-        estado=$3,
-        revisado_por=$4,
-        revisado_en=NOW(),
-        comentario_revision=$5,
-        datos_adicionales=COALESCE(datos_adicionales, '{}'::jsonb) || $6::jsonb,
-        actualizado_en=NOW() 
-       WHERE empresa_id=$1 AND id=$2 RETURNING *`,
-      [
-        empresaId,
-        solicitudId,
-        decision === 'aprobar' ? 'aprobada' : 'rechazada',
-        reviewerId,
-        comentario || null,
-        datos_adicionales ? JSON.stringify(datos_adicionales) : '{}'
-      ]
-    );
-      // If vacation is approved, update the vacation balance
-      if (decision === 'aprobar' && request.tipo === 'vacaciones') {
-        const mergedAdicionales = {
-          ...(request.datos_adicionales || {}),
-          ...(datos_adicionales || {}),
-        };
-        await vacacionesService.registrarVacacionesAprobadas(
-          empresaId,
-          request.empleado_id,
-          request,
-          mergedAdicionales,
-          client
-        );
+
+    const fields = ['actualizado_en = NOW()'];
+    const params = [empresaId, solicitudId];
+    
+    const addParam = (fieldName, value) => {
+      params.push(value);
+      fields.push(`${fieldName} = $${params.length}`);
+    };
+
+    addParam('estado', nextEstado);
+
+    if (isSupervisor) {
+      addParam('validado_por', reviewerId);
+      fields.push('validado_en = NOW()');
+      addParam('comentario_validacion', comentario || null);
+      if (reemplazo_empleado_id) {
+        addParam('reemplazo_empleado_id', reemplazo_empleado_id);
       }
-      await client.query('COMMIT'); return updated.rows[0];
+    } else {
+      addParam('revisado_por', reviewerId);
+      fields.push('revisado_en = NOW()');
+      addParam('comentario_revision', comentario || null);
+    }
+
+    if (datos_adicionales) {
+      params.push(JSON.stringify(datos_adicionales));
+      fields.push(`datos_adicionales = COALESCE(datos_adicionales, '{}'::jsonb) || $${params.length}::jsonb`);
+    }
+
+    const query = `UPDATE solicitudes SET ${fields.join(', ')} WHERE empresa_id = $1 AND id = $2 RETURNING *`;
+    const updated = await client.query(query, params);
+
+    // If vacation is finally approved, update the vacation balance
+    if (decision === 'aprobar' && nextEstado === 'aprobada' && request.tipo === 'vacaciones') {
+      const mergedAdicionales = {
+        ...(request.datos_adicionales || {}),
+        ...(datos_adicionales || {}),
+      };
+      await vacacionesService.registrarVacacionesAprobadas(
+        empresaId,
+        request.empleado_id,
+        request,
+        mergedAdicionales,
+        client
+      );
+    }
+    await client.query('COMMIT'); return updated.rows[0];
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
 

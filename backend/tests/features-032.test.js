@@ -160,16 +160,28 @@ test('Integration tests for features in migration 032', async () => {
     /Un jefe de almacén no puede aprobar sus propias solicitudes/
   );
 
-  // Review Solicitud - Jefe de Almacen approves Juan's request (should succeed)
-  const approvedSolicitud = await solicitudService.reviewSolicitud({
+  // Review Solicitud - Jefe de Almacen validates Juan's request (should transition to 'validada')
+  const validatedSolicitud = await solicitudService.reviewSolicitud({
     empresaId,
     solicitudId: solicitud.id,
     reviewerId: jefeEmpleado.usuario_id,
     auth: authJefe,
     decision: 'aprobar',
   });
+  assert.equal(validatedSolicitud.estado, 'validada');
+  assert.equal(validatedSolicitud.validado_por, jefeEmpleado.usuario_id);
+
+  // Finally, RRHH/Admin approves the request (should transition to 'aprobada')
+  const authAdmin = { usuario_id: regResult.user.id, rol: 'ADMIN_EMPRESA' };
+  const approvedSolicitud = await solicitudService.reviewSolicitud({
+    empresaId,
+    solicitudId: solicitud.id,
+    reviewerId: regResult.user.id,
+    auth: authAdmin,
+    decision: 'aprobar',
+  });
   assert.equal(approvedSolicitud.estado, 'aprobada');
-  assert.equal(approvedSolicitud.revisado_por, jefeEmpleado.usuario_id);
+  assert.equal(approvedSolicitud.revisado_por, regResult.user.id);
 
   // Create leave request for Jefe (Employee 1)
   const jefeSolicitud = await solicitudService.createSolicitud({
