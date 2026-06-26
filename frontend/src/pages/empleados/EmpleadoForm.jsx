@@ -43,6 +43,14 @@ const empleadoSchema = z
       });
     }
 
+    if (!values.username) {
+      context.addIssue({
+        code: 'custom',
+        path: ['username'],
+        message: 'Nombre de usuario requerido',
+      });
+    }
+
     if (!values.password_acceso || values.password_acceso.length < 8) {
       context.addIssue({
         code: 'custom',
@@ -201,20 +209,10 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
           <input {...register('apellidos')} placeholder="Perez Mora" />
           {errors.apellidos && <small>{errors.apellidos.message}</small>}
         </label>
-        <div style={{ display: 'contents' }}>
-          <label style={{ alignSelf: 'start' }}>
-            Cédula / C.I.
-            <input {...register('cedula')} placeholder="Ej. 1792948271" />
-          </label>
-          <label style={{ alignSelf: 'start' }}>
-            Username <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(para iniciar sesión)</small>
-            <input {...register('username')} placeholder="ej: juan.perez" style={{ textTransform: 'lowercase' }} />
-            {errors.username
-              ? <small style={{ color: 'var(--danger-color)' }}>{errors.username.message}</small>
-              : <small style={{ color: 'var(--text-muted)' }}>Minúsculas, números, puntos o guiones · mín. 3 caracteres</small>
-            }
-          </label>
-        </div>
+        <label>
+          Cédula / C.I.
+          <input {...register('cedula')} placeholder="Ej. 1792948271" />
+        </label>
         {empleado && (
           <label className="wide-field">
             Bloqueo de Dispositivo (UUID)
@@ -352,13 +350,21 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
             </label>
             {createAccess ? (
               <>
-                <label>
+                 <label>
                   Rol del empleado
                   <select {...register('rol_acceso')}>
                     <option value="EMPLEADO">Empleado</option>
                     <option value="RRHH">RRHH</option>
                   </select>
                   <small>RRHH podrá administrar asistencia según permisos asignados en Ajustes.</small>
+                </label>
+                <label>
+                  Username <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(para iniciar sesión)</small>
+                  <input {...register('username')} placeholder="ej: juan.perez" style={{ textTransform: 'lowercase' }} />
+                  {errors.username
+                    ? <small style={{ color: 'var(--danger-color)' }}>{errors.username.message}</small>
+                    : <small style={{ color: 'var(--text-muted)' }}>Minúsculas, números, puntos o guiones · mín. 3 caracteres</small>
+                  }
                 </label>
                 <label>
                   Contraseña temporal
