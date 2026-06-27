@@ -70,6 +70,11 @@ const exportAsistenciaDiariaSchema = z.object({
 const exportEntradasSalidasSchema = dateRangeSchema(dateRangeQuery);
 const exportNovedadesSchema = dateRangeSchema(dateRangeQuery);
 const exportAtrasosSchema = dateRangeSchema(dateRangeQuery);
+const exportAsistenciaRangoSchema = dateRangeSchema(
+  dateRangeQuery.extend({
+    estado: asistenciaEstado.optional(),
+  })
+);
 
 module.exports = {
   asistenciaDiariaSchema,
@@ -81,5 +86,6 @@ module.exports = {
   exportAtrasosSchema,
   exportEntradasSalidasSchema,
   exportNovedadesSchema,
+  exportAsistenciaRangoSchema,
   novedadesSchema,
 };

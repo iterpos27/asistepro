@@ -15,6 +15,7 @@ const {
   exportAtrasosSchema,
   exportEntradasSalidasSchema,
   exportNovedadesSchema,
+  exportAsistenciaRangoSchema,
   novedadesSchema,
 } = require('../validators/reporte.validator');
 
@@ -37,6 +38,13 @@ router.get(
   permissionGuard('reportes', 'exportar'),
   validateSchema(exportAsistenciaDiariaSchema),
   reporteController.exportarAsistenciaDiaria,
+);
+router.get(
+  '/export/asistencia-rango.csv',
+  featureGuard('reportes_avanzados'),
+  permissionGuard('reportes', 'exportar'),
+  validateSchema(exportAsistenciaRangoSchema),
+  reporteController.exportarAsistenciaRango,
 );
 router.get(
   '/export/entradas-salidas.xls',

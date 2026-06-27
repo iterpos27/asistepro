@@ -203,6 +203,20 @@ export default function Reportes() {
         );
       }
 
+      if (type === 'rango') {
+        await reporteService.downloadCsv(
+          '/reportes/export/asistencia-rango.csv',
+          {
+            fecha_desde: reportParams.fechaDesde,
+            fecha_hasta: reportParams.fechaHasta,
+            sucursal_id: reportParams.sucursalId,
+            empleado_id: reportParams.empleadoId,
+            estado: reportParams.dailyStatus,
+          },
+          `asistencia-rango-${reportParams.fechaDesde}-a-${reportParams.fechaHasta}.csv`,
+        );
+      }
+
       if (type === 'entradas-salidas') {
         await reporteService.downloadFile(
           '/reportes/export/entradas-salidas.xls',
@@ -377,6 +391,10 @@ export default function Reportes() {
           <button className="outline-button" type="button" onClick={() => exportCsv('diaria')}>
             <Download size={16} />
             Asistencia diaria
+          </button>
+          <button className="outline-button" type="button" onClick={() => exportCsv('rango')}>
+            <Download size={16} />
+            Asistencia por rango
           </button>
           <button className="outline-button" type="button" onClick={() => exportCsv('entradas-salidas')}>
             <Download size={16} />

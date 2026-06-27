@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { listMarcacionesSchema, marcacionSchema } = require('../src/validators/marcacion.validator');
-const { asistenciaDiariaSchema, entradasSalidasSchema } = require('../src/validators/reporte.validator');
+const { asistenciaDiariaSchema, entradasSalidasSchema, exportAsistenciaRangoSchema } = require('../src/validators/reporte.validator');
 const { createReemplazoSchema } = require('../src/validators/reemplazo.validator');
 const { createSucursalSchema } = require('../src/validators/sucursal.validator');
 const { listNotificacionesSchema } = require('../src/validators/notificacion.validator');
@@ -122,4 +122,21 @@ test('validaciones de notificaciones aceptan query vacio y parametros de paginac
   assert.equal(result.success, true);
   assert.equal(result.data.query.limit, 15);
   assert.equal(result.data.query.offset, 5);
+});
+
+test('validaciones de exportar asistencia por rango rechazan fechas invertidas y aceptan correctas', () => {
+  const rangoInvertido = exportAsistenciaRangoSchema.safeParse({
+    body: {},
+    query: { fecha_desde: '2026-06-16', fecha_hasta: '2026-06-01' },
+    params: {},
+  });
+
+  const rangoCorrecto = exportAsistenciaRangoSchema.safeParse({
+    body: {},
+    query: { fecha_desde: '2026-06-01', fecha_hasta: '2026-06-16', estado: 'presente' },
+    params: {},
+  });
+
+  assert.equal(rangoInvertido.success, false);
+  assert.equal(rangoCorrecto.success, true);
 });

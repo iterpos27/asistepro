@@ -326,6 +326,42 @@ async function exportarAtrasos(req, res, next) {
   }
 }
 
+async function exportarAsistenciaRango(req, res, next) {
+  try {
+    const fechaDesde = req.query.fecha_desde || todayDate();
+    const fechaHasta = req.query.fecha_hasta || todayDate();
+    const result = await reporteService.asistenciaRango({
+      empresaId: getEmpresaId(req),
+      fechaDesde,
+      fechaHasta,
+      sucursalId: req.query.sucursal_id,
+      empleadoId: req.query.empleado_id,
+      estado: req.query.estado,
+    });
+    const csv = toCsv(result.items, [
+      { key: 'fecha', header: 'Fecha', format: formatDateOnly },
+      { key: 'empleado_codigo', header: 'Codigo' },
+      { key: 'empleado_nombres', header: 'Nombres' },
+      { key: 'empleado_apellidos', header: 'Apellidos' },
+      { key: 'sucursal_habitual_nombre', header: 'Sucursal habitual' },
+      { key: 'primera_entrada', header: 'Primera entrada', format: formatDateTime },
+      { key: 'ultima_salida', header: 'Ultima salida', format: formatDateTime },
+      { key: 'horas_trabajadas', header: 'Horas trabajadas', format: formatDecimalHours },
+      { key: 'minutos_trabajados', header: 'Minutos trabajados' },
+      { key: 'marcaciones_validas', header: 'Marcaciones validas' },
+      { key: 'novedades', header: 'Novedades' },
+      { key: 'rechazadas', header: 'Rechazadas' },
+      { key: 'estado_asistencia', header: 'Estado' },
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="asistencia-rango-${fechaDesde}-a-${fechaHasta}.csv"`);
+    return res.send(csv);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   asistenciaDiaria,
   asistenciaMensual,
@@ -337,4 +373,5 @@ module.exports = {
   exportarEntradasSalidasExcel,
   exportarNovedades,
   exportarAtrasos,
+  exportarAsistenciaRango,
 };

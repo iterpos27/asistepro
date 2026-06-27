@@ -538,6 +538,93 @@ async function resumenEjecutivo({ empresaId, fechaDesde, fechaHasta, sucursalId,
   };
 }
 
+async function asistenciaRango({ empresaId, fechaDesde, fechaHasta, sucursalId, empleadoId, estado }) {
+  const filters = ['e.empresa_id = $1'];
+  const values = [empresaId];
+  const today = new Date().toISOString().slice(0, 10);
+
+  values.push(fechaDesde || today);
+  const fromParam = values.length;
+
+  values.push(fechaHasta || today);
+  const toParam = values.length;
+
+  if (sucursalId) {
+    values.push(sucursalId);
+    filters.push(`e.sucursal_habitual_id = $${values.length}`);
+  }
+
+  if (empleadoId) {
+    values.push(empleadoId);
+    filters.push(`e.id = $${values.length}`);
+  }
+
+  const result = await pool.query(
+    `
+      WITH dates AS (
+        SELECT generate_series($${fromParam}::date, $${toParam}::date, '1 day'::interval)::date AS fecha
+      )
+      SELECT
+        d.fecha,
+        e.id AS empleado_id,
+        e.codigo AS empleado_codigo,
+        e.nombres AS empleado_nombres,
+        e.apellidos AS empleado_apellidos,
+        s.nombre AS sucursal_habitual_nombre,
+        MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END) AS primera_entrada,
+        MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END) AS ultima_salida,
+        CASE
+          WHEN MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END) IS NOT NULL
+           AND MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END) IS NOT NULL
+           AND MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+             >= MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+          THEN FLOOR(EXTRACT(EPOCH FROM (
+            MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+            - MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+          )) / 60)::int
+          ELSE NULL
+        END AS minutos_trabajados,
+        CASE
+          WHEN MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END) IS NOT NULL
+           AND MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END) IS NOT NULL
+           AND MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+             >= MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+          THEN ROUND((EXTRACT(EPOCH FROM (
+            MAX(CASE WHEN m.tipo = 'salida' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+            - MIN(CASE WHEN m.tipo = 'entrada' AND m.estado <> 'rechazada' THEN m.marcado_en END)
+          )) / 3600)::numeric, 2)
+          ELSE NULL
+        END AS horas_trabajadas,
+        COUNT(m.id) FILTER (WHERE m.estado <> 'rechazada')::int AS marcaciones_validas,
+        COUNT(m.id) FILTER (WHERE m.estado = 'aceptada_con_novedad')::int AS novedades,
+        COUNT(m.id) FILTER (WHERE m.estado = 'rechazada')::int AS rechazadas,
+        CASE
+          WHEN COUNT(m.id) FILTER (WHERE m.estado <> 'rechazada') > 0 THEN 'presente'
+          ELSE 'ausente'
+        END AS estado_asistencia
+      FROM dates d
+      CROSS JOIN empleados e
+      LEFT JOIN sucursales s ON s.id = e.sucursal_habitual_id
+      LEFT JOIN marcaciones m
+        ON m.empleado_id = e.id
+       AND m.empresa_id = e.empresa_id
+       AND (m.marcado_en AT TIME ZONE '${REPORT_TIME_ZONE}')::date = d.fecha
+      WHERE ${filters.join(' AND ')}
+        AND e.estado = 'activo'
+      GROUP BY d.fecha, e.id, e.codigo, e.nombres, e.apellidos, s.nombre
+      ORDER BY d.fecha ASC, e.apellidos ASC, e.nombres ASC
+    `,
+    values,
+  );
+
+  const rows = estado ? result.rows.filter((row) => row.estado_asistencia === estado) : result.rows;
+
+  return {
+    items: rows,
+    total: rows.length,
+  };
+}
+
 module.exports = {
   asistenciaDiaria,
   asistenciaMensual,
@@ -545,4 +632,5 @@ module.exports = {
   novedades,
   atrasos,
   resumenEjecutivo,
+  asistenciaRango,
 };

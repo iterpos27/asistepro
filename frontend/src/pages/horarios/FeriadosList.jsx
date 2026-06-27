@@ -158,7 +158,7 @@ export default function FeriadosList() {
                       <tr key={item.id}>
                         <td>
                           <span style={{ fontWeight: '600' }}>
-                            {new Date(item.fecha + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            {new Date(String(item.fecha).slice(0, 10) + 'T12:00:00').toLocaleDateString('es-EC', { weekday: 'long', day: 'numeric', month: 'long' })}
                           </span>
                         </td>
                         <td>
