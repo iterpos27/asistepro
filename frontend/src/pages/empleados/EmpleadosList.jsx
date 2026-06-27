@@ -278,7 +278,14 @@ export default function EmpleadosList() {
         </div>
       ) : null}
 
-      <EmpleadoDetalle empleado={detailEmpleado} onClose={() => setDetailEmpleado(null)} />
+      <EmpleadoDetalle
+        empleado={detailEmpleado}
+        onClose={() => setDetailEmpleado(null)}
+        onDeviceReleased={async () => {
+          setDetailEmpleado(null);
+          await loadEmpleados();
+        }}
+      />
 
       <div className="panel">
         <PanelTitle title="Empleados registrados" subtitle="Vista util para RRHH, supervision y estructura interna" />

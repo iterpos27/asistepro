@@ -71,6 +71,8 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
         ausencias: 0,
         minutos_atraso: 0,
         minutos_extra: 0,
+        minutos_suplementarias: 0,
+        minutos_extraordinarias: 0,
         minutos_trabajados: 0,
       });
     }
@@ -78,6 +80,8 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
     if (item.estado === 'ausente') e.ausencias++;
     e.minutos_atraso += item.minutos_atraso || 0;
     e.minutos_extra += item.minutos_extra || 0;
+    e.minutos_suplementarias += item.minutos_suplementarias || 0;
+    e.minutos_extraordinarias += item.minutos_extraordinarias || 0;
     e.minutos_trabajados += item.minutos_trabajados || 0;
   }
 
@@ -87,16 +91,23 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
     let descuentoAusencias = 0;
     let descuentoAtrasos = 0;
     let pagoHorasExtra = 0;
+    let pagoSuplementarias = 0;
+    let pagoExtraordinarias = 0;
     let netoPagar = 0;
 
     if (salarioBase > 0) {
       const tarifaPorHora = salarioBase / 240;
       const tarifaPorMinuto = tarifaPorHora / 60;
-      const tarifaHoraExtra = tarifaPorHora * 1.5;
+      const tarifaSuplementaria = tarifaPorHora * 1.5;
+      const tarifaExtraordinaria = tarifaPorHora * 2.0;
 
       descuentoAusencias = e.ausencias * (salarioBase / 30);
       descuentoAtrasos = e.minutos_atraso * tarifaPorMinuto;
-      pagoHorasExtra = (e.minutos_extra / 60) * tarifaHoraExtra;
+      
+      pagoSuplementarias = (e.minutos_suplementarias / 60) * tarifaSuplementaria;
+      pagoExtraordinarias = (e.minutos_extraordinarias / 60) * tarifaExtraordinaria;
+      pagoHorasExtra = pagoSuplementarias + pagoExtraordinarias;
+      
       netoPagar = Math.max(0, salarioBase - descuentoAusencias - descuentoAtrasos + pagoHorasExtra);
     }
 
@@ -105,6 +116,8 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
       salario_base: salarioBase,
       descuento_ausencias: Number(descuentoAusencias.toFixed(2)),
       descuento_atrasos: Number(descuentoAtrasos.toFixed(2)),
+      pago_suplementarias: Number(pagoSuplementarias.toFixed(2)),
+      pago_extraordinarias: Number(pagoExtraordinarias.toFixed(2)),
       pago_horas_extra: Number(pagoHorasExtra.toFixed(2)),
       neto_pagar: Number(netoPagar.toFixed(2)),
     });
@@ -177,6 +190,10 @@ async function calcularMes({ empresaId, mes }) {
       const request = (requestsByEmployee.get(employee.id) || []).find((item) => item.fecha_inicio <= date.value && item.fecha_fin >= date.value);
       if (!schedule && !mark && !request) continue;
 
+      const isFeriado = feriadosSet.has(date.value);
+      const isWeekend = date.weekday === 6 || date.weekday === 7;
+      const status = isFeriado ? 'feriado' : request ? 'justificada' : !schedule ? 'sin_horario' : !mark ? 'ausente' : !mark.entrada || !mark.salida ? 'incompleta' : 'completa';
+
       const scheduledStart = timeToMinutes(schedule?.hora_inicio);
       const scheduledEnd = timeToMinutes(schedule?.hora_fin);
       const breakMinutes = Number(schedule?.descanso_minutos || 0);
@@ -184,11 +201,30 @@ async function calcularMes({ empresaId, mes }) {
       const entry = timeToMinutes(mark?.entrada);
       const exit = timeToMinutes(mark?.salida);
       const workedMinutes = entry !== null && exit !== null ? Math.max(0, durationMinutes(entry, exit) - breakMinutes) : 0;
-      const lateMinutes = entry !== null && scheduledStart !== null
+      
+      // Point 4: Atrasos are NOT penalized if there is a request (like permiso/justification) or if it is a holiday.
+      const lateMinutes = entry !== null && scheduledStart !== null && !request && !isFeriado
         ? Math.max(0, entry - scheduledStart - Number(schedule?.tolerancia_minutos || 0))
         : 0;
-      const isFeriado = feriadosSet.has(date.value);
-      const status = isFeriado ? 'feriado' : request ? 'justificada' : !schedule ? 'sin_horario' : !mark ? 'ausente' : !mark.entrada || !mark.salida ? 'incompleta' : 'completa';
+
+      // Point 1: Overtime 50% (suplementarias) vs 100% (extraordinarias)
+      let minutosSuplementarias = 0;
+      let minutosExtraordinarias = 0;
+      const extraMins = scheduledMinutes ? Math.max(0, workedMinutes - scheduledMinutes) : 0;
+
+      if (extraMins > 0) {
+        if (isFeriado || isWeekend) {
+          minutosExtraordinarias = extraMins;
+        } else {
+          minutosSuplementarias = extraMins;
+        }
+      } else if (!schedule && workedMinutes > 0) {
+        if (isFeriado || isWeekend) {
+          minutosExtraordinarias = workedMinutes;
+        } else {
+          minutosSuplementarias = workedMinutes;
+        }
+      }
 
       items.push({
         fecha: date.value,
@@ -201,7 +237,9 @@ async function calcularMes({ empresaId, mes }) {
         minutos_programados: scheduledMinutes,
         minutos_trabajados: workedMinutes,
         minutos_ordinarios: Math.min(workedMinutes, scheduledMinutes || workedMinutes),
-        minutos_extra: scheduledMinutes ? Math.max(0, workedMinutes - scheduledMinutes) : 0,
+        minutos_extra: minutosSuplementarias + minutosExtraordinarias,
+        minutos_suplementarias: minutosSuplementarias,
+        minutos_extraordinarias: minutosExtraordinarias,
         minutos_atraso: lateMinutes,
         estado: status,
         justificacion: request?.tipo || null,
@@ -214,6 +252,8 @@ async function calcularMes({ empresaId, mes }) {
     acc.minutos_trabajados += item.minutos_trabajados;
     acc.minutos_ordinarios += item.minutos_ordinarios;
     acc.minutos_extra += item.minutos_extra;
+    acc.minutos_suplementarias += item.minutos_suplementarias || 0;
+    acc.minutos_extraordinarias += item.minutos_extraordinarias || 0;
     acc.minutos_atraso += item.minutos_atraso;
     acc.jornadas_completas += item.estado === 'completa' ? 1 : 0;
     acc.jornadas_incompletas += item.estado === 'incompleta' ? 1 : 0;
@@ -221,31 +261,53 @@ async function calcularMes({ empresaId, mes }) {
     acc.ausencias_justificadas += (item.estado === 'justificada' || item.estado === 'feriado') ? 1 : 0;
     acc.feriados += item.estado === 'feriado' ? 1 : 0;
     return acc;
-  }, { empleados: employeesResult.rows.length, minutos_programados: 0, minutos_trabajados: 0, minutes_ordinarios: 0, minutos_ordinarios: 0, minutos_extra: 0, minutos_atraso: 0, jornadas_completas: 0, jornadas_incompletas: 0, ausencias: 0, ausencias_justificadas: 0, feriados: 0 });
+  }, {
+    empleados: employeesResult.rows.length,
+    minutos_programados: 0,
+    minutos_trabajados: 0,
+    minutos_ordinarios: 0,
+    minutos_extra: 0,
+    minutos_suplementarias: 0,
+    minutos_extraordinarias: 0,
+    minutos_atraso: 0,
+    jornadas_completas: 0,
+    jornadas_incompletas: 0,
+    ausencias: 0,
+    ausencias_justificadas: 0,
+    feriados: 0
+  });
 
   const prenomina = [];
   for (const employee of employeesResult.rows) {
     const empItems = items.filter((item) => item.empleado_id === employee.id);
     const salarioBase = Number(employee.salario_base || 0);
-    // Only truly unexcused absences are penalized; feriados and justified days are excluded
     const ausencias = empItems.filter((item) => item.estado === 'ausente').length;
     const minutosAtraso = empItems.reduce((acc, item) => acc + item.minutos_atraso, 0);
     const minutosExtra = empItems.reduce((acc, item) => acc + item.minutos_extra, 0);
+    const minutosSuplementarias = empItems.reduce((acc, item) => acc + (item.minutos_suplementarias || 0), 0);
+    const minutosExtraordinarias = empItems.reduce((acc, item) => acc + (item.minutos_extraordinarias || 0), 0);
     const minutosTrabajados = empItems.reduce((acc, item) => acc + item.minutos_trabajados, 0);
 
     let descuentoAusencias = 0;
     let descuentoAtrasos = 0;
     let pagoHorasExtra = 0;
+    let pagoSuplementarias = 0;
+    let pagoExtraordinarias = 0;
     let netoPagar = 0;
 
     if (salarioBase > 0) {
       const tarifaPorHora = salarioBase / 240;
       const tarifaPorMinuto = tarifaPorHora / 60;
-      const tarifaHoraExtra = tarifaPorHora * 1.5;
+      const tarifaSuplementaria = tarifaPorHora * 1.5;
+      const tarifaExtraordinaria = tarifaPorHora * 2.0;
 
       descuentoAusencias = ausencias * (salarioBase / 30);
       descuentoAtrasos = minutosAtraso * tarifaPorMinuto;
-      pagoHorasExtra = (minutosExtra / 60) * tarifaHoraExtra;
+      
+      pagoSuplementarias = (minutosSuplementarias / 60) * tarifaSuplementaria;
+      pagoExtraordinarias = (minutosExtraordinarias / 60) * tarifaExtraordinaria;
+      pagoHorasExtra = pagoSuplementarias + pagoExtraordinarias;
+
       netoPagar = Math.max(0, salarioBase - descuentoAusencias - descuentoAtrasos + pagoHorasExtra);
     }
 
@@ -257,9 +319,13 @@ async function calcularMes({ empresaId, mes }) {
       ausencias,
       minutos_atraso: minutosAtraso,
       minutos_extra: minutosExtra,
+      minutos_suplementarias: minutosSuplementarias,
+      minutos_extraordinarias: minutosExtraordinarias,
       minutos_trabajados: minutosTrabajados,
       descuento_ausencias: Number(descuentoAusencias.toFixed(2)),
       descuento_atrasos: Number(descuentoAtrasos.toFixed(2)),
+      pago_suplementarias: Number(pagoSuplementarias.toFixed(2)),
+      pago_extraordinarias: Number(pagoExtraordinarias.toFixed(2)),
       pago_horas_extra: Number(pagoHorasExtra.toFixed(2)),
       neto_pagar: Number(netoPagar.toFixed(2)),
     });

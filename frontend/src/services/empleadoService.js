@@ -44,3 +44,8 @@ export async function deleteEmpleado(id) {
   const response = await api.delete(`/empleados/${id}`);
   return response.data.data;
 }
+
+export async function liberarDispositivo(id) {
+  const response = await api.patch(`/empleados/${id}/liberar-dispositivo`);
+  return response.data;
+}

@@ -87,10 +87,25 @@ async function deleteEmpleado(req, res, next) {
   }
 }
 
+async function liberarDispositivo(req, res, next) {
+  try {
+    const empleado = await empleadoService.updateEmpleado(getEmpresaId(req), req.params.id, { dispositivo_uuid: null });
+
+    if (!empleado) {
+      return res.status(404).json({ ok: false, message: 'Empleado no encontrado' });
+    }
+
+    return res.json({ ok: true, message: 'Dispositivo liberado exitosamente', data: empleado });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listEmpleados,
   getEmpleado,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
+  liberarDispositivo,
 };

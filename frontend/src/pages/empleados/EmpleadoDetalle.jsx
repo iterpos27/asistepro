@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import PanelTitle from '../../components/common/PanelTitle';
+import * as empleadoService from '../../services/empleadoService';
+import { toast } from '../../services/toastService';
 
 function dateOnly(value) {
   if (!value) return '-';
@@ -36,7 +39,9 @@ function renderDetailSection(title, items) {
   );
 }
 
-export default function EmpleadoDetalle({ empleado, onClose }) {
+export default function EmpleadoDetalle({ empleado, onClose, onDeviceReleased }) {
+  const [loadingDevice, setLoadingDevice] = useState(false);
+
   if (!empleado) return null;
 
   const personal = [
@@ -62,7 +67,22 @@ export default function EmpleadoDetalle({ empleado, onClose }) {
     ['Cargo estructurado', empleado.cargo_estructura_nombre || '-'],
     ['Centro de costo', empleado.centro_costo_nombre || '-'],
     ['Usuario vinculado', empleado.usuario_email || '-'],
+    ['Dispositivo UUID', empleado.dispositivo_uuid || 'Ninguno (Libre)'],
   ];
+
+  async function handleLiberar() {
+    if (!window.confirm('¿Confirmas liberar el dispositivo vinculado de este empleado? El empleado podrá volver a registrarse desde otro celular.')) return;
+    setLoadingDevice(true);
+    try {
+      await empleadoService.liberarDispositivo(empleado.id);
+      toast.success('Dispositivo liberado correctamente');
+      if (onDeviceReleased) onDeviceReleased();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'No se pudo liberar el dispositivo');
+    } finally {
+      setLoadingDevice(false);
+    }
+  }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -94,6 +114,11 @@ export default function EmpleadoDetalle({ empleado, onClose }) {
         </div>
 
         <div className="form-actions">
+          {empleado.dispositivo_uuid && (
+            <button className="primary-button compact warning-button" type="button" onClick={handleLiberar} disabled={loadingDevice} style={{ background: '#eab308', borderColor: '#eab308' }}>
+              {loadingDevice ? 'Liberando...' : 'Liberar celular'}
+            </button>
+          )}
           <button className="outline-button" type="button" onClick={onClose}>
             Cerrar
           </button>

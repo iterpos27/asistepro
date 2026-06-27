@@ -57,6 +57,103 @@ export default function CalculoLaboral() {
     await load();
   }
 
+  function printMonthlySheet(employeeId, employeeName, employeeCodigo) {
+    const empItems = (data.items || []).filter(item => item.empleado_id === employeeId).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const printWindow = window.open('', '_blank');
+    
+    let rowsHtml = empItems.map(item => `
+      <tr>
+        <td>${item.fecha}</td>
+        <td>${item.horario || '-'}</td>
+        <td>${item.entrada?.slice(0, 5) || '-'}</td>
+        <td>${item.salida?.slice(0, 5) || '-'}</td>
+        <td>${hours(item.minutos_programados)}</td>
+        <td>${hours(item.minutos_trabajados)}</td>
+        <td>${hours(item.minutos_suplementarias || 0)}</td>
+        <td>${hours(item.minutos_extraordinarias || 0)}</td>
+        <td>${item.minutos_atraso || 0} min</td>
+        <td>${item.estado} ${item.justificacion ? `(${item.justificacion})` : ''}</td>
+      </tr>
+    `).join('');
+
+    const totalTrabajadas = hours(empItems.reduce((acc, item) => acc + item.minutos_trabajados, 0));
+    const totalSupl = hours(empItems.reduce((acc, item) => acc + (item.minutos_suplementarias || 0), 0));
+    const totalExtra = hours(empItems.reduce((acc, item) => acc + (item.minutos_extraordinarias || 0), 0));
+    const totalAtrasos = empItems.reduce((acc, item) => acc + item.minutos_atraso, 0);
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Hoja de Asistencia Mensual - ${employeeName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 30px; color: #333; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .header h1 { margin: 5px 0; font-size: 20px; }
+            .header p { margin: 2px 0; color: #666; font-size: 14px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+            .info-item { font-size: 14px; }
+            .info-item strong { color: #111; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }
+            th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; font-weight: bold; }
+            .summary { margin-bottom: 40px; font-size: 13px; }
+            .signatures { display: flex; justify-content: space-around; margin-top: 60px; }
+            .signature-box { width: 200px; border-top: 1px solid #333; text-align: center; padding-top: 8px; font-size: 12px; font-weight: bold; }
+            @media print {
+              body { margin: 15px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body onload="window.print();">
+          <div class="header">
+            <h1>HOJA DE ASISTENCIA MENSUAL</h1>
+            <p>ASISTEPRO - CONTROL DE ASISTENCIA Y PERSONAL</p>
+          </div>
+          <div class="info-grid">
+            <div class="info-item"><strong>Empleado:</strong> ${employeeName}</div>
+            <div class="info-item"><strong>Código:</strong> ${employeeCodigo}</div>
+            <div class="info-item"><strong>Periodo (Mes):</strong> ${month}</div>
+            <div class="info-item"><strong>Empresa:</strong> ${user?.empresa_nombre || 'AsistePro Tenant'}</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Horario</th>
+                <th>Entrada</th>
+                <th>Salida</th>
+                <th>Prog.</th>
+                <th>Trabaj.</th>
+                <th>H. Supl (50%)</th>
+                <th>H. Extra (100%)</th>
+                <th>Atraso</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <div class="summary">
+            <strong>Resumen del Periodo:</strong>
+            <ul>
+              <li>Total Horas Trabajadas: ${totalTrabajadas}</li>
+              <li>Total Horas Suplementarias (50%): ${totalSupl}</li>
+              <li>Total Horas Extraordinarias (100%): ${totalExtra}</li>
+              <li>Total Minutos de Atraso: ${totalAtrasos} min</li>
+            </ul>
+          </div>
+          <div class="signatures">
+            <div class="signature-box">Firma del Empleado</div>
+            <div class="signature-box">Talento Humano / Supervisor</div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
   return <>
     <PageHeader
       title="Calculo laboral"
@@ -126,11 +223,14 @@ export default function CalculoLaboral() {
                 <th>Salario Base</th>
                 <th>Ausencias</th>
                 <th>Atrasos</th>
-                <th>H. Extra</th>
+                <th>H. Supl (50%)</th>
+                <th>H. Extra (100%)</th>
                 <th>Dcto. Ausencias</th>
                 <th>Dcto. Atrasos</th>
-                <th>Pago H. Extra</th>
+                <th>Pago Supl</th>
+                <th>Pago Extra</th>
                 <th>Neto a Pagar</th>
+                <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -141,15 +241,27 @@ export default function CalculoLaboral() {
                   <td>{money(item.salario_base)}</td>
                   <td>{item.ausencias} {item.ausencias === 1 ? 'día' : 'días'}</td>
                   <td>{item.minutos_atraso} min</td>
-                  <td>{hours(item.minutos_extra)}</td>
+                  <td>{hours(item.minutos_suplementarias || 0)}</td>
+                  <td>{hours(item.minutos_extraordinarias || 0)}</td>
                   <td style={{ color: 'var(--accent-color)' }}>-{money(item.descuento_ausencias)}</td>
                   <td style={{ color: 'var(--accent-color)' }}>-{money(item.descuento_atrasos)}</td>
-                  <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_horas_extra)}</td>
+                  <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_suplementarias || 0)}</td>
+                  <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_extraordinarias || 0)}</td>
                   <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{money(item.neto_pagar)}</td>
+                  <td>
+                    <button
+                      className="outline-button compact"
+                      onClick={() => printMonthlySheet(item.empleado_id, item.empleado_nombre, item.empleado_codigo)}
+                      title="Imprimir Hoja de Asistencia Mensual"
+                      style={{ padding: '4px 10px', fontSize: '11px' }}
+                    >
+                      Imprimir Hoja
+                    </button>
+                  </td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: 'center' }}>No hay información de pre-nómina para este mes.</td>
+                  <td colSpan="13" style={{ textAlign: 'center' }}>No hay información de pre-nómina para este mes.</td>
                 </tr>
               )}
             </tbody>
@@ -170,7 +282,8 @@ export default function CalculoLaboral() {
                 <th>Salida</th>
                 <th>Programadas</th>
                 <th>Trabajadas</th>
-                <th>Extra</th>
+                <th>H. Supl (50%)</th>
+                <th>H. Extra (100%)</th>
                 <th>Atraso</th>
                 <th>Estado</th>
               </tr>
@@ -185,7 +298,8 @@ export default function CalculoLaboral() {
                   <td>{item.salida?.slice(0, 5) || '-'}</td>
                   <td>{hours(item.minutos_programados)}</td>
                   <td>{hours(item.minutos_trabajados)}</td>
-                  <td>{hours(item.minutos_extra)}</td>
+                  <td>{hours(item.minutos_suplementarias || 0)}</td>
+                  <td>{hours(item.minutos_extraordinarias || 0)}</td>
                   <td>{item.minutos_atraso} min</td>
                   <td>
                     <span className={`status-pill ${
@@ -204,7 +318,7 @@ export default function CalculoLaboral() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="10">No hay jornadas calculables para este mes.</td>
+                  <td colSpan="11">No hay jornadas calculables para este mes.</td>
                 </tr>
               )}
             </tbody>

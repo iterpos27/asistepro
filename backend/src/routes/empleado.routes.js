@@ -23,6 +23,7 @@ router.get('/', permissionGuard('empleados', 'ver'), validateSchema(listEmpleado
 router.post('/', permissionGuard('empleados', 'crear'), validateSchema(createEmpleadoSchema), planLimitGuard('empleados'), empleadoController.createEmpleado);
 router.get('/:id', permissionGuard('empleados', 'ver'), validateSchema(idParamSchema), empleadoController.getEmpleado);
 router.put('/:id', permissionGuard('empleados', 'editar'), validateSchema(updateEmpleadoSchema), empleadoController.updateEmpleado);
+router.patch('/:id/liberar-dispositivo', permissionGuard('empleados', 'editar'), validateSchema(idParamSchema), empleadoController.liberarDispositivo);
 router.delete('/:id', permissionGuard('empleados', 'eliminar'), validateSchema(idParamSchema), empleadoController.deleteEmpleado);
 
 module.exports = router;
