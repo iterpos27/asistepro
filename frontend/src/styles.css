@@ -4180,6 +4180,41 @@ tbody tr:hover {
   gap: 16px;
 }
 
+.identity-logo-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.identity-logo-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 88px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #dbe4f0;
+  overflow: hidden;
+}
+
+.identity-logo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.identity-logo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .inline-hint {
   display: flex;
   justify-content: space-between;
@@ -4217,6 +4252,11 @@ tbody tr:hover {
 
   .detail-summary {
     grid-template-columns: 1fr;
+  }
+
+  .identity-logo-preview {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -4617,5 +4657,4 @@ tbody tr:hover {
 .register-link-centered:hover {
   text-decoration: underline;
 }
-
 

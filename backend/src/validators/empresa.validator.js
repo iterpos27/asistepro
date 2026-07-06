@@ -9,6 +9,11 @@ const empresaBody = z.object({
   telefono: z.string().trim().max(40).optional().nullable(),
   direccion: z.string().trim().max(260).optional().nullable(),
   estado: z.enum(['activa', 'suspendida', 'cancelada']).optional(),
+  logo: z.object({
+    nombre: z.string().trim().min(1).max(255),
+    tipo: z.string().trim().min(1).max(120),
+    data_base64: z.string().trim().min(1),
+  }).optional().nullable(),
 });
 
 const createEmpresaBody = empresaBody

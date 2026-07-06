@@ -122,6 +122,44 @@ async function updateMiEmpresa(req, res, next) {
   return updateEmpresa(req, res, next);
 }
 
+async function getEmpresaLogo(req, res, next) {
+  try {
+    const empresa = await empresaService.readEmpresaLogo(req.params.id);
+
+    if (!empresa) {
+      return res.status(404).json({
+        ok: false,
+        message: 'Empresa no encontrada',
+      });
+    }
+
+    if (!canAccessEmpresa(req, empresa.id)) {
+      return res.status(403).json({
+        ok: false,
+        message: 'No puede acceder a esta empresa',
+      });
+    }
+
+    if (!empresa.logo_data) {
+      return res.status(404).json({
+        ok: false,
+        message: 'La empresa no tiene logo cargado',
+      });
+    }
+
+    res.setHeader('Content-Type', empresa.logo_tipo || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${empresa.logo_nombre || `logo-${empresa.nombre || empresa.id}`}"`);
+    return res.send(empresa.logo_data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getMiEmpresaLogo(req, res, next) {
+  req.params.id = req.auth.empresa_id;
+  return getEmpresaLogo(req, res, next);
+}
+
 async function deleteEmpresa(req, res, next) {
   try {
     const empresa = await empresaService.deleteEmpresa(req.params.id);
@@ -160,6 +198,8 @@ module.exports = {
   listEmpresas,
   getEmpresa,
   getMiEmpresa,
+  getEmpresaLogo,
+  getMiEmpresaLogo,
   createEmpresa,
   updateEmpresa,
   updateMiEmpresa,

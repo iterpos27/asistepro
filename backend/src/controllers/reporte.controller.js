@@ -1,7 +1,9 @@
 const reporteService = require('../services/reporte.service');
+const empresaService = require('../services/empresa.service');
 const { toCsv } = require('../utils/csv.util');
 const { toExcelHtml } = require('../utils/excel.util');
 const { parsePagination } = require('../utils/pagination.util');
+const { buildAsistenciaRangoPdf } = require('../utils/pdf-report.util');
 
 const REPORT_TIME_ZONE = process.env.REPORT_TIME_ZONE || 'America/Guayaquil';
 const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
@@ -362,6 +364,50 @@ async function exportarAsistenciaRango(req, res, next) {
   }
 }
 
+async function exportarAsistenciaRangoPdf(req, res, next) {
+  try {
+    const fechaDesde = req.query.fecha_desde || todayDate();
+    const fechaHasta = req.query.fecha_hasta || todayDate();
+    const [result, empresa, empresaLogo] = await Promise.all([
+      reporteService.asistenciaRango({
+        empresaId: getEmpresaId(req),
+        fechaDesde,
+        fechaHasta,
+        sucursalId: req.query.sucursal_id,
+        empleadoId: req.query.empleado_id,
+        estado: req.query.estado,
+      }),
+      empresaService.findEmpresaById(getEmpresaId(req)),
+      empresaService.readEmpresaLogo(getEmpresaId(req)),
+    ]);
+
+    const rows = result.items || [];
+    const summary = {
+      total: rows.length,
+      presentes: rows.filter((row) => row.estado_asistencia === 'presente').length,
+      ausentes: rows.filter((row) => row.estado_asistencia === 'ausente').length,
+      horas: rows.reduce((total, row) => total + Number(row.horas_trabajadas || 0), 0),
+    };
+
+    const pdfBuffer = await buildAsistenciaRangoPdf({
+      empresa,
+      logoBuffer: empresaLogo?.logo_data || null,
+      filters: {
+        fechaDesde,
+        fechaHasta,
+      },
+      rows,
+      summary,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="asistencia-rango-${fechaDesde}-a-${fechaHasta}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   asistenciaDiaria,
   asistenciaMensual,
@@ -374,4 +420,5 @@ module.exports = {
   exportarNovedades,
   exportarAtrasos,
   exportarAsistenciaRango,
+  exportarAsistenciaRangoPdf,
 };

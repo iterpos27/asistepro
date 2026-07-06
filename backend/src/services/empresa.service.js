@@ -1,7 +1,29 @@
 const { pool } = require('../config/database');
 const bcrypt = require('bcryptjs');
+const { deleteObject, getObject, putObject } = require('./storage.service');
 
 const EMPRESA_ESTADOS = ['activa', 'suspendida', 'cancelada'];
+const LOGO_TIPOS = ['image/png', 'image/jpeg'];
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+
+function getBase64Payload(file) {
+  const rawBase64 = String(file?.data_base64 || file?.data || '');
+  return rawBase64.includes(',') ? rawBase64.split(',').pop() : rawBase64;
+}
+
+function normalizeLogo(file) {
+  if (!file) return null;
+
+  return {
+    nombre: String(file.nombre || file.name || '').trim().slice(0, 255),
+    tipo: String(file.tipo || file.type || '').trim(),
+    data: Buffer.from(getBase64Payload(file), 'base64'),
+  };
+}
+
+function buildLogoStorageKey({ empresaId, fileName }) {
+  return `tenants/${empresaId}/branding/${Date.now()}-${String(fileName || 'logo').replace(/[^a-zA-Z0-9._-]+/g, '_')}`;
+}
 
 function normalizeEmpresaPayload(payload) {
   return {
@@ -12,6 +34,7 @@ function normalizeEmpresaPayload(payload) {
     telefono: payload.telefono?.trim() || null,
     direccion: payload.direccion?.trim() || null,
     estado: payload.estado || 'activa',
+    logo: payload.logo || undefined,
   };
 }
 
@@ -30,6 +53,17 @@ function validateEmpresaPayload(payload, { partial = false } = {}) {
 
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
     errors.push('email invalido');
+  }
+
+  if (payload.logo) {
+    const logo = normalizeLogo(payload.logo);
+    const estimatedBytes = (getBase64Payload(payload.logo).length * 3) / 4;
+    if (!logo.nombre) errors.push('logo.nombre es requerido');
+    if (!LOGO_TIPOS.includes(logo.tipo)) errors.push('El logo debe ser PNG o JPG');
+    if (!logo.data.length) errors.push('archivo de logo vacio');
+    if (estimatedBytes > LOGO_MAX_BYTES || logo.data.length > LOGO_MAX_BYTES) {
+      errors.push('El logo no puede superar 2MB');
+    }
   }
 
   if (errors.length) {
@@ -101,6 +135,11 @@ async function listEmpresas({ search, estado, limit = 20, offset = 0 }) {
         e.telefono,
         e.direccion,
         e.estado,
+        e.logo_nombre,
+        e.logo_tipo,
+        e.logo_storage_url,
+        e.logo_subido_en,
+        (e.logo_data IS NOT NULL OR e.logo_storage_key IS NOT NULL) AS tiene_logo,
         e.creado_en,
         e.actualizado_en,
         p.codigo AS plan_codigo,
@@ -136,6 +175,14 @@ async function findEmpresaById(id) {
         e.telefono,
         e.direccion,
         e.estado,
+        e.logo_nombre,
+        e.logo_tipo,
+        e.logo_storage_provider,
+        e.logo_storage_bucket,
+        e.logo_storage_key,
+        e.logo_storage_url,
+        e.logo_subido_en,
+        (e.logo_data IS NOT NULL OR e.logo_storage_key IS NOT NULL) AS tiene_logo,
         e.creado_en,
         e.actualizado_en,
         p.codigo AS plan_codigo,
@@ -249,9 +296,32 @@ async function updateEmpresa(id, payload) {
     telefono: payload.telefono !== undefined ? payload.telefono?.trim() || null : current.telefono,
     direccion: payload.direccion !== undefined ? payload.direccion?.trim() || null : current.direccion,
     estado: payload.estado !== undefined ? payload.estado : current.estado,
+    logo: payload.logo !== undefined ? payload.logo : undefined,
   };
 
   await assertPlanExists(next.plan_id);
+
+  const logo = payload.logo !== undefined ? normalizeLogo(payload.logo) : undefined;
+  let logoMeta = {
+    provider: current.logo_storage_provider || null,
+    bucket: current.logo_storage_bucket || null,
+    key: current.logo_storage_key || null,
+    url: current.logo_storage_url || null,
+  };
+
+  if (payload.logo !== undefined) {
+    if (logo?.data?.length) {
+      logoMeta = await putObject({
+        key: buildLogoStorageKey({ empresaId: id, fileName: logo.nombre }),
+        body: logo.data,
+        contentType: logo.tipo,
+      });
+    } else {
+      logoMeta = { provider: null, bucket: null, key: null, url: null };
+    }
+  }
+
+  const usesExternalStorage = logoMeta?.provider && logoMeta.provider !== 'database';
 
   await pool.query(
     `
@@ -263,6 +333,14 @@ async function updateEmpresa(id, payload) {
           telefono = $6,
           direccion = $7,
           estado = $8,
+          logo_nombre = CASE WHEN $9::boolean THEN $10::varchar ELSE logo_nombre END,
+          logo_tipo = CASE WHEN $9::boolean THEN $11::varchar ELSE logo_tipo END,
+          logo_data = CASE WHEN $9::boolean THEN $12::bytea ELSE logo_data END,
+          logo_storage_provider = CASE WHEN $9::boolean THEN $13::varchar ELSE logo_storage_provider END,
+          logo_storage_bucket = CASE WHEN $9::boolean THEN $14::varchar ELSE logo_storage_bucket END,
+          logo_storage_key = CASE WHEN $9::boolean THEN $15::text ELSE logo_storage_key END,
+          logo_storage_url = CASE WHEN $9::boolean THEN $16::text ELSE logo_storage_url END,
+          logo_subido_en = CASE WHEN $9::boolean THEN (CASE WHEN $12::bytea IS NULL AND $15::text IS NULL THEN NULL ELSE NOW() END) ELSE logo_subido_en END,
           actualizado_en = NOW()
       WHERE id = $1
     `,
@@ -275,8 +353,20 @@ async function updateEmpresa(id, payload) {
       next.telefono,
       next.direccion,
       next.estado,
+      payload.logo !== undefined,
+      logo?.nombre || null,
+      logo?.tipo || null,
+      usesExternalStorage ? null : logo?.data || null,
+      usesExternalStorage ? logoMeta?.provider || null : null,
+      usesExternalStorage ? logoMeta?.bucket || null : null,
+      usesExternalStorage ? logoMeta?.key || null : null,
+      usesExternalStorage ? logoMeta?.url || null : null,
     ],
   );
+
+  if (payload.logo !== undefined && current.logo_storage_key && current.logo_storage_key !== logoMeta?.key) {
+    await deleteObject({ bucket: current.logo_storage_bucket, key: current.logo_storage_key });
+  }
 
   return findEmpresaById(id);
 }
@@ -381,6 +471,45 @@ async function resetAdminPassword(id) {
   };
 }
 
+async function readEmpresaLogo(id) {
+  const result = await pool.query(
+    `
+      SELECT
+        id,
+        nombre,
+        logo_nombre,
+        logo_tipo,
+        logo_data,
+        logo_storage_bucket,
+        logo_storage_key,
+        logo_storage_url
+      FROM empresas
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  const empresa = result.rows[0];
+  if (!empresa) return null;
+
+  if (!empresa.logo_data && !empresa.logo_storage_key) {
+    return {
+      ...empresa,
+      logo_data: null,
+    };
+  }
+
+  return {
+    ...empresa,
+    logo_data: await getObject({
+      bucket: empresa.logo_storage_bucket,
+      key: empresa.logo_storage_key,
+      fallbackBody: empresa.logo_data,
+    }),
+  };
+}
+
 module.exports = {
   listEmpresas,
   findEmpresaById,
@@ -388,4 +517,5 @@ module.exports = {
   updateEmpresa,
   deleteEmpresa,
   resetAdminPassword,
+  readEmpresaLogo,
 };

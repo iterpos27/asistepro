@@ -47,6 +47,13 @@ router.get(
   reporteController.exportarAsistenciaRango,
 );
 router.get(
+  '/export/asistencia-rango.pdf',
+  featureGuard('reportes_avanzados'),
+  permissionGuard('reportes', 'exportar'),
+  validateSchema(exportAsistenciaRangoSchema),
+  reporteController.exportarAsistenciaRangoPdf,
+);
+router.get(
   '/export/entradas-salidas.xls',
   featureGuard('reportes_avanzados'),
   permissionGuard('reportes', 'exportar'),

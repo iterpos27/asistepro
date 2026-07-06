@@ -107,3 +107,7 @@ export async function downloadFile(path, params, filename) {
   link.click();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadPdf(path, params, filename) {
+  return downloadFile(path, params, filename);
+}

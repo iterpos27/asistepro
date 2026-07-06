@@ -32,3 +32,20 @@ export async function resetAdminPassword(id) {
   const response = await api.post(`/empresas/${id}/reset-admin-password`);
   return response.data.data;
 }
+
+export async function getMiEmpresa() {
+  const response = await api.get('/empresas/me');
+  return response.data.data;
+}
+
+export async function updateMiEmpresa(payload) {
+  const response = await api.put('/empresas/me', payload);
+  return response.data.data;
+}
+
+export async function getMiEmpresaLogo() {
+  const response = await api.get('/empresas/me/logo', {
+    responseType: 'blob',
+  });
+  return response.data;
+}
