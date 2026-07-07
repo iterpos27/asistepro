@@ -44,8 +44,8 @@ async function uploadStoredFile({ empresaId, scope, entityId, file }) {
 async function resolveEmpleado(client, empresaId, auth, requestedId) {
   const values = [empresaId];
   let condition;
-  if (auth.rol === 'EMPLEADO') { values.push(auth.usuario_id); condition = 'usuario_id = $2'; }
-  else { if (!requestedId) { const error = new Error('empleado_id es requerido'); error.statusCode = 400; throw error; } values.push(requestedId); condition = 'id = $2'; }
+  if (auth.rol === 'EMPLEADO' || !requestedId) { values.push(auth.usuario_id); condition = 'usuario_id = $2'; }
+  else { values.push(requestedId); condition = 'id = $2'; }
   const result = await client.query(`SELECT * FROM empleados WHERE empresa_id = $1 AND ${condition} AND estado = 'activo' LIMIT 1`, values);
   if (!result.rows[0]) { const error = new Error('Empleado activo no encontrado'); error.statusCode = 404; throw error; }
   return result.rows[0];

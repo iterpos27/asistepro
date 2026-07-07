@@ -26,6 +26,7 @@ export default function AppMovil() {
   const [notifications, setNotifications] = useState([]);
   const [totalNotifications, setTotalNotifications] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
 
   const supportsPush = useMemo(
     () => 'serviceWorker' in navigator && 'PushManager' in window && Boolean(import.meta.env.VITE_VAPID_PUBLIC_KEY),
@@ -78,11 +79,12 @@ export default function AppMovil() {
 
   async function installApp() {
     if (!installEvent) {
-      toast.warning('El navegador aun no ofrece la instalacion');
+      setInstallHelpOpen(true);
       return;
     }
     await installEvent.prompt();
     setInstallEvent(null);
+    setInstallHelpOpen(false);
   }
 
   const shortcuts = [
@@ -181,6 +183,11 @@ export default function AppMovil() {
             <div className="list-row"><strong>Service worker</strong><span>{swReady ? 'Registrado' : 'No disponible'}</span></div>
             <div className="list-row"><strong>Modo install</strong><span>{installEvent ? 'Disponible' : 'Esperando navegador'}</span></div>
           </div>
+          {installHelpOpen ? (
+            <div className="alert-info" style={{ marginTop: '14px' }}>
+              En Chrome movil abre el menu de tres puntos y usa "Agregar a pantalla principal" o "Instalar app". Si ya esta instalada, el navegador no vuelve a mostrar el instalador.
+            </div>
+          ) : null}
           <div className="form-actions">
             <button className="primary-button" type="button" onClick={installApp}>Instalar app</button>
           </div>

@@ -84,16 +84,10 @@ async function findEmpleadoForMarcacion({ empresaId, empleadoId, usuarioId, rol 
   const values = [empresaId];
   let condition = '';
 
-  if (rol === 'EMPLEADO') {
+  if (rol === 'EMPLEADO' || !empleadoId) {
     values.push(usuarioId);
     condition = `AND usuario_id = $${values.length}`;
   } else {
-    if (!empleadoId) {
-      const error = new Error('empleado_id es requerido');
-      error.statusCode = 400;
-      throw error;
-    }
-
     values.push(empleadoId);
     condition = `AND id = $${values.length}`;
   }
