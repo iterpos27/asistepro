@@ -71,6 +71,29 @@ async function assertSucursalInTenant(empresaId, sucursalId) {
   }
 }
 
+async function assertSucursalesAutorizadasInTenant(empresaId, sucursalIds = []) {
+  const ids = [...new Set((sucursalIds || []).filter(Boolean))];
+  if (!ids.length) return [];
+
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM sucursales
+      WHERE empresa_id = $1
+        AND id = ANY($2::uuid[])
+    `,
+    [empresaId, ids],
+  );
+
+  if (result.rows.length !== ids.length) {
+    const error = new Error('Una o mas sucursales autorizadas no pertenecen a la empresa');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return ids;
+}
+
 async function assertUsuarioInTenant(empresaId, usuarioId) {
   if (!usuarioId) return;
 
@@ -253,6 +276,8 @@ async function listEmpleados({
         supervisor.codigo AS supervisor_codigo,
         supervisor.nombres AS supervisor_nombres,
         supervisor.apellidos AS supervisor_apellidos,
+        COALESCE(autorizadas.sucursales_autorizadas_ids, '[]'::json) AS sucursales_autorizadas_ids,
+        COALESCE(autorizadas.sucursales_autorizadas_nombres, '[]'::json) AS sucursales_autorizadas_nombres,
         COUNT(*) OVER() AS total
       FROM empleados e
       LEFT JOIN sucursales s ON s.id = e.sucursal_habitual_id
@@ -261,6 +286,16 @@ async function listEmpleados({
       LEFT JOIN estructuras_organizacionales cargo_org ON cargo_org.id = e.cargo_estructura_id
       LEFT JOIN estructuras_organizacionales centro ON centro.id = e.centro_costo_estructura_id
       LEFT JOIN empleados supervisor ON supervisor.id = e.supervisor_empleado_id
+      LEFT JOIN LATERAL (
+        SELECT
+          json_agg(esa.sucursal_id ORDER BY suc.nombre) AS sucursales_autorizadas_ids,
+          json_agg(suc.nombre ORDER BY suc.nombre) AS sucursales_autorizadas_nombres
+        FROM empleado_sucursales_autorizadas esa
+        INNER JOIN sucursales suc ON suc.id = esa.sucursal_id
+        WHERE esa.empresa_id = e.empresa_id
+          AND esa.empleado_id = e.id
+          AND esa.activo = TRUE
+      ) autorizadas ON TRUE
       WHERE ${filters.join(' AND ')}
       ORDER BY e.creado_en DESC
       LIMIT $${limitParam}
@@ -290,7 +325,9 @@ async function findEmpleadoById(empresaId, id) {
         centro.nombre AS centro_costo_nombre,
         supervisor.codigo AS supervisor_codigo,
         supervisor.nombres AS supervisor_nombres,
-        supervisor.apellidos AS supervisor_apellidos
+        supervisor.apellidos AS supervisor_apellidos,
+        COALESCE(autorizadas.sucursales_autorizadas_ids, '[]'::json) AS sucursales_autorizadas_ids,
+        COALESCE(autorizadas.sucursales_autorizadas_nombres, '[]'::json) AS sucursales_autorizadas_nombres
       FROM empleados e
       LEFT JOIN sucursales s ON s.id = e.sucursal_habitual_id
       LEFT JOIN usuarios u ON u.id = e.usuario_id
@@ -298,6 +335,16 @@ async function findEmpleadoById(empresaId, id) {
       LEFT JOIN estructuras_organizacionales cargo_org ON cargo_org.id = e.cargo_estructura_id
       LEFT JOIN estructuras_organizacionales centro ON centro.id = e.centro_costo_estructura_id
       LEFT JOIN empleados supervisor ON supervisor.id = e.supervisor_empleado_id
+      LEFT JOIN LATERAL (
+        SELECT
+          json_agg(esa.sucursal_id ORDER BY suc.nombre) AS sucursales_autorizadas_ids,
+          json_agg(suc.nombre ORDER BY suc.nombre) AS sucursales_autorizadas_nombres
+        FROM empleado_sucursales_autorizadas esa
+        INNER JOIN sucursales suc ON suc.id = esa.sucursal_id
+        WHERE esa.empresa_id = e.empresa_id
+          AND esa.empleado_id = e.id
+          AND esa.activo = TRUE
+      ) autorizadas ON TRUE
       WHERE e.empresa_id = $1
         AND e.id = $2
       LIMIT 1
@@ -308,10 +355,39 @@ async function findEmpleadoById(empresaId, id) {
   return result.rows[0] || null;
 }
 
+async function syncSucursalesAutorizadas(client, empresaId, empleadoId, sucursalIds = []) {
+  const ids = [...new Set((sucursalIds || []).filter(Boolean))];
+
+  await client.query(
+    `
+      UPDATE empleado_sucursales_autorizadas
+      SET activo = FALSE,
+          actualizado_en = NOW()
+      WHERE empresa_id = $1
+        AND empleado_id = $2
+    `,
+    [empresaId, empleadoId],
+  );
+
+  for (const sucursalId of ids) {
+    await client.query(
+      `
+        INSERT INTO empleado_sucursales_autorizadas (empresa_id, empleado_id, sucursal_id, activo)
+        VALUES ($1, $2, $3, TRUE)
+        ON CONFLICT (empresa_id, empleado_id, sucursal_id)
+        DO UPDATE SET activo = TRUE,
+                      actualizado_en = NOW()
+      `,
+      [empresaId, empleadoId, sucursalId],
+    );
+  }
+}
+
 async function createEmpleado(empresaId, payload) {
   validateEmpleadoPayload(payload);
   validateUsuarioPayload(payload);
   await assertSucursalInTenant(empresaId, payload.sucursal_habitual_id);
+  const sucursalesAutorizadasIds = await assertSucursalesAutorizadasInTenant(empresaId, payload.sucursales_autorizadas_ids);
   await assertUsuarioInTenant(empresaId, payload.usuario_id);
   await assertEstructuraInTenant(empresaId, payload.area_estructura_id, ['direccion', 'departamento', 'area', 'unidad']);
   await assertEstructuraInTenant(empresaId, payload.cargo_estructura_id, ['cargo']);
@@ -393,6 +469,7 @@ async function createEmpleado(empresaId, payload) {
     if (saldoInicial !== undefined && saldoInicial !== null && saldoInicial !== '') {
       await vacacionesService.setSaldoInicial(empresaId, result.rows[0].id, Number(saldoInicial), client);
     }
+    await syncSucursalesAutorizadas(client, empresaId, result.rows[0].id, sucursalesAutorizadasIds);
     await client.query('COMMIT');
     return findEmpleadoById(empresaId, result.rows[0].id);
   } catch (error) {
@@ -455,6 +532,9 @@ async function updateEmpleado(empresaId, id, payload) {
   };
 
   await assertSucursalInTenant(empresaId, next.sucursal_habitual_id);
+  const sucursalesAutorizadasIds = payload.sucursales_autorizadas_ids !== undefined
+    ? await assertSucursalesAutorizadasInTenant(empresaId, payload.sucursales_autorizadas_ids)
+    : null;
   await assertUsuarioInTenant(empresaId, next.usuario_id);
   await assertEstructuraInTenant(empresaId, next.area_estructura_id, ['direccion', 'departamento', 'area', 'unidad']);
   await assertEstructuraInTenant(empresaId, next.cargo_estructura_id, ['cargo']);
@@ -525,6 +605,10 @@ async function updateEmpleado(empresaId, id, payload) {
         'UPDATE usuarios SET username = $1, actualizado_en = NOW() WHERE id = $2',
         [payload.username?.trim().toLowerCase() || null, usuarioId]
       );
+    }
+
+    if (sucursalesAutorizadasIds !== null) {
+      await syncSucursalesAutorizadas(client, empresaId, id, sucursalesAutorizadasIds);
     }
 
     await client.query('COMMIT');

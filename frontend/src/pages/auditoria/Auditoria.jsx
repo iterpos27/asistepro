@@ -23,6 +23,10 @@ const FIELD_LABELS = {
   comprobante_url: 'Archivo de Comprobante',
 };
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function FriendlyMetadata({ metadata }) {
   if (!metadata) return <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '12px 0' }}>No hay detalles adicionales.</p>;
   const fields = {};
@@ -63,7 +67,7 @@ function FriendlyMetadata({ metadata }) {
 export default function Auditoria() {
   const [empresas, setEmpresas] = useState([]);
   const [empresaId, setEmpresaId] = useState('');
-  const [filters, setFilters] = useState({ search: '', entidad: '', fecha_desde: '', fecha_hasta: '' });
+  const [filters, setFilters] = useState({ search: '', entidad: '', fecha_desde: today(), fecha_hasta: today() });
   const [data, setData] = useState({ items: [], total: 0 });
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);

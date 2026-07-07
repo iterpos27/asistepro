@@ -261,7 +261,7 @@ test('empleado accede a solicitudes con permiso granular', async ({ page }) => {
 });
 
 test('admin visualiza calculo laboral y cierre mensual', async ({ page }) => {
-  const user = userFor('ADMIN_EMPRESA', {}, { calculo_laboral: { ver: true, exportar: true }, cierres_mensuales: { ver: true, cerrar: true, reabrir: true } });
+  const user = userFor('ADMIN_EMPRESA', { nomina: true }, { calculo_laboral: { ver: true, exportar: true }, cierres_mensuales: { ver: true, cerrar: true, reabrir: true } });
   await mockApi(page, user);
   await page.goto('/calculo-laboral');
   await expect(page.getByRole('heading', { name: 'Calculo laboral' })).toBeVisible();

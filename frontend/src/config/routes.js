@@ -9,6 +9,7 @@ const HorariosList = lazy(() => import('../pages/horarios/HorariosList'));
 const FeriadosList = lazy(() => import('../pages/horarios/FeriadosList'));
 const HistorialMarcaciones = lazy(() => import('../pages/marcaciones/HistorialMarcaciones'));
 const MarcarAsistencia = lazy(() => import('../pages/marcaciones/MarcarAsistencia'));
+const Integraciones = lazy(() => import('../pages/integraciones/Integraciones'));
 const PlanesList = lazy(() => import('../pages/planes/PlanesList'));
 const Reportes = lazy(() => import('../pages/reportes/Reportes'));
 const ReemplazosList = lazy(() => import('../pages/reemplazos/ReemplazosList'));
@@ -113,6 +114,13 @@ export const privateRoutes = [
     permission: ['organizacion', 'ver'],
   },
   {
+    path: '/integraciones',
+    element: Integraciones,
+    roles: routeRoles.rrhh,
+    feature: 'integraciones',
+    permission: ['integraciones', 'ver'],
+  },
+  {
     path: '/saas-control',
     element: SaasControl,
     roles: routeRoles.superAdmin,
@@ -122,6 +130,7 @@ export const privateRoutes = [
     path: '/app-movil',
     element: AppMovil,
     roles: routeRoles.all,
+    feature: 'pwa',
   },
   {
     path: '/solicitudes', element: SolicitudesList, roles: routeRoles.all, permission: ['solicitudes', 'ver'],

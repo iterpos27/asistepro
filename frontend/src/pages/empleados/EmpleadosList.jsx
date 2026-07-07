@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Edit, Eye, Plus, RotateCcw, Search, Trash2, UserCheck, Users, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Edit, Eye, Plus, RotateCcw, Search, Trash2, Upload, UserCheck, Users, Wallet } from 'lucide-react';
 import ActionDialog from '../../components/common/ActionDialog';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -11,7 +11,8 @@ import * as sucursalService from '../../services/sucursalService';
 import EmpleadoDetalle from './EmpleadoDetalle';
 import EmpleadoForm from './EmpleadoForm';
 
-const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesionales', 'Pasantia'];
+const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesionales / Bajo factura', 'Pasantia'];
+const professionalServiceTypes = ['servicios profesionales', 'servicios profesionales / bajo factura', 'bajo factura'];
 
 function statusClass(estado) {
   if (estado === 'activo') return 'status-pill';
@@ -23,7 +24,21 @@ function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function isProfessionalService(tipoContrato) {
+  return professionalServiceTypes.includes(String(tipoContrato || '').trim().toLowerCase());
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function EmpleadosList() {
+  const importInputRef = useRef(null);
   const [empleados, setEmpleados] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [catalogs, setCatalogs] = useState({ estructuras: [], supervisores: [] });
@@ -41,6 +56,7 @@ export default function EmpleadosList() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [pendingDeactivate, setPendingDeactivate] = useState(null);
@@ -53,7 +69,9 @@ export default function EmpleadosList() {
   const summary = useMemo(() => {
     const activos = empleados.filter((item) => item.estado === 'activo').length;
     const conUsuario = empleados.filter((item) => item.usuario_email).length;
-    const salarioBase = empleados.reduce((totalSalary, item) => totalSalary + Number(item.salario_base || 0), 0);
+    const salarioBase = empleados
+      .filter((item) => !isProfessionalService(item.tipo_contrato))
+      .reduce((totalSalary, item) => totalSalary + Number(item.salario_base || 0), 0);
     const sinSupervisor = empleados.filter((item) => item.estado === 'activo' && !item.supervisor_empleado_id).length;
     return { activos, conUsuario, salarioBase, sinSupervisor };
   }, [empleados]);
@@ -173,6 +191,38 @@ export default function EmpleadosList() {
     }
   }
 
+  async function downloadTemplate() {
+    try {
+      await organizacionService.downloadEmployeeTemplate();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'No se pudo descargar la plantilla');
+    }
+  }
+
+  async function importEmployees(file) {
+    if (!file) return;
+    setImportLoading(true);
+    setError('');
+    try {
+      const archivo_base64 = await readFileAsDataUrl(file);
+      const result = await organizacionService.importEmployees({
+        nombre_archivo: file.name,
+        archivo_base64,
+      });
+      const created = result?.filas_creadas || 0;
+      const updated = result?.filas_actualizadas || 0;
+      const errors = result?.filas_con_error || 0;
+      toast.success(`Importacion procesada: ${created} creados, ${updated} actualizados, ${errors} errores`);
+      await loadCatalogs();
+      await loadEmpleados();
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'No se pudo importar el archivo');
+    } finally {
+      setImportLoading(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -181,10 +231,25 @@ export default function EmpleadosList() {
         actions={
           <>
             <span className="status-pill">{loading ? 'Cargando' : `${total} registros`}</span>
+            <button className="outline-button" type="button" onClick={downloadTemplate}>
+              <Download size={16} />
+              Plantilla
+            </button>
+            <button className="outline-button" type="button" onClick={() => importInputRef.current?.click()} disabled={importLoading}>
+              <Upload size={16} />
+              {importLoading ? 'Importando' : 'Importar'}
+            </button>
             <button className="outline-button" type="button" onClick={openCreateForm}>
               <Plus size={16} />
               Nuevo empleado
             </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={(event) => importEmployees(event.target.files?.[0])}
+            />
           </>
         }
       />
@@ -192,7 +257,7 @@ export default function EmpleadosList() {
       <section className="metrics-grid">
         <MetricCard label="Activos" value={summary.activos} icon={UserCheck} tone="success" />
         <MetricCard label="Con acceso" value={summary.conUsuario} icon={Users} tone="accent" />
-        <MetricCard label="Nomina base" value={money(summary.salarioBase)} icon={Wallet} tone="warning" />
+        <MetricCard label="Salario base" value={money(summary.salarioBase)} icon={Wallet} tone="warning" />
         <MetricCard label="Sin supervisor" value={summary.sinSupervisor} icon={Users} />
       </section>
 
@@ -320,7 +385,12 @@ export default function EmpleadosList() {
                     <td>
                       {empleado.supervisor_nombres ? `${empleado.supervisor_nombres} ${empleado.supervisor_apellidos || ''}`.trim() : '-'}
                     </td>
-                    <td>{empleado.sucursal_habitual_nombre || '-'}</td>
+                    <td>
+                      {empleado.sucursal_habitual_nombre || '-'}
+                      {empleado.sucursales_autorizadas_nombres?.length ? (
+                        <span className="table-subtext">Autorizadas: {empleado.sucursales_autorizadas_nombres.join(', ')}</span>
+                      ) : null}
+                    </td>
                     <td>
                       <span className={empleado.usuario_email ? 'status-pill' : 'status-pill muted'}>
                         {empleado.usuario_email ? 'Con acceso' : 'Sin acceso'}

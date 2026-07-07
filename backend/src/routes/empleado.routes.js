@@ -5,6 +5,7 @@ const { authGuard, roleGuard } = require('../middlewares/auth.middleware');
 const { tenantGuard, subscriptionGuard, planLimitGuard } = require('../middlewares/tenant.middleware');
 const { validateSchema } = require('../middlewares/validation.middleware');
 const { permissionGuard } = require('../utils/granular-permissions.util');
+const { importEmployeesSchema } = require('../validators/organizacion.validator');
 const {
   createEmpleadoSchema,
   idParamSchema,
@@ -21,6 +22,8 @@ router.use(subscriptionGuard);
 
 router.get('/', permissionGuard('empleados', 'ver'), validateSchema(listEmpleadosSchema), empleadoController.listEmpleados);
 router.post('/', permissionGuard('empleados', 'crear'), validateSchema(createEmpleadoSchema), planLimitGuard('empleados'), empleadoController.createEmpleado);
+router.get('/importaciones/plantilla', permissionGuard('importaciones', 'exportar'), empleadoController.employeeImportTemplate);
+router.post('/importaciones', permissionGuard('importaciones', 'crear'), validateSchema(importEmployeesSchema), empleadoController.importEmployees);
 router.get('/:id', permissionGuard('empleados', 'ver'), validateSchema(idParamSchema), empleadoController.getEmpleado);
 router.put('/:id', permissionGuard('empleados', 'editar'), validateSchema(updateEmpleadoSchema), empleadoController.updateEmpleado);
 router.patch('/:id/liberar-dispositivo', permissionGuard('empleados', 'editar'), validateSchema(idParamSchema), empleadoController.liberarDispositivo);

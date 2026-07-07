@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const { deleteObject, getObject, putObject } = require('./storage.service');
+const notificacionService = require('./notificacion.service');
 
 const FACTURA_ESTADOS = ['pendiente', 'pagada', 'anulada', 'vencida'];
 const PAGO_METODOS = ['transferencia', 'deposito'];
@@ -641,15 +642,48 @@ async function registerManualPayment(payload) {
 
     await client.query('COMMIT');
 
-    return {
+    const response = {
       pago: await findPagoById(paymentResult.rows[0].id),
       factura: await findFacturaById(factura.id),
     };
+    notifyPagoRegistrado(response).catch(() => {});
+    return response;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function notifyPagoRegistrado({ pago, factura }) {
+  if (!pago || !factura) return;
+  const isPending = pago.estado === 'pendiente';
+  const roles = isPending ? ['SUPER_ADMIN'] : ['ADMIN_EMPRESA'];
+  const values = isPending ? [roles] : [factura.empresa_id, roles];
+  const empresaFilter = isPending ? '' : 'AND u.empresa_id = $1';
+  const roleParam = isPending ? '$1' : '$2';
+
+  const result = await pool.query(
+    `
+      SELECT u.id, u.empresa_id
+      FROM usuarios u
+      INNER JOIN roles r ON r.id = u.rol_id
+      WHERE r.codigo = ANY(${roleParam})
+        AND u.estado = 'activo'
+        ${empresaFilter}
+    `,
+    values,
+  );
+
+  for (const user of result.rows) {
+    await notificacionService.createNotificacion({
+      empresaId: user.empresa_id || factura.empresa_id,
+      usuarioId: user.id,
+      titulo: isPending ? 'Pago pendiente de aprobacion' : 'Pago registrado',
+      mensaje: `Factura ${factura.numero}: pago por ${Number(pago.monto || 0).toFixed(2)} registrado.`,
+      tipo: 'factura',
+    });
   }
 }
 
@@ -746,15 +780,42 @@ async function aprobarPago(id) {
     await recalculateFacturaEstado(client, pago.factura_id);
     await client.query('COMMIT');
 
-    return {
+    const response = {
       pago: await findPagoById(id),
       factura: await findFacturaById(pago.factura_id),
     };
+    notifyPagoAprobado(response).catch(() => {});
+    return response;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function notifyPagoAprobado({ pago, factura }) {
+  if (!pago || !factura) return;
+  const admins = await pool.query(
+    `
+      SELECT u.id
+      FROM usuarios u
+      INNER JOIN roles r ON r.id = u.rol_id
+      WHERE u.empresa_id = $1
+        AND r.codigo = 'ADMIN_EMPRESA'
+        AND u.estado = 'activo'
+    `,
+    [factura.empresa_id],
+  );
+
+  for (const admin of admins.rows) {
+    await notificacionService.createNotificacion({
+      empresaId: factura.empresa_id,
+      usuarioId: admin.id,
+      titulo: 'Pago aprobado',
+      mensaje: `El pago de la factura ${factura.numero} fue aprobado.`,
+      tipo: 'factura',
+    });
   }
 }
 
@@ -848,15 +909,42 @@ async function anulacionPago(id, motivoAnulacion) {
     await recalculateFacturaEstado(client, pago.factura_id);
     await client.query('COMMIT');
 
-    return {
+    const response = {
       pago: await findPagoById(id),
       factura: await findFacturaById(pago.factura_id),
     };
+    notifyPagoAnulado(response).catch(() => {});
+    return response;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
+  }
+}
+
+async function notifyPagoAnulado({ pago, factura }) {
+  if (!pago || !factura) return;
+  const admins = await pool.query(
+    `
+      SELECT u.id
+      FROM usuarios u
+      INNER JOIN roles r ON r.id = u.rol_id
+      WHERE u.empresa_id = $1
+        AND r.codigo = 'ADMIN_EMPRESA'
+        AND u.estado = 'activo'
+    `,
+    [factura.empresa_id],
+  );
+
+  for (const admin of admins.rows) {
+    await notificacionService.createNotificacion({
+      empresaId: factura.empresa_id,
+      usuarioId: admin.id,
+      titulo: 'Pago anulado',
+      mensaje: `El pago de la factura ${factura.numero} fue anulado. Revisa la facturacion.`,
+      tipo: 'factura',
+    });
   }
 }
 

@@ -102,7 +102,7 @@ export default function Integraciones() {
     <>
       <PageHeader
         title="Integraciones"
-        description="Conecta nomina, biometria y storage externo sin meter logica sensible dentro del core de asistencia."
+        description="Conecta exportes laborales, biometria y storage externo sin meter logica sensible dentro del core de asistencia."
         actions={<span className="status-pill">{data.storage?.driver || 'database'}</span>}
       />
 
@@ -113,7 +113,7 @@ export default function Integraciones() {
             <div className="toolbar-grid">
               <input placeholder="Nombre" value={form.nombre} onChange={(event) => setForm((current) => ({ ...current, nombre: event.target.value }))} />
               <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: event.target.value }))}>
-                <option value="nomina">Nomina</option>
+                <option value="nomina">Exportacion laboral</option>
                 <option value="biometrico">Biometrico</option>
                 <option value="storage">Storage</option>
               </select>
@@ -137,10 +137,10 @@ export default function Integraciones() {
         </div>
 
         <div className="panel">
-          <PanelTitle title="Ejecucion manual" subtitle="Prueba exportes de nomina, lotes biometricos o validacion del storage configurado." />
+          <PanelTitle title="Ejecucion manual" subtitle="Prueba exportes laborales, lotes biometricos o validacion del storage configurado." />
           <textarea rows="14" value={runPayload} onChange={(event) => setRunPayload(event.target.value)} />
           <div className="inline-hint">
-            <span>Nomina: usa `plantilla` = `detalle_diario`, `resumen_mensual` o `cliente`.</span>
+            <span>Laboral: usa `plantilla` = `detalle_diario`, `resumen_mensual` o `cliente`.</span>
             <span>Archivo: `tipo_archivo` = `csv` o `xlsx`.</span>
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function Integraciones() {
       </div>
 
       <div className="panel">
-        <PanelTitle title="Bitacora reciente" subtitle="Ultimas ejecuciones de nomina, biometria y almacenamiento." />
+        <PanelTitle title="Bitacora reciente" subtitle="Ultimas ejecuciones laborales, biometria y almacenamiento." />
         <div className="table-wrap">
           <table>
             <thead>

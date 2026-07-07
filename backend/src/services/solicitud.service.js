@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { pool } = require('../config/database');
 const laboralService = require('./laboral.service');
+const notificacionService = require('./notificacion.service');
 const vacacionesService = require('./vacaciones.service');
 const { putObject } = require('./storage.service');
 
@@ -52,6 +53,7 @@ async function resolveEmpleado(client, empresaId, auth, requestedId) {
 
 async function createSolicitud({ empresaId, auth, payload }) {
   const client = await pool.connect();
+  let solicitud;
   try {
     await client.query('BEGIN');
     const employee = await resolveEmpleado(client, empresaId, auth, payload.empleado_id);
@@ -101,8 +103,47 @@ async function createSolicitud({ empresaId, auth, payload }) {
         fileData.url
       ]
     );
-    await client.query('COMMIT'); return result.rows[0];
+    solicitud = result.rows[0];
+    await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+
+  notifySolicitudCreada(solicitud).catch(() => {});
+  return solicitud;
+}
+
+async function notifySolicitudCreada(solicitud) {
+  const admins = await pool.query(
+    `
+      SELECT u.id
+      FROM usuarios u
+      INNER JOIN roles r ON r.id = u.rol_id
+      WHERE u.empresa_id = $1
+        AND r.codigo IN ('ADMIN_EMPRESA', 'RRHH')
+        AND u.estado = 'activo'
+    `,
+    [solicitud.empresa_id],
+  );
+
+  for (const admin of admins.rows) {
+    await notificacionService.createNotificacion({
+      empresaId: solicitud.empresa_id,
+      usuarioId: admin.id,
+      titulo: 'Nueva solicitud pendiente',
+      mensaje: `Se registro una solicitud de ${solicitud.tipo}. Revisa el flujo de aprobacion.`,
+      tipo: 'solicitud',
+    });
+  }
+}
+
+async function notifySolicitudRevisada(solicitud) {
+  if (!solicitud?.solicitado_por) return;
+  await notificacionService.createNotificacion({
+    empresaId: solicitud.empresa_id,
+    usuarioId: solicitud.solicitado_por,
+    titulo: `Solicitud ${solicitud.estado}`,
+    mensaje: `Tu solicitud de ${solicitud.tipo} quedo en estado ${solicitud.estado}.`,
+    tipo: 'solicitud',
+  });
 }
 
 async function listSolicitudes({ empresaId, auth, estado, tipo, empleadoId, limit, offset }) {
@@ -204,6 +245,7 @@ async function applyCorrection(client, request) {
 
 async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decision, comentario, datos_adicionales, reemplazo_empleado_id }) {
   const client = await pool.connect();
+  let reviewed;
   try {
     await client.query('BEGIN');
     const result = await client.query(`SELECT * FROM solicitudes WHERE empresa_id=$1 AND id=$2 FOR UPDATE`, [empresaId, solicitudId]);
@@ -336,8 +378,12 @@ async function reviewSolicitud({ empresaId, solicitudId, reviewerId, auth, decis
         client
       );
     }
-    await client.query('COMMIT'); return updated.rows[0];
+    reviewed = updated.rows[0];
+    await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
+
+  notifySolicitudRevisada(reviewed).catch(() => {});
+  return reviewed;
 }
 
 async function cancelSolicitud({ empresaId, solicitudId, auth }) {

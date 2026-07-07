@@ -28,6 +28,7 @@ router.post('/estructuras', permissionGuard('organizacion', 'crear'), validateSc
 router.put('/estructuras/:id', permissionGuard('organizacion', 'editar'), validateSchema(updateStructureSchema), organizacionController.updateStructure);
 router.delete('/estructuras/:id', permissionGuard('organizacion', 'eliminar'), validateSchema(idParamSchema), organizacionController.deleteStructure);
 router.get('/importaciones', permissionGuard('importaciones', 'ver'), organizacionController.listImports);
+router.get('/importaciones/empleados/plantilla', permissionGuard('importaciones', 'exportar'), organizacionController.employeeImportTemplate);
 router.post('/importaciones/empleados', permissionGuard('importaciones', 'crear'), featureGuard('importaciones'), validateSchema(importEmployeesSchema), organizacionController.importEmployees);
 
 module.exports = router;

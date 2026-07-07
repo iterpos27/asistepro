@@ -57,7 +57,23 @@ async function subscribePush(req, res, next) {
   }
 }
 
+async function createTestNotification(req, res, next) {
+  try {
+    const data = await notificacionService.createNotificacion({
+      empresaId: req.tenant.empresa_id,
+      usuarioId: req.auth.usuario_id,
+      titulo: 'Aviso de prueba',
+      mensaje: 'Las notificaciones de AsistePro estan activas para este usuario.',
+      tipo: 'general',
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
+  createTestNotification,
   listNotificaciones,
   markAsRead,
   markAllAsRead,

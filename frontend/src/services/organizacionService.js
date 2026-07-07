@@ -36,6 +36,16 @@ export async function listImports() {
 }
 
 export async function importEmployees(payload) {
-  const response = await api.post('/organizacion/importaciones/empleados', payload);
+  const response = await api.post('/empleados/importaciones', payload);
   return response.data.data;
+}
+
+export async function downloadEmployeeTemplate() {
+  const response = await api.get('/empleados/importaciones/plantilla', { responseType: 'blob' });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'plantilla-importacion-empleados.xlsx';
+  link.click();
+  URL.revokeObjectURL(url);
 }

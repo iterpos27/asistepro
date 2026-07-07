@@ -1,6 +1,9 @@
 const { pool } = require('../config/database');
 
 const TIME_ZONE = 'America/Guayaquil';
+const LUNCH_WINDOW_START = 12 * 60;
+const LUNCH_WINDOW_END = 15 * 60;
+const PROFESSIONAL_SERVICE_TYPES = ['servicios profesionales', 'servicios profesionales / bajo factura', 'bajo factura'];
 
 function monthRange(month) {
   const [year, monthNumber] = month.split('-').map(Number);
@@ -18,6 +21,39 @@ function timeToMinutes(value) {
 function durationMinutes(start, end) {
   if (start === null || end === null) return 0;
   return end >= start ? end - start : end + 1440 - start;
+}
+
+function overlapsLunchWindow(start, end) {
+  if (start === null || end === null) return 0;
+  const normalizedEnd = end >= start ? end : end + 1440;
+  const windows = [
+    [LUNCH_WINDOW_START, LUNCH_WINDOW_END],
+    [LUNCH_WINDOW_START + 1440, LUNCH_WINDOW_END + 1440],
+  ];
+
+  return windows.reduce((total, [windowStart, windowEnd]) => {
+    const overlapStart = Math.max(start, windowStart);
+    const overlapEnd = Math.min(normalizedEnd, windowEnd);
+    return total + Math.max(0, overlapEnd - overlapStart);
+  }, 0);
+}
+
+function lunchBreakMinutes(start, end, configuredBreak) {
+  const configured = Number(configuredBreak || 0);
+  if (!configured) return 0;
+  return Math.min(configured, overlapsLunchWindow(start, end));
+}
+
+function explicitLunchBreakMinutes(lunchOut, lunchIn) {
+  const start = timeToMinutes(lunchOut);
+  const end = timeToMinutes(lunchIn);
+  if (start === null || end === null) return null;
+  return durationMinutes(start, end);
+}
+
+function isProfessionalServices(tipoContrato) {
+  const normalized = String(tipoContrato || '').trim().toLowerCase();
+  return PROFESSIONAL_SERVICE_TYPES.includes(normalized);
 }
 
 function localToday() {
@@ -56,10 +92,11 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
   if (!employeeIds.length) return [];
 
   const employeesResult = await pool.query(
-    `SELECT id, salario_base FROM empleados WHERE id = ANY($1)`,
+    `SELECT id, salario_base, tipo_contrato FROM empleados WHERE id = ANY($1)`,
     [employeeIds]
   );
   const salaryMap = new Map(employeesResult.rows.map((r) => [r.id, Number(r.salario_base || 0)]));
+  const contractMap = new Map(employeesResult.rows.map((r) => [r.id, r.tipo_contrato || null]));
 
   const empMap = new Map();
   for (const item of detalle) {
@@ -87,6 +124,7 @@ async function calcularPrenominaDesdeDetalle(empresaId, detalle) {
 
   const prenomina = [];
   for (const e of empMap.values()) {
+    if (isProfessionalServices(contractMap.get(e.empleado_id))) continue;
     const salarioBase = salaryMap.get(e.empleado_id) || 0;
     let descuentoAusencias = 0;
     let descuentoAtrasos = 0;
@@ -131,7 +169,7 @@ async function calcularMes({ empresaId, mes }) {
   const maximumDate = mes > today.slice(0, 7) ? `${mes}-00` : mes === today.slice(0, 7) ? today : range.last;
   const [employeesResult, schedulesResult, marksResult, requestsResult, feriadosResult] = await Promise.all([
     pool.query(
-      `SELECT id, codigo, nombres, apellidos, sucursal_habitual_id, salario_base FROM empleados WHERE empresa_id = $1 AND estado = 'activo' ORDER BY codigo`,
+      `SELECT id, codigo, nombres, apellidos, sucursal_habitual_id, salario_base, tipo_contrato FROM empleados WHERE empresa_id = $1 AND estado = 'activo' ORDER BY codigo`,
       [empresaId],
     ),
     pool.query(
@@ -148,6 +186,8 @@ async function calcularMes({ empresaId, mes }) {
       `SELECT m.empleado_id,
               TO_CHAR(m.marcado_en AT TIME ZONE $4, 'YYYY-MM-DD') AS fecha,
               MIN(TO_CHAR(m.marcado_en AT TIME ZONE $4, 'HH24:MI:SS')) FILTER (WHERE m.tipo = 'entrada') AS entrada,
+              MIN(TO_CHAR(m.marcado_en AT TIME ZONE $4, 'HH24:MI:SS')) FILTER (WHERE m.tipo = 'salida_almuerzo') AS salida_almuerzo,
+              MAX(TO_CHAR(m.marcado_en AT TIME ZONE $4, 'HH24:MI:SS')) FILTER (WHERE m.tipo = 'entrada_almuerzo') AS entrada_almuerzo,
               MAX(TO_CHAR(m.marcado_en AT TIME ZONE $4, 'HH24:MI:SS')) FILTER (WHERE m.tipo = 'salida') AS salida
        FROM marcaciones m
        WHERE m.empresa_id = $1 AND m.anulada = FALSE AND m.estado <> 'rechazada'
@@ -196,11 +236,13 @@ async function calcularMes({ empresaId, mes }) {
 
       const scheduledStart = timeToMinutes(schedule?.hora_inicio);
       const scheduledEnd = timeToMinutes(schedule?.hora_fin);
-      const breakMinutes = Number(schedule?.descanso_minutos || 0);
-      const scheduledMinutes = Math.max(0, durationMinutes(scheduledStart, scheduledEnd) - breakMinutes);
+      const scheduledBreakMinutes = lunchBreakMinutes(scheduledStart, scheduledEnd, schedule?.descanso_minutos);
+      const scheduledMinutes = Math.max(0, durationMinutes(scheduledStart, scheduledEnd) - scheduledBreakMinutes);
       const entry = timeToMinutes(mark?.entrada);
       const exit = timeToMinutes(mark?.salida);
-      const workedMinutes = entry !== null && exit !== null ? Math.max(0, durationMinutes(entry, exit) - breakMinutes) : 0;
+      const explicitBreak = explicitLunchBreakMinutes(mark?.salida_almuerzo, mark?.entrada_almuerzo);
+      const workedBreakMinutes = explicitBreak !== null ? explicitBreak : lunchBreakMinutes(entry, exit, schedule?.descanso_minutos);
+      const workedMinutes = entry !== null && exit !== null ? Math.max(0, durationMinutes(entry, exit) - workedBreakMinutes) : 0;
       
       // Point 4: Atrasos are NOT penalized if there is a request (like permiso/justification) or if it is a holiday.
       const lateMinutes = entry !== null && scheduledStart !== null && !request && !isFeriado
@@ -231,8 +273,12 @@ async function calcularMes({ empresaId, mes }) {
         empleado_id: employee.id,
         empleado_codigo: employee.codigo,
         empleado_nombre: `${employee.nombres} ${employee.apellidos || ''}`.trim(),
+        tipo_contrato: employee.tipo_contrato || null,
+        bajo_factura: isProfessionalServices(employee.tipo_contrato),
         horario: schedule?.horario_nombre || null,
         entrada: mark?.entrada || null,
+        salida_almuerzo: mark?.salida_almuerzo || null,
+        entrada_almuerzo: mark?.entrada_almuerzo || null,
         salida: mark?.salida || null,
         minutos_programados: scheduledMinutes,
         minutos_trabajados: workedMinutes,
@@ -278,8 +324,23 @@ async function calcularMes({ empresaId, mes }) {
   });
 
   const prenomina = [];
+  const serviciosProfesionales = [];
   for (const employee of employeesResult.rows) {
     const empItems = items.filter((item) => item.empleado_id === employee.id);
+    const isExternal = isProfessionalServices(employee.tipo_contrato);
+    if (isExternal) {
+      serviciosProfesionales.push({
+        empleado_id: employee.id,
+        empleado_codigo: employee.codigo,
+        empleado_nombre: `${employee.nombres} ${employee.apellidos || ''}`.trim(),
+        tipo_contrato: employee.tipo_contrato,
+        jornadas: empItems.length,
+        minutos_trabajados: empItems.reduce((acc, item) => acc + item.minutos_trabajados, 0),
+        minutos_atraso: empItems.reduce((acc, item) => acc + item.minutos_atraso, 0),
+      });
+      continue;
+    }
+
     const salarioBase = Number(employee.salario_base || 0);
     const ausencias = empItems.filter((item) => item.estado === 'ausente').length;
     const minutosAtraso = empItems.reduce((acc, item) => acc + item.minutos_atraso, 0);
@@ -331,7 +392,16 @@ async function calcularMes({ empresaId, mes }) {
     });
   }
 
-  return { mes, resumen, items, prenomina };
+  return {
+    mes,
+    resumen: {
+      ...resumen,
+      servicios_profesionales: serviciosProfesionales.length,
+    },
+    items,
+    prenomina,
+    servicios_profesionales: serviciosProfesionales,
+  };
 }
 
 async function getCalculo({ empresaId, mes }) {

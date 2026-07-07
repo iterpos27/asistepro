@@ -6,6 +6,8 @@ const { permissionGuard } = require('../utils/granular-permissions.util');
 
 const router = Router();
 
+router.post('/cron/cleanup', saasController.runCronCleanup);
+
 router.use(authGuard);
 router.use(roleGuard(['SUPER_ADMIN']));
 
@@ -13,3 +15,4 @@ router.get('/overview', permissionGuard('saas_consumo', 'ver'), saasController.o
 router.get('/tenants', permissionGuard('saas_consumo', 'ver'), saasController.tenants);
 
 module.exports = router;
+

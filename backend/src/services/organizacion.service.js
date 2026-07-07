@@ -555,6 +555,80 @@ async function listImports(empresaId) {
   return result.rows;
 }
 
+async function buildEmployeeImportTemplate() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'AsistePro';
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet('empleados');
+  worksheet.columns = [
+    { header: 'codigo', key: 'codigo', width: 14 },
+    { header: 'nombres', key: 'nombres', width: 22 },
+    { header: 'apellidos', key: 'apellidos', width: 22 },
+    { header: 'email', key: 'email', width: 28 },
+    { header: 'telefono', key: 'telefono', width: 16 },
+    { header: 'sucursal_codigo', key: 'sucursal_codigo', width: 18 },
+    { header: 'sucursal_nombre', key: 'sucursal_nombre', width: 24 },
+    { header: 'departamento_nombre', key: 'departamento_nombre', width: 24 },
+    { header: 'area_nombre', key: 'area_nombre', width: 24 },
+    { header: 'cargo_nombre', key: 'cargo_nombre', width: 24 },
+    { header: 'centro_costo_nombre', key: 'centro_costo_nombre', width: 24 },
+    { header: 'supervisor_codigo', key: 'supervisor_codigo', width: 18 },
+    { header: 'tipo_contrato', key: 'tipo_contrato', width: 32 },
+    { header: 'salario_base', key: 'salario_base', width: 14 },
+    { header: 'fecha_ingreso', key: 'fecha_ingreso', width: 16 },
+    { header: 'estado', key: 'estado', width: 12 },
+    { header: 'crear_usuario', key: 'crear_usuario', width: 14 },
+    { header: 'rol_acceso', key: 'rol_acceso', width: 14 },
+    { header: 'password_acceso', key: 'password_acceso', width: 18 },
+  ];
+
+  worksheet.addRow({
+    codigo: 'EMP001',
+    nombres: 'Maria Fernanda',
+    apellidos: 'Zambrano Vera',
+    email: 'maria.zambrano@empresa.com',
+    telefono: '0999999999',
+    sucursal_codigo: 'MATRIZ',
+    departamento_nombre: 'Administracion',
+    area_nombre: 'RRHH',
+    cargo_nombre: 'Asistente',
+    centro_costo_nombre: 'ADM',
+    supervisor_codigo: 'EMP000',
+    tipo_contrato: 'Indefinido',
+    salario_base: 460,
+    fecha_ingreso: '2026-07-01',
+    estado: 'activo',
+    crear_usuario: 'si',
+    rol_acceso: 'EMPLEADO',
+    password_acceso: '',
+  });
+
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const help = workbook.addWorksheet('ayuda');
+  help.columns = [
+    { header: 'Campo', key: 'campo', width: 24 },
+    { header: 'Uso', key: 'uso', width: 72 },
+  ];
+  [
+    ['codigo', 'Obligatorio. Identificador unico del empleado dentro de la empresa.'],
+    ['nombres/apellidos', 'Obligatorios. Datos personales principales.'],
+    ['sucursal_codigo o sucursal_nombre', 'Usa una sucursal existente. Si ambos estan vacios, queda sin sucursal habitual.'],
+    ['departamento_nombre, area_nombre, cargo_nombre, centro_costo_nombre', 'Si no existen, se crean automaticamente como estructuras organizacionales.'],
+    ['supervisor_codigo', 'Debe existir previamente como empleado. Puede quedar vacio.'],
+    ['tipo_contrato', 'Ejemplos: Indefinido, Temporal, Por horas, Servicios profesionales / Bajo factura, Pasantia.'],
+    ['fecha_ingreso', 'Formato recomendado: AAAA-MM-DD.'],
+    ['crear_usuario', 'Usa si/no. Si hay email, tambien se crea o actualiza el usuario.'],
+    ['rol_acceso', 'Valores permitidos para importacion: EMPLEADO o RRHH.'],
+  ].forEach(([campo, uso]) => help.addRow({ campo, uso }));
+  help.getRow(1).font = { bold: true };
+
+  return workbook.xlsx.writeBuffer();
+}
+
 async function importEmployeesFromExcel({ empresaId, usuarioId, fileBase64, filename }) {
   const rows = await parseWorkbookRows(fileBase64);
   if (!rows.length) {
@@ -650,6 +724,7 @@ module.exports = {
   getCatalogs,
   getSummary,
   importEmployeesFromExcel,
+  buildEmployeeImportTemplate,
   listImports,
   listStructures,
   saveStructure,

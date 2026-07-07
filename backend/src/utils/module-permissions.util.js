@@ -5,10 +5,12 @@ const MODULES = [
   { key: 'reemplazos', label: 'Reemplazos', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'organizacion', label: 'Organizacion', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'importaciones', label: 'Importaciones', roles: ['ADMIN_EMPRESA', 'RRHH'] },
+  { key: 'integraciones', label: 'Integraciones', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'marcaciones', label: 'Marcaciones', roles: ['ADMIN_EMPRESA', 'RRHH', 'EMPLEADO'] },
   { key: 'mis_marcaciones', label: 'Mis marcaciones', roles: ['ADMIN_EMPRESA', 'RRHH', 'EMPLEADO'] },
   { key: 'reportes_avanzados', label: 'Reportes', roles: ['ADMIN_EMPRESA', 'RRHH'] },
   { key: 'facturacion', label: 'Facturacion', roles: ['ADMIN_EMPRESA'] },
+  { key: 'pwa', label: 'App movil / PWA', roles: ['ADMIN_EMPRESA', 'RRHH', 'EMPLEADO'] },
 ];
 
 const DEFAULT_ENABLED_MODULES = MODULES.reduce((acc, module) => {

@@ -21,6 +21,7 @@ const empleadoBodyBase = z.object({
   fecha_ingreso: z.string().trim().optional().nullable(),
   estado: z.enum(['activo', 'inactivo', 'suspendido']).optional(),
   dispositivo_uuid: z.string().trim().max(100).optional().nullable(),
+  sucursales_autorizadas_ids: z.array(uuid('sucursal_autorizada_id')).optional(),
   username: z.string().min(3, 'El nombre de usuario debe tener al menos 3 caracteres').max(100).regex(/^[a-zA-Z0-9_.]+$/, 'El nombre de usuario solo puede contener letras, números, puntos y guiones bajos').optional().nullable(),
   crear_usuario: z.coerce.boolean().optional(),
   password_acceso: z.string().min(8, 'password_acceso debe tener al menos 8 caracteres').optional(),

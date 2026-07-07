@@ -42,6 +42,8 @@ const migrations = [
   '035_vacaciones_saldo.sql',
   '036_solicitudes_flujo_dos_pasos.sql',
   '037_empresas_logo_branding.sql',
+  '038_empleados_sucursales_autorizadas.sql',
+  '039_marcaciones_almuerzo_tipos.sql',
 ];
 
 async function runMigrations() {

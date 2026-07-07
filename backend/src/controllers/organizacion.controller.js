@@ -105,10 +105,22 @@ async function importEmployees(req, res, next) {
   }
 }
 
+async function employeeImportTemplate(req, res, next) {
+  try {
+    const buffer = await organizacionService.buildEmployeeImportTemplate();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="plantilla-importacion-empleados.xlsx"');
+    return res.send(Buffer.from(buffer));
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   catalogs,
   createStructure,
   deleteStructure,
+  employeeImportTemplate,
   importEmployees,
   listImports,
   listStructures,

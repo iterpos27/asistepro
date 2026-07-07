@@ -4,7 +4,7 @@ const notificacionService = require('./notificacion.service');
 const { calculateDistanceMeters } = require('../utils/geo.util');
 const laboralService = require('./laboral.service');
 
-const MARCACION_TIPOS = ['entrada', 'salida'];
+const MARCACION_TIPOS = ['entrada', 'salida_almuerzo', 'entrada_almuerzo', 'salida'];
 const GPS_TOLERANCIA_METROS = Number(process.env.GPS_TOLERANCIA_METROS || 10);
 const GPS_PRECISION_MAXIMA_METROS = Number(process.env.GPS_PRECISION_MAXIMA_METROS || 20);
 const REPORT_TIME_ZONE = 'America/Guayaquil';
@@ -20,7 +20,7 @@ function validateMarcacionPayload(payload) {
   const errors = [];
 
   if (!payload.qr_token) errors.push('qr_token es requerido');
-  if (!MARCACION_TIPOS.includes(payload.tipo)) errors.push('tipo debe ser entrada o salida');
+  if (!MARCACION_TIPOS.includes(payload.tipo)) errors.push('tipo debe ser entrada, salida_almuerzo, entrada_almuerzo o salida');
 
   const latitud = Number(payload.latitud);
   const longitud = Number(payload.longitud);
@@ -134,6 +134,23 @@ async function findActiveHorario({ empresaId, empleadoId, markedAt = new Date() 
   return result.rows[0] || null;
 }
 
+async function isSucursalAutorizada({ empresaId, empleadoId, sucursalId }) {
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM empleado_sucursales_autorizadas
+      WHERE empresa_id = $1
+        AND empleado_id = $2
+        AND sucursal_id = $3
+        AND activo = TRUE
+      LIMIT 1
+    `,
+    [empresaId, empleadoId, sucursalId],
+  );
+
+  return result.rows.length > 0;
+}
+
 async function insertMarcacion(data) {
   const result = await pool.query(
     `
@@ -206,6 +223,8 @@ async function findOperationalStateForDate({ empresaId, empleadoId, markedAt = n
     `
       SELECT
         MIN(CASE WHEN tipo = 'entrada' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS entrada,
+        MIN(CASE WHEN tipo = 'salida_almuerzo' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS salida_almuerzo,
+        MAX(CASE WHEN tipo = 'entrada_almuerzo' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS entrada_almuerzo,
         MAX(CASE WHEN tipo = 'salida' AND estado <> 'rechazada' AND anulada = FALSE THEN marcado_en END) AS salida
       FROM marcaciones
       WHERE empresa_id = $1
@@ -215,23 +234,48 @@ async function findOperationalStateForDate({ empresaId, empleadoId, markedAt = n
     [empresaId, empleadoId, markedAt, REPORT_TIME_ZONE],
   );
 
-  return result.rows[0] || { entrada: null, salida: null };
+  return result.rows[0] || { entrada: null, salida_almuerzo: null, entrada_almuerzo: null, salida: null };
 }
 
 async function assertOperationalSequence({ empresaId, empleadoId, tipo, markedAt = new Date() }) {
   const state = await findOperationalStateForDate({ empresaId, empleadoId, markedAt });
   const hasEntrada = Boolean(state.entrada);
+  const hasSalidaAlmuerzo = Boolean(state.salida_almuerzo);
+  const hasEntradaAlmuerzo = Boolean(state.entrada_almuerzo);
   const hasSalida = Boolean(state.salida);
-  const hasOpenJornada = hasEntrada && !hasSalida;
 
-  if (tipo === 'entrada' && hasOpenJornada) {
-    const error = new Error('Ya existe una jornada abierta para este empleado. Debe registrar la salida antes de una nueva entrada');
+  if (tipo === 'entrada' && hasEntrada) {
+    const error = new Error('Ya existe una entrada para este empleado en la fecha indicada');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (tipo === 'salida_almuerzo' && (!hasEntrada || hasSalidaAlmuerzo || hasSalida)) {
+    const error = new Error('Para salir a almuerzo debe existir entrada y no debe existir salida de almuerzo ni salida final');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (tipo === 'entrada_almuerzo' && (!hasSalidaAlmuerzo || hasEntradaAlmuerzo || hasSalida)) {
+    const error = new Error('Para entrar de almuerzo debe existir una salida a almuerzo pendiente y no debe existir salida final');
     error.statusCode = 409;
     throw error;
   }
 
   if (tipo === 'salida' && !hasEntrada) {
     const error = new Error('No existe una entrada valida previa para registrar la salida');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (tipo === 'salida' && hasSalidaAlmuerzo && !hasEntradaAlmuerzo) {
+    const error = new Error('Debe registrar la entrada del almuerzo antes de la salida final');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (tipo === 'salida' && hasSalida) {
+    const error = new Error('Ya existe una salida final para este empleado en la fecha indicada');
     error.statusCode = 409;
     throw error;
   }
@@ -321,6 +365,9 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
         markedAt,
       })
     : null;
+  const sucursalAutorizada = sucursalDistinta
+    ? await isSucursalAutorizada({ empresaId, empleadoId: empleado.id, sucursalId: sucursal.id })
+    : false;
 
   let estado = 'aceptada';
   let mensaje = 'Marcacion aceptada';
@@ -331,7 +378,9 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
     estado = 'rechazada';
     mensaje = 'Marcacion rechazada: fuera del radio permitido';
   } else if (sucursalDistinta) {
-    if (reemplazoAutorizado) {
+    if (sucursalAutorizada) {
+      mensaje = 'Marcacion aceptada en sucursal autorizada';
+    } else if (reemplazoAutorizado) {
       estado = 'aceptada_con_novedad';
       motivoNovedad = 'Reemplazo';
       detalleNovedad = reemplazoAutorizado.motivo;

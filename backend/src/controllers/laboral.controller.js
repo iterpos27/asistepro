@@ -13,7 +13,8 @@ async function exportar(req, res, next) {
     const csv = toCsv(data.items, [
       { key: 'fecha', header: 'Fecha' }, { key: 'empleado_codigo', header: 'Codigo' },
       { key: 'empleado_nombre', header: 'Empleado' }, { key: 'horario', header: 'Horario' },
-      { key: 'entrada', header: 'Entrada' }, { key: 'salida', header: 'Salida' },
+      { key: 'entrada', header: 'Entrada' }, { key: 'salida_almuerzo', header: 'Salida almuerzo' },
+      { key: 'entrada_almuerzo', header: 'Entrada almuerzo' }, { key: 'salida', header: 'Salida' },
       { key: 'minutos_programados', header: 'Minutos programados' }, { key: 'minutos_trabajados', header: 'Minutos trabajados' },
       { key: 'minutos_ordinarios', header: 'Minutos ordinarios' }, { key: 'minutos_extra', header: 'Minutos extra' },
       { key: 'minutos_atraso', header: 'Minutos atraso' }, { key: 'estado', header: 'Estado' }, { key: 'justificacion', header: 'Justificacion' },
@@ -40,7 +41,7 @@ async function exportarPrenomina(req, res, next) {
       { key: 'neto_pagar', header: 'Neto a Pagar' },
     ]);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="prenomina-${req.params.mes}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="resumen-financiero-laboral-${req.params.mes}.csv"`);
     res.send(csv);
   } catch (error) { next(error); }
 }

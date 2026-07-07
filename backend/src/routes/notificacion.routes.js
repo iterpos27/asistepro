@@ -15,6 +15,7 @@ router.use(subscriptionGuard);
 
 router.get('/', validateSchema(listNotificacionesSchema), notificacionController.listNotificaciones);
 router.post('/subscribe', validateSchema(subscribePushSchema), notificacionController.subscribePush);
+router.post('/test', notificacionController.createTestNotification);
 router.put('/read-all', notificacionController.markAllAsRead);
 router.put('/:id/read', validateSchema(idParamSchema), notificacionController.markAsRead);
 

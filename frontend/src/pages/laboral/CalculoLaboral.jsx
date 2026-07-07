@@ -14,7 +14,7 @@ function money(val) { return new Intl.NumberFormat('es-EC', { style: 'currency',
 export default function CalculoLaboral() {
   const { user } = useAuthContext();
   const [month, setMonth] = useState(currentMonth);
-  const [data, setData] = useState({ resumen: {}, items: [], prenomina: [], cierre: null });
+  const [data, setData] = useState({ resumen: {}, items: [], prenomina: [], servicios_profesionales: [], cierre: null });
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('jornadas');
@@ -66,6 +66,8 @@ export default function CalculoLaboral() {
         <td>${item.fecha}</td>
         <td>${item.horario || '-'}</td>
         <td>${item.entrada?.slice(0, 5) || '-'}</td>
+        <td>${item.salida_almuerzo?.slice(0, 5) || '-'}</td>
+        <td>${item.entrada_almuerzo?.slice(0, 5) || '-'}</td>
         <td>${item.salida?.slice(0, 5) || '-'}</td>
         <td>${hours(item.minutos_programados)}</td>
         <td>${hours(item.minutos_trabajados)}</td>
@@ -122,6 +124,8 @@ export default function CalculoLaboral() {
                 <th>Fecha</th>
                 <th>Horario</th>
                 <th>Entrada</th>
+                <th>Salida almuerzo</th>
+                <th>Entrada almuerzo</th>
                 <th>Salida</th>
                 <th>Prog.</th>
                 <th>Trabaj.</th>
@@ -157,12 +161,12 @@ export default function CalculoLaboral() {
   return <>
     <PageHeader
       title="Calculo laboral"
-      description="Horas ordinarias, extras, atrasos, ausencias y pre-nómina."
+      description="Horas ordinarias, extras, atrasos, ausencias, cierres mensuales y resumen financiero laboral."
       actions={<>
         <input aria-label="Mes de calculo" type="month" value={month} onChange={e => setMonth(e.target.value)} />
         <button className="outline-button" onClick={() => activeTab === 'prenomina' ? service.exportarPrenomina(month) : service.exportarCalculo(month)}>
           <Download size={16} />
-          {activeTab === 'prenomina' ? 'Exportar Pre-nómina' : 'Exportar Jornadas'}
+          {activeTab === 'prenomina' ? 'Exportar resumen' : 'Exportar jornadas'}
         </button>
         {closed && canReopen ? <button className="outline-button" onClick={reopenMonth}><Unlock size={16} />Reabrir</button> : canClose && periodFinished ? <button className="primary-button compact" onClick={closeMonth}><Lock size={16} />Cerrar mes</button> : null}
       </>}
@@ -176,6 +180,7 @@ export default function CalculoLaboral() {
       <MetricCard label="Ausencias" value={data.resumen.ausencias || 0} icon={CalendarX} tone="accent" />
       {(data.resumen.feriados > 0) && <MetricCard label="Feriados" value={data.resumen.feriados || 0} icon={Star} />}
       {(data.resumen.ausencias_justificadas > 0) && <MetricCard label="Justificadas" value={data.resumen.ausencias_justificadas || 0} icon={CalendarX} tone="success" />}
+      {(data.resumen.servicios_profesionales > 0) && <MetricCard label="Bajo factura" value={data.resumen.servicios_profesionales || 0} icon={DollarSign} tone="accent" />}
     </section>
 
     <div className="tabs-container" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
@@ -207,13 +212,13 @@ export default function CalculoLaboral() {
           color: activeTab === 'prenomina' ? 'var(--primary-color)' : 'var(--text-muted)'
         }}
       >
-        Pre-nómina Financiera
+        Resumen financiero
       </button>
     </div>
 
     {activeTab === 'prenomina' ? (
       <div className="panel">
-        <PanelTitle title="Pre-nómina Financiera" subtitle={loading ? 'Calculando...' : `${data.prenomina?.length || 0} empleados`} />
+        <PanelTitle title="Resumen financiero laboral" subtitle={loading ? 'Calculando...' : `${data.prenomina?.length || 0} empleados`} />
         <div className="table-wrap">
           <table>
             <thead>
@@ -261,7 +266,7 @@ export default function CalculoLaboral() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="13" style={{ textAlign: 'center' }}>No hay información de pre-nómina para este mes.</td>
+                  <td colSpan="13" style={{ textAlign: 'center' }}>No hay resumen financiero para este mes.</td>
                 </tr>
               )}
             </tbody>
@@ -279,6 +284,8 @@ export default function CalculoLaboral() {
                 <th>Empleado</th>
                 <th>Horario</th>
                 <th>Entrada</th>
+                <th>Salida almuerzo</th>
+                <th>Entrada almuerzo</th>
                 <th>Salida</th>
                 <th>Programadas</th>
                 <th>Trabajadas</th>
@@ -295,6 +302,8 @@ export default function CalculoLaboral() {
                   <td>{item.empleado_codigo} - {item.empleado_nombre}</td>
                   <td>{item.horario || '-'}</td>
                   <td>{item.entrada?.slice(0, 5) || '-'}</td>
+                  <td>{item.salida_almuerzo?.slice(0, 5) || '-'}</td>
+                  <td>{item.entrada_almuerzo?.slice(0, 5) || '-'}</td>
                   <td>{item.salida?.slice(0, 5) || '-'}</td>
                   <td>{hours(item.minutos_programados)}</td>
                   <td>{hours(item.minutos_trabajados)}</td>
@@ -318,7 +327,7 @@ export default function CalculoLaboral() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="11">No hay jornadas calculables para este mes.</td>
+                  <td colSpan="13">No hay jornadas calculables para este mes.</td>
                 </tr>
               )}
             </tbody>
@@ -326,6 +335,38 @@ export default function CalculoLaboral() {
         </div>
       </div>
     )}
+
+    {data.servicios_profesionales?.length ? (
+      <div className="panel">
+        <PanelTitle title="Servicios profesionales / bajo factura" subtitle="Control operativo de asistencia separado del resumen financiero laboral." />
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Persona</th>
+                <th>Contrato</th>
+                <th>Jornadas</th>
+                <th>Horas registradas</th>
+                <th>Atrasos registrados</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.servicios_profesionales.map((item) => (
+                <tr key={item.empleado_id}>
+                  <td>{item.empleado_codigo}</td>
+                  <td>{item.empleado_nombre}</td>
+                  <td>{item.tipo_contrato}</td>
+                  <td>{item.jornadas}</td>
+                  <td>{hours(item.minutos_trabajados)}</td>
+                  <td>{item.minutos_atraso || 0} min</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ) : null}
 
     <div className="panel">
       <PanelTitle title="Historial de cierres" />

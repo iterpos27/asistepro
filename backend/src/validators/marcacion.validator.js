@@ -2,11 +2,14 @@ const { z } = require('zod');
 const { emptyBody, emptyParams, idParamSchema, isoDate, paginationQuery, requiredNumber, uuid, maybeIsoDate, maybeUuid } = require('./common.validator');
 
 const marcacionEstado = z.enum(['aceptada', 'aceptada_con_novedad', 'rechazada']);
+const marcacionTipo = z.enum(['entrada', 'salida_almuerzo', 'entrada_almuerzo', 'salida'], {
+  message: 'tipo debe ser entrada, salida_almuerzo, entrada_almuerzo o salida',
+});
 
 const marcacionSchema = z.object({
   body: z.object({
     qr_token: z.string().trim().min(1, 'qr_token es requerido'),
-    tipo: z.enum(['entrada', 'salida'], { message: 'tipo debe ser entrada o salida' }),
+    tipo: marcacionTipo,
     empleado_id: z.uuid('empleado_id invalido').optional(),
     latitud: requiredNumber('latitud', {
       min: { value: -90, message: 'latitud invalida' },

@@ -1,5 +1,14 @@
 const CACHE_NAME = 'asistepro-shell-v2';
-const APP_SHELL = ['/', '/dashboard', '/manifest.webmanifest', '/icons/asistepro-icon.svg'];
+const APP_SHELL = [
+  '/',
+  '/dashboard',
+  '/app-movil',
+  '/marcaciones',
+  '/mis-marcaciones',
+  '/solicitudes',
+  '/manifest.webmanifest',
+  '/icons/asistepro-icon.svg',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -48,12 +57,25 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    self.registration.showNotification('AsistePro', {
+      body: 'Tienes una nueva notificacion pendiente.',
+      icon: '/icons/asistepro-icon.svg',
+      badge: '/icons/asistepro-icon.svg',
+      tag: 'asistepro-notificacion',
+      data: { url: '/dashboard' },
+    }),
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/dashboard';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       if (clients.length) return clients[0].focus();
-      return self.clients.openWindow('/dashboard');
+      return self.clients.openWindow(targetUrl);
     }),
   );
 });

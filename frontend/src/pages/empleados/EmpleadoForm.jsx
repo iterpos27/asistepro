@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { generateTemporaryPassword } from '../../utils/password';
 
-const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesionales', 'Pasantia'];
+const contractTypes = ['Indefinido', 'Temporal', 'Por horas', 'Servicios profesionales / Bajo factura', 'Pasantia'];
 
 const empleadoSchema = z
   .object({
@@ -25,6 +25,7 @@ const empleadoSchema = z
     cargo_estructura_id: z.string().optional(),
     centro_costo_estructura_id: z.string().optional(),
     supervisor_empleado_id: z.string().optional(),
+    sucursales_autorizadas_ids: z.array(z.string()).optional(),
     tipo_contrato: z.string().optional(),
     salario_base: z.union([z.coerce.number().min(0, 'Salario no puede ser negativo'), z.literal('')]).optional(),
     saldo_vacaciones_inicial: z.union([z.coerce.number().min(0, 'Saldo no puede ser negativo'), z.literal('')]).optional(),
@@ -78,6 +79,7 @@ const defaultValues = {
   cargo_estructura_id: '',
   centro_costo_estructura_id: '',
   supervisor_empleado_id: '',
+  sucursales_autorizadas_ids: [],
   tipo_contrato: '',
   salario_base: '',
   saldo_vacaciones_inicial: '',
@@ -129,6 +131,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
             cargo_estructura_id: empleado.cargo_estructura_id || '',
             centro_costo_estructura_id: empleado.centro_costo_estructura_id || '',
             supervisor_empleado_id: empleado.supervisor_empleado_id || '',
+            sucursales_autorizadas_ids: empleado.sucursales_autorizadas_ids || [],
             tipo_contrato: empleado.tipo_contrato || '',
             salario_base: empleado.salario_base ?? '',
             saldo_vacaciones_inicial: '',
@@ -163,6 +166,7 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
       cargo_estructura_id: values.cargo_estructura_id || null,
       centro_costo_estructura_id: values.centro_costo_estructura_id || null,
       supervisor_empleado_id: values.supervisor_empleado_id || null,
+      sucursales_autorizadas_ids: (values.sucursales_autorizadas_ids || []).filter(Boolean),
       tipo_contrato: values.tipo_contrato || null,
       salario_base: values.salario_base === '' || values.salario_base === null || values.salario_base === undefined ? null : Number(values.salario_base),
       saldo_vacaciones_inicial: values.saldo_vacaciones_inicial === '' || values.saldo_vacaciones_inicial === null || values.saldo_vacaciones_inicial === undefined ? null : Number(values.saldo_vacaciones_inicial),
@@ -263,6 +267,17 @@ export default function EmpleadoForm({ empleado, sucursales, catalogs, superviso
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          Sucursales autorizadas
+          <select {...register('sucursales_autorizadas_ids')} multiple size={Math.min(5, Math.max(3, sucursales.length || 3))}>
+            {sucursales.map((sucursal) => (
+              <option key={sucursal.id} value={sucursal.id}>
+                {sucursal.nombre}
+              </option>
+            ))}
+          </select>
+          <small>Permite entrada en una sucursal y salida en otra sin marcar novedad.</small>
         </label>
         <label>
           Fecha ingreso

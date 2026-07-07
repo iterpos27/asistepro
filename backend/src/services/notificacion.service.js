@@ -1,4 +1,123 @@
+const crypto = require('crypto');
+const https = require('https');
 const { pool } = require('../config/database');
+
+function base64url(input) {
+  return Buffer.from(input)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function buildVapidPrivateKey() {
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  if (!privateKey || !publicKey) return null;
+
+  if (privateKey.includes('BEGIN')) return privateKey;
+
+  const publicBuffer = Buffer.from(publicKey.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+  if (publicBuffer.length !== 65 || publicBuffer[0] !== 4) return null;
+
+  return crypto.createPrivateKey({
+    key: {
+      kty: 'EC',
+      crv: 'P-256',
+      d: privateKey,
+      x: base64url(publicBuffer.subarray(1, 33)),
+      y: base64url(publicBuffer.subarray(33, 65)),
+    },
+    format: 'jwk',
+  });
+}
+
+function createVapidJwt(endpoint) {
+  const privateKey = buildVapidPrivateKey();
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  if (!privateKey || !publicKey) return null;
+
+  const aud = new URL(endpoint).origin;
+  const subject = process.env.VAPID_SUBJECT || process.env.FRONTEND_URL || 'mailto:soporte@asistepro.local';
+  const header = base64url(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+  const payload = base64url(JSON.stringify({
+    aud,
+    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+    sub: subject,
+  }));
+  const signingInput = `${header}.${payload}`;
+  const signature = crypto.sign('SHA256', Buffer.from(signingInput), {
+    key: privateKey,
+    dsaEncoding: 'ieee-p1363',
+  });
+
+  return {
+    publicKey,
+    token: `${signingInput}.${base64url(signature)}`,
+  };
+}
+
+function sendEmptyPush(subscription) {
+  return new Promise((resolve) => {
+    let vapid;
+    try {
+      vapid = createVapidJwt(subscription.endpoint);
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    if (!vapid) {
+      resolve(false);
+      return;
+    }
+
+    const url = new URL(subscription.endpoint);
+    const request = https.request(
+      {
+        method: 'POST',
+        hostname: url.hostname,
+        path: `${url.pathname}${url.search}`,
+        headers: {
+          Authorization: `vapid t=${vapid.token}, k=${vapid.publicKey}`,
+          TTL: '60',
+          'Content-Length': '0',
+        },
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode >= 200 && response.statusCode < 300);
+      },
+    );
+
+    request.on('error', () => resolve(false));
+    request.end();
+  });
+}
+
+async function notifyPushSubscribers(usuarioId) {
+  const result = await pool.query(
+    `
+      SELECT id, endpoint
+      FROM notificaciones_push_suscripciones
+      WHERE usuario_id = $1
+        AND activo = TRUE
+      ORDER BY actualizado_en DESC
+      LIMIT 5
+    `,
+    [usuarioId],
+  );
+
+  for (const subscription of result.rows) {
+    const delivered = await sendEmptyPush(subscription);
+    if (!delivered && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY) {
+      await pool.query(
+        `UPDATE notificaciones_push_suscripciones SET activo = FALSE, actualizado_en = NOW() WHERE id = $1`,
+        [subscription.id],
+      );
+    }
+  }
+}
 
 async function createNotificacion({ empresaId, usuarioId, titulo, mensaje, tipo }) {
   const result = await pool.query(
@@ -9,6 +128,7 @@ async function createNotificacion({ empresaId, usuarioId, titulo, mensaje, tipo 
     `,
     [empresaId, usuarioId, titulo, mensaje, tipo]
   );
+  notifyPushSubscribers(usuarioId).catch(() => {});
   return result.rows[0];
 }
 
@@ -119,5 +239,6 @@ module.exports = {
   markAsRead,
   markAllAsRead,
   savePushSubscription,
+  notifyPushSubscribers,
   createMarcacionNovedadNotification,
 };

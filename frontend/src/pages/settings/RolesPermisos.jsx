@@ -32,6 +32,8 @@ export default function RolesPermisos() {
   const [loading, setLoading] = useState(false);
   const [permissionData, setPermissionData] = useState({ modules: [], items: [] });
   const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [userPermissionEditor, setUserPermissionEditor] = useState(null);
+  const [userPermissionForm, setUserPermissionForm] = useState({});
 
   const canManagePermissions = [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA].includes(user?.rol);
 
@@ -103,9 +105,17 @@ export default function RolesPermisos() {
   }
 
   async function assign(target, roleId) {
-    await service.assignRolPersonalizado(target.id, roleId || null, {});
-    toast.success('Perfil asignado. El usuario recibira los cambios al renovar su sesion.');
-    await load();
+    setPermissionsLoading(true);
+    try {
+      const updatedData = await service.assignRolPersonalizado(target.id, roleId || null, target.permisos_overrides || {});
+      setPermissionData(updatedData);
+      setUsers(updatedData);
+      toast.success('Perfil asignado. El usuario recibira los cambios al renovar su sesion.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'No se pudo asignar el perfil');
+    } finally {
+      setPermissionsLoading(false);
+    }
   }
 
   async function toggleUserModule(targetUser, moduleKey) {
@@ -122,6 +132,42 @@ export default function RolesPermisos() {
       toast.success('Permisos actualizados correctamente');
     } catch (error) {
       toast.error(error.response?.data?.message || 'No se pudieron actualizar los permisos');
+    } finally {
+      setPermissionsLoading(false);
+    }
+  }
+
+  function openUserPermissions(targetUser) {
+    setUserPermissionEditor(targetUser);
+    setUserPermissionForm({ ...blankPermissions(resources), ...(targetUser.permisos || {}) });
+  }
+
+  function toggleUserPermission(resource, action) {
+    setUserPermissionForm((current) => ({
+      ...current,
+      [resource]: {
+        ...(current[resource] || {}),
+        [action]: !current?.[resource]?.[action],
+      },
+    }));
+  }
+
+  async function saveUserPermissions(event) {
+    event.preventDefault();
+    if (!userPermissionEditor) return;
+    setPermissionsLoading(true);
+    try {
+      const updatedData = await service.assignRolPersonalizado(
+        userPermissionEditor.id,
+        userPermissionEditor.rol_personalizado_id || null,
+        userPermissionForm,
+      );
+      setPermissionData(updatedData);
+      setUsers(updatedData);
+      setUserPermissionEditor(null);
+      toast.success('Permisos especiales guardados. El usuario recibira los cambios al renovar su sesion.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'No se pudieron guardar los permisos especiales');
     } finally {
       setPermissionsLoading(false);
     }
@@ -207,6 +253,56 @@ export default function RolesPermisos() {
           </div>
         </div>
       )}
+
+      {userPermissionEditor && (
+        <div className="modal-backdrop" onClick={() => setUserPermissionEditor(null)}>
+          <div className="modal-panel permission-modal" onClick={(e) => e.stopPropagation()}>
+            <PanelTitle
+              title="Permisos especiales"
+              subtitle={`${userPermissionEditor.nombre || ''} ${userPermissionEditor.apellido || ''}`.trim() || userPermissionEditor.email}
+            />
+            <form className="module-form" onSubmit={saveUserPermissions}>
+              <div className="table-wrap permission-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Recurso</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resources.map((resource) => (
+                      <tr key={resource.key}>
+                        <td>{resource.label}</td>
+                        <td>
+                          <div className="permission-actions">
+                            {resource.actions.map((action) => (
+                              <label className="switch-field compact-switch" key={action}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPermissionForm?.[resource.key]?.[action] === true}
+                                  onChange={() => toggleUserPermission(resource.key, action)}
+                                />
+                                <span>{action}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="outline-button" onClick={() => setUserPermissionEditor(null)}>
+                  Cancelar
+                </button>
+                <button className="primary-button compact" disabled={permissionsLoading}>Guardar permisos</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       <div className="panel">
         <PanelTitle title="Perfiles personalizados" subtitle={loading ? 'Cargando...' : `${roles.items?.length || 0} perfiles`} />
@@ -274,6 +370,27 @@ export default function RolesPermisos() {
                       <span className="user-email">{targetUser.email}</span>
                     </div>
                     <span className="user-role-badge">{getRoleLabel(targetUser.rol)}</span>
+                  </div>
+
+                  <div className="toolbar-grid" style={{ marginBottom: '12px' }}>
+                    <select
+                      value={targetUser.rol_personalizado_id || ''}
+                      disabled={permissionsLoading}
+                      onChange={(event) => assign(targetUser, event.target.value)}
+                    >
+                      <option value="">Permisos base del rol</option>
+                      {(roles.items || [])
+                        .filter((role) => role.rol_base === targetUser.rol && role.activo)
+                        .map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.nombre}
+                          </option>
+                        ))}
+                    </select>
+                    <button className="outline-button" type="button" onClick={() => openUserPermissions(targetUser)} disabled={permissionsLoading}>
+                      <Edit size={16} />
+                      Permisos especiales
+                    </button>
                   </div>
                   
                   <div className="user-modules-grid">

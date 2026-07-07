@@ -297,7 +297,7 @@ export default function MarcarAsistencia() {
 
   return (
     <>
-      <PageHeader title="Marcar asistencia" description="Registra entrada o salida con QR y ubicacion GPS." />
+      <PageHeader title="Marcar asistencia" description="Registra entrada, almuerzo o salida con QR y ubicacion GPS." />
 
       {lastResult ? (
         <div className="alert-success">
@@ -338,6 +338,8 @@ export default function MarcarAsistencia() {
               Tipo
               <select value={tipo} onChange={(event) => setTipo(event.target.value)}>
                 <option value="entrada">Entrada</option>
+                <option value="salida_almuerzo">Salida almuerzo</option>
+                <option value="entrada_almuerzo">Entrada almuerzo</option>
                 <option value="salida">Salida</option>
               </select>
             </label>

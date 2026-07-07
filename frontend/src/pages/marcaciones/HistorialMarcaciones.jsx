@@ -8,6 +8,20 @@ import * as marcacionService from '../../services/marcacionService';
 import * as empleadoService from '../../services/empleadoService';
 import * as sucursalService from '../../services/sucursalService';
 
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function tipoLabel(tipo) {
+  const labels = {
+    entrada: 'Entrada',
+    salida_almuerzo: 'Salida almuerzo',
+    entrada_almuerzo: 'Entrada almuerzo',
+    salida: 'Salida',
+  };
+  return labels[tipo] || tipo || '-';
+}
+
 function statusClass(estado) {
   if (estado === 'aceptada') return 'status-pill';
   if (estado === 'aceptada_con_novedad') return 'status-pill warning';
@@ -35,8 +49,8 @@ export default function HistorialMarcaciones() {
   const [empleadoId, setEmpleadoId] = useState('');
   const [sucursalId, setSucursalId] = useState('');
   const [estado, setEstado] = useState('');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(today());
+  const [fechaHasta, setFechaHasta] = useState(today());
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -105,8 +119,8 @@ export default function HistorialMarcaciones() {
     setEmpleadoId('');
     setSucursalId('');
     setEstado('');
-    setFechaDesde('');
-    setFechaHasta('');
+    setFechaDesde(today());
+    setFechaHasta(today());
   };
 
   return (
@@ -208,7 +222,7 @@ export default function HistorialMarcaciones() {
                       )}
                     </td>
                     <td>{marcacion.sucursal_nombre || '-'}</td>
-                    <td>{marcacion.tipo === 'entrada' ? 'Entrada' : 'Salida'}</td>
+                    <td>{tipoLabel(marcacion.tipo)}</td>
                     <td>
                       <span className={statusClass(marcacion.estado)}>{marcacion.estado.replace(/_/g, ' ')}</span>
                     </td>

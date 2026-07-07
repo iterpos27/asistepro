@@ -21,3 +21,8 @@ export async function subscribePush(payload) {
   const response = await api.post('/notificaciones/subscribe', payload);
   return response.data.data;
 }
+
+export async function createTestNotification() {
+  const response = await api.post('/notificaciones/test');
+  return response.data.data;
+}
