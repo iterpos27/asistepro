@@ -61,6 +61,9 @@ export default function EmpleadosList() {
   const [error, setError] = useState('');
   const [pendingDeactivate, setPendingDeactivate] = useState(null);
 
+  const [limit] = useState(25);
+  const [offset, setOffset] = useState(0);
+
   const areaOptions = useMemo(
     () => (catalogs.estructuras || []).filter((item) => ['direccion', 'departamento', 'area', 'unidad'].includes(item.tipo)),
     [catalogs.estructuras],
@@ -97,7 +100,8 @@ export default function EmpleadosList() {
         areaId: filters.areaId,
         supervisorId: filters.supervisorId,
         tipoContrato: filters.tipoContrato,
-        limit: 100,
+        limit,
+        offset,
       });
       setEmpleados(result.items || []);
       setTotal(result.total || 0);
@@ -112,11 +116,22 @@ export default function EmpleadosList() {
     loadCatalogs().catch((requestError) => {
       setError(requestError.response?.data?.message || 'No se pudieron cargar los catalogos de RRHH');
     });
-    loadEmpleados();
   }, []);
+
+  useEffect(() => {
+    loadEmpleados();
+  }, [offset]);
 
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleApplyFilters() {
+    if (offset === 0) {
+      loadEmpleados();
+    } else {
+      setOffset(0);
+    }
   }
 
   function openCreateForm() {
@@ -306,7 +321,7 @@ export default function EmpleadosList() {
               </option>
             ))}
           </select>
-          <button className="outline-button" type="button" onClick={loadEmpleados}>
+          <button className="outline-button" type="button" onClick={handleApplyFilters}>
             <RotateCcw size={16} />
             Aplicar
           </button>
@@ -422,6 +437,29 @@ export default function EmpleadosList() {
             </tbody>
           </table>
         </div>
+        {total > limit && (
+          <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
+            <span style={{ fontSize: '14px', color: '#64748b' }}>
+              Mostrando {offset + 1}-{Math.min(offset + limit, total)} de {total}
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="outline-button compact" 
+                disabled={offset === 0} 
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+              >
+                Anterior
+              </button>
+              <button 
+                className="outline-button compact" 
+                disabled={offset + limit >= total} 
+                onClick={() => setOffset(offset + limit)}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

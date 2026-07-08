@@ -214,7 +214,7 @@ export default function MarcarAsistencia() {
       const response = await marcacionService.registrarMarcacion({
         ...payload,
         dispositivo_uuid: deviceUuid
-      });
+      }, { skipToast: true });
       if (response.marcacion?.estado === 'rechazada') {
         toast.warning(response.mensaje || response.marcacion?.mensaje || 'Marcacion registrada con advertencia');
       } else {

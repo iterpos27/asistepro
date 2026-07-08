@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -35,8 +36,9 @@ function formatDateTime(value) {
 
 export default function HistorialMarcaciones() {
   const { user } = useAuthContext();
+  const location = useLocation();
   const canSeeGps = [ROLES.SUPER_ADMIN, ROLES.ADMIN_EMPRESA, ROLES.RRHH].includes(user?.rol);
-  const isGeneral = window.location.pathname === '/historial-general';
+  const isGeneral = location.pathname === '/historial-general';
 
   const [marcaciones, setMarcaciones] = useState([]);
   const [total, setTotal] = useState(0);
@@ -51,6 +53,9 @@ export default function HistorialMarcaciones() {
   const [estado, setEstado] = useState('');
   const [fechaDesde, setFechaDesde] = useState(today());
   const [fechaHasta, setFechaHasta] = useState(today());
+  
+  const [limit] = useState(25);
+  const [offset, setOffset] = useState(0);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -89,7 +94,8 @@ export default function HistorialMarcaciones() {
         fechaDesde,
         fechaHasta,
         soloMios: !isGeneral,
-        limit: 100,
+        limit,
+        offset,
       });
       setMarcaciones(result.items || []);
       setTotal(result.total || 0);
@@ -104,6 +110,11 @@ export default function HistorialMarcaciones() {
     }
   }
 
+  // Reset offset when filters change
+  useEffect(() => {
+    setOffset(0);
+  }, [isGeneral, empleadoId, sucursalId, estado, fechaDesde, fechaHasta]);
+
   // Reload data reactively and set up silent polling
   useEffect(() => {
     loadMarcaciones();
@@ -113,7 +124,7 @@ export default function HistorialMarcaciones() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isGeneral, empleadoId, sucursalId, estado, fechaDesde, fechaHasta]);
+  }, [isGeneral, empleadoId, sucursalId, estado, fechaDesde, fechaHasta, limit, offset]);
 
   const handleClearFilters = () => {
     setEmpleadoId('');
@@ -248,6 +259,29 @@ export default function HistorialMarcaciones() {
             </tbody>
           </table>
         </div>
+        {total > limit && (
+          <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
+            <span style={{ fontSize: '14px', color: '#64748b' }}>
+              Mostrando {offset + 1}-{Math.min(offset + limit, total)} de {total}
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="outline-button compact" 
+                disabled={offset === 0} 
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+              >
+                Anterior
+              </button>
+              <button 
+                className="outline-button compact" 
+                disabled={offset + limit >= total} 
+                onClick={() => setOffset(offset + limit)}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

@@ -2,7 +2,7 @@ const ACTIONS = ['ver', 'crear', 'editar', 'eliminar', 'aprobar', 'exportar', 'c
 
 const RESOURCES = [
   { key: 'solicitudes', label: 'Solicitudes', actions: ['ver', 'crear', 'aprobar'] },
-  { key: 'calculo_laboral', label: 'Calculo laboral', actions: ['ver', 'exportar'] },
+  { key: 'calculo_laboral', label: 'Calculo laboral', actions: ['ver', 'editar', 'exportar'] },
   { key: 'cierres_mensuales', label: 'Cierres mensuales', actions: ['ver', 'cerrar', 'reabrir'] },
   { key: 'auditoria', label: 'Auditoria', actions: ['ver', 'exportar'] },
   { key: 'empleados', label: 'Empleados', actions: ['ver', 'crear', 'editar', 'eliminar'] },

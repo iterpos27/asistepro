@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlarmClock, CalendarX, Clock3, Download, Lock, TimerReset, Unlock, DollarSign, Star } from 'lucide-react';
+import { AlarmClock, AlertTriangle, CalendarX, Clock3, Download, Lock, Save, Settings, TimerReset, Unlock, DollarSign, Star } from 'lucide-react';
 import MetricCard from '../../components/cards/MetricCard';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
@@ -14,25 +14,31 @@ function money(val) { return new Intl.NumberFormat('es-EC', { style: 'currency',
 export default function CalculoLaboral() {
   const { user } = useAuthContext();
   const [month, setMonth] = useState(currentMonth);
-  const [data, setData] = useState({ resumen: {}, items: [], prenomina: [], servicios_profesionales: [], cierre: null });
+  const [data, setData] = useState({ resumen: {}, items: [], prenomina: [], servicios_profesionales: [], alertas: [], cierre: null });
   const [closures, setClosures] = useState([]);
+  const [rules, setRules] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
   const [activeTab, setActiveTab] = useState('jornadas');
 
   const canClose = user?.permisos?.cierres_mensuales?.cerrar === true;
   const canReopen = user?.permisos?.cierres_mensuales?.reabrir === true;
+  const canEditRules = user?.permisos?.calculo_laboral?.editar === true;
   const closed = data.cierre?.estado === 'cerrado';
   const periodFinished = month < currentMonth;
+  const alertas = data.alertas || [];
 
   async function load() {
     setLoading(true);
     try {
-      const [calculation, list] = await Promise.all([
+      const [calculation, list, companyRules] = await Promise.all([
         service.getCalculo(month),
-        service.listCierres()
+        service.listCierres(),
+        service.getReglasLaborales()
       ]);
       setData(calculation);
       setClosures(list || []);
+      setRules(companyRules || calculation.reglas || null);
     } finally {
       setLoading(false);
     }
@@ -43,10 +49,28 @@ export default function CalculoLaboral() {
   }, [month]);
 
   async function closeMonth() {
-    if (!window.confirm(`Cerrar ${month}? Las marcaciones y correcciones quedaran bloqueadas.`)) return;
+    const critical = alertas.filter(item => item.nivel === 'critica').length;
+    const warningText = critical ? `\n\nHay ${critical} alerta(s) critica(s) antes del cierre.` : '';
+    if (!window.confirm(`Cerrar ${month}? Las marcaciones y correcciones quedaran bloqueadas.${warningText}`)) return;
     await service.cerrarMes(month);
     toast.success('Mes cerrado correctamente');
     await load();
+  }
+
+  async function saveRules() {
+    setSavingRules(true);
+    try {
+      const saved = await service.updateReglasLaborales(rules);
+      setRules(saved);
+      toast.success('Reglas laborales actualizadas');
+      await load();
+    } finally {
+      setSavingRules(false);
+    }
+  }
+
+  function updateRule(key, value) {
+    setRules(prev => ({ ...(prev || {}), [key]: value }));
   }
 
   async function reopenMonth() {
@@ -168,6 +192,10 @@ export default function CalculoLaboral() {
           <Download size={16} />
           {activeTab === 'prenomina' ? 'Exportar resumen' : 'Exportar jornadas'}
         </button>
+        <button className="outline-button" onClick={() => service.exportarResumenContable(month)}>
+          <Download size={16} />
+          Exportar contable
+        </button>
         {closed && canReopen ? <button className="outline-button" onClick={reopenMonth}><Unlock size={16} />Reabrir</button> : canClose && periodFinished ? <button className="primary-button compact" onClick={closeMonth}><Lock size={16} />Cerrar mes</button> : null}
       </>}
     />
@@ -176,12 +204,69 @@ export default function CalculoLaboral() {
     <section className="metrics-grid">
       <MetricCard label="Horas trabajadas" value={hours(data.resumen.minutos_trabajados)} icon={Clock3} />
       <MetricCard label="Horas extra" value={hours(data.resumen.minutos_extra)} icon={TimerReset} tone="success" />
+      <MetricCard label="Nocturnas" value={hours(data.resumen.minutos_nocturnos)} icon={Clock3} tone="accent" />
       <MetricCard label="Atrasos" value={hours(data.resumen.minutos_atraso)} icon={AlarmClock} tone="warning" />
       <MetricCard label="Ausencias" value={data.resumen.ausencias || 0} icon={CalendarX} tone="accent" />
+      {(data.resumen.alertas_criticas > 0) && <MetricCard label="Alertas criticas" value={data.resumen.alertas_criticas || 0} icon={AlertTriangle} tone="warning" />}
       {(data.resumen.feriados > 0) && <MetricCard label="Feriados" value={data.resumen.feriados || 0} icon={Star} />}
       {(data.resumen.ausencias_justificadas > 0) && <MetricCard label="Justificadas" value={data.resumen.ausencias_justificadas || 0} icon={CalendarX} tone="success" />}
       {(data.resumen.servicios_profesionales > 0) && <MetricCard label="Bajo factura" value={data.resumen.servicios_profesionales || 0} icon={DollarSign} tone="accent" />}
     </section>
+
+    {rules ? (
+      <div className="panel">
+        <PanelTitle title="Reglas laborales por empresa" subtitle="Base de calculo, almuerzo, recargos y ausencias pagadas." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
+          <label>Horas base mes<input type="number" step="0.01" value={rules.base_calculo_mensual_horas ?? ''} disabled={!canEditRules} onChange={e => updateRule('base_calculo_mensual_horas', e.target.value)} /></label>
+          <label>Dias base mes<input type="number" step="0.01" value={rules.dias_base_mes ?? ''} disabled={!canEditRules} onChange={e => updateRule('dias_base_mes', e.target.value)} /></label>
+          <label>Tolerancia atraso<input type="number" value={rules.tolerancia_atraso_minutos ?? ''} disabled={!canEditRules} onChange={e => updateRule('tolerancia_atraso_minutos', e.target.value)} /></label>
+          <label>Almuerzo min<input type="number" value={rules.almuerzo_minutos ?? ''} disabled={!canEditRules} onChange={e => updateRule('almuerzo_minutos', e.target.value)} /></label>
+          <label>Almuerzo desde<input type="time" value={rules.almuerzo_inicio ?? '12:00'} disabled={!canEditRules} onChange={e => updateRule('almuerzo_inicio', e.target.value)} /></label>
+          <label>Almuerzo hasta<input type="time" value={rules.almuerzo_fin ?? '15:00'} disabled={!canEditRules} onChange={e => updateRule('almuerzo_fin', e.target.value)} /></label>
+          <label>Nocturna desde<input type="time" value={rules.hora_inicio_nocturna ?? '19:00'} disabled={!canEditRules} onChange={e => updateRule('hora_inicio_nocturna', e.target.value)} /></label>
+          <label>Nocturna hasta<input type="time" value={rules.hora_fin_nocturna ?? '06:00'} disabled={!canEditRules} onChange={e => updateRule('hora_fin_nocturna', e.target.value)} /></label>
+          <label>Recargo supl.<input type="number" step="0.01" value={rules.recargo_suplementaria ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_suplementaria', e.target.value)} /></label>
+          <label>Recargo extra<input type="number" step="0.01" value={rules.recargo_extraordinaria ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_extraordinaria', e.target.value)} /></label>
+          <label>Recargo noct.<input type="number" step="0.01" value={rules.recargo_nocturna ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_nocturna', e.target.value)} /></label>
+          <label>Recargo feriado<input type="number" step="0.01" value={rules.recargo_feriado ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_feriado', e.target.value)} /></label>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '1rem' }}>
+          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+            <input type="checkbox" checked={rules.descontar_almuerzo_automatico !== false} disabled={!canEditRules} onChange={e => updateRule('descontar_almuerzo_automatico', e.target.checked)} />
+            Descontar almuerzo automatico
+          </label>
+          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+            <input type="checkbox" checked={rules.ausencia_permiso_pagado !== false} disabled={!canEditRules} onChange={e => updateRule('ausencia_permiso_pagado', e.target.checked)} />
+            Permiso pagado
+          </label>
+          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+            <input type="checkbox" checked={rules.ausencia_incapacidad_pagada !== false} disabled={!canEditRules} onChange={e => updateRule('ausencia_incapacidad_pagada', e.target.checked)} />
+            Incapacidad pagada
+          </label>
+          {canEditRules ? <button className="primary-button compact" onClick={saveRules} disabled={savingRules}><Save size={16} />{savingRules ? 'Guardando...' : 'Guardar reglas'}</button> : <span className="status-pill"><Settings size={14} />Solo lectura</span>}
+        </div>
+      </div>
+    ) : null}
+
+    {alertas.length ? (
+      <div className="panel">
+        <PanelTitle title="Alertas antes de cerrar" subtitle={`${data.resumen.alertas_criticas || 0} criticas · ${data.resumen.alertas_advertencia || 0} advertencias · ${data.resumen.alertas_info || 0} informativas`} />
+        <div style={{ display: 'grid', gap: '0.65rem' }}>
+          {alertas.slice(0, 12).map((alerta, index) => (
+            <div key={`${alerta.codigo}-${index}`} className={alerta.nivel === 'critica' ? 'alert-error' : 'alert-success'} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.7rem',
+              ...(alerta.nivel === 'advertencia' ? { background: '#fff7ed', borderColor: '#fdba74', color: '#9a3412' } : {})
+            }}>
+              <AlertTriangle size={18} />
+              <span>{alerta.mensaje}</span>
+            </div>
+          ))}
+          {alertas.length > 12 ? <div className="status-pill">+{alertas.length - 12} alertas adicionales en exportacion</div> : null}
+        </div>
+      </div>
+    ) : null}
 
     <div className="tabs-container" style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
       <button
@@ -226,14 +311,22 @@ export default function CalculoLaboral() {
                 <th>Código</th>
                 <th>Empleado</th>
                 <th>Salario Base</th>
+                <th>Justificadas</th>
+                <th>No justificadas</th>
                 <th>Ausencias</th>
                 <th>Atrasos</th>
                 <th>H. Supl (50%)</th>
                 <th>H. Extra (100%)</th>
+                <th>Nocturnas</th>
+                <th>Feriados</th>
                 <th>Dcto. Ausencias</th>
                 <th>Dcto. Atrasos</th>
                 <th>Pago Supl</th>
                 <th>Pago Extra</th>
+                <th>Pago Noct.</th>
+                <th>Pago Feriado</th>
+                <th>Ingresos</th>
+                <th>Descuentos</th>
                 <th>Neto a Pagar</th>
                 <th>Acciones</th>
               </tr>
@@ -244,14 +337,22 @@ export default function CalculoLaboral() {
                   <td>{item.empleado_codigo}</td>
                   <td>{item.empleado_nombre}</td>
                   <td>{money(item.salario_base)}</td>
+                  <td>{item.ausencias_justificadas || 0}</td>
+                  <td>{item.ausencias_no_justificadas || 0}</td>
                   <td>{item.ausencias} {item.ausencias === 1 ? 'día' : 'días'}</td>
                   <td>{item.minutos_atraso} min</td>
                   <td>{hours(item.minutos_suplementarias || 0)}</td>
                   <td>{hours(item.minutos_extraordinarias || 0)}</td>
+                  <td>{hours(item.minutos_nocturnos || 0)}</td>
+                  <td>{hours(item.minutos_feriado || 0)}</td>
                   <td style={{ color: 'var(--accent-color)' }}>-{money(item.descuento_ausencias)}</td>
                   <td style={{ color: 'var(--accent-color)' }}>-{money(item.descuento_atrasos)}</td>
                   <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_suplementarias || 0)}</td>
                   <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_extraordinarias || 0)}</td>
+                  <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_nocturnas || 0)}</td>
+                  <td style={{ color: 'var(--success-color, #10b981)' }}>+{money(item.pago_feriados || 0)}</td>
+                  <td>{money(item.total_ingresos || 0)}</td>
+                  <td>{money(item.total_descuentos || 0)}</td>
                   <td style={{ fontWeight: 'bold', color: 'var(--primary-color)' }}>{money(item.neto_pagar)}</td>
                   <td>
                     <button
@@ -266,7 +367,7 @@ export default function CalculoLaboral() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="13" style={{ textAlign: 'center' }}>No hay resumen financiero para este mes.</td>
+                  <td colSpan="21" style={{ textAlign: 'center' }}>No hay resumen financiero para este mes.</td>
                 </tr>
               )}
             </tbody>
@@ -291,6 +392,8 @@ export default function CalculoLaboral() {
                 <th>Trabajadas</th>
                 <th>H. Supl (50%)</th>
                 <th>H. Extra (100%)</th>
+                <th>Nocturna</th>
+                <th>Feriado</th>
                 <th>Atraso</th>
                 <th>Estado</th>
               </tr>
@@ -309,6 +412,8 @@ export default function CalculoLaboral() {
                   <td>{hours(item.minutos_trabajados)}</td>
                   <td>{hours(item.minutos_suplementarias || 0)}</td>
                   <td>{hours(item.minutos_extraordinarias || 0)}</td>
+                  <td>{hours(item.minutos_nocturnos || 0)}</td>
+                  <td>{hours(item.minutos_feriado || 0)}</td>
                   <td>{item.minutos_atraso} min</td>
                   <td>
                     <span className={`status-pill ${
@@ -327,7 +432,7 @@ export default function CalculoLaboral() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="13">No hay jornadas calculables para este mes.</td>
+                  <td colSpan="15">No hay jornadas calculables para este mes.</td>
                 </tr>
               )}
             </tbody>

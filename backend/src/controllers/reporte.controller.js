@@ -31,10 +31,8 @@ function getEmpresaId(req) {
 }
 
 function todayDate() {
-  const now = new Date();
-  const guayaquilOffsetMs = 5 * 60 * 60 * 1000;
-
-  return new Date(now.getTime() - guayaquilOffsetMs).toISOString().slice(0, 10);
+  const parts = partsToObject(dateTimeFormatter, new Date());
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function partsToObject(formatter, value) {

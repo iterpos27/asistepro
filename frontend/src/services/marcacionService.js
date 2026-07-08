@@ -1,7 +1,7 @@
 import { api } from './api';
 
-export async function registrarMarcacion(payload) {
-  const response = await api.post('/marcaciones', payload);
+export async function registrarMarcacion(payload, config = {}) {
+  const response = await api.post('/marcaciones', payload, config);
   return response.data.data;
 }
 

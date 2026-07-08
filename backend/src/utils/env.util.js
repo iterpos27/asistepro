@@ -4,7 +4,12 @@ const dotenv = require('dotenv');
 function loadBackendEnv() {
   dotenv.config({ path: path.resolve(__dirname, '../..', '.env') });
 
-  if (process.env.RENDER === 'true' || process.env.RENDER_SERVICE_ID) {
+  if (
+    process.env.RENDER === 'true' ||
+    process.env.RENDER_SERVICE_ID ||
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID
+  ) {
     process.env.NODE_ENV = 'production';
   }
 }
@@ -18,7 +23,9 @@ function validateProductionEnv() {
   if (!process.env.DATABASE_URL) errors.push('DATABASE_URL es requerida');
   if (!process.env.JWT_ACCESS_SECRET) errors.push('JWT_ACCESS_SECRET es requerida');
   if (!process.env.JWT_REFRESH_SECRET) errors.push('JWT_REFRESH_SECRET es requerida');
-  if (!corsOrigin) errors.push('CORS_ORIGIN o FRONTEND_URL es requerida');
+  const isRailwaySingleService = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+
+  if (!corsOrigin && !isRailwaySingleService) errors.push('CORS_ORIGIN o FRONTEND_URL es requerida');
   if (/localhost|127\.0\.0\.1/i.test(corsOrigin)) {
     errors.push('CORS_ORIGIN y FRONTEND_URL no pueden usar localhost');
   }

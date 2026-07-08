@@ -18,5 +18,6 @@ coverage/
 *.zip
 
 CODEX_START.md
+.codex-remote-attachments/
 ROADMAP_ASISTEPRO.md
 ROADMAP_FRONTEND_ASISTEPRO.md

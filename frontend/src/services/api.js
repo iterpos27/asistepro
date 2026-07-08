@@ -9,7 +9,7 @@ import {
 } from '../utils/auth';
 import { toast } from './toastService';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:4001/api');
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -84,7 +84,7 @@ api.interceptors.response.use(
       window.location.assign('/login');
     }
 
-    if (!isRefreshRequest) {
+    if (!isRefreshRequest && !originalRequest?.skipToast) {
       if (status && (status !== 401 || isLoginRequest)) {
         toast.error(error.response?.data?.message || 'No se pudo completar la operacion');
       } else if (!status) {

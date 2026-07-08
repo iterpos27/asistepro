@@ -7,25 +7,27 @@ import { ROLES } from '../../utils/roles';
 import * as solicitudService from '../../services/solicitudService';
 import { toast } from '../../services/toastService';
 
-const today = new Date().toISOString().slice(0, 10);
-const initialForm = {
-  empleado_id: '',
-  tipo: 'vacaciones',
-  fecha_inicio: today,
-  fecha_fin: today,
-  hora_inicio: '',
-  hora_fin: '',
-  motivo: '',
-  accion: 'crear',
-  marcacion_id: '',
-  tipo_marcacion: 'entrada',
-  marcado_en: '',
-  sucursal_id: '',
-  duracion_tipo: 'dias',
-  destinatario: 'Unidad de Administración de Talento Humano',
-  periodo: `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`,
-  cedula: '',
-  reemplazo_empleado_id: ''
+const getInitialForm = () => {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    empleado_id: '',
+    tipo: 'vacaciones',
+    fecha_inicio: today,
+    fecha_fin: today,
+    hora_inicio: '',
+    hora_fin: '',
+    motivo: '',
+    accion: 'crear',
+    marcacion_id: '',
+    tipo_marcacion: 'entrada',
+    marcado_en: '',
+    sucursal_id: '',
+    duracion_tipo: 'dias',
+    destinatario: 'Unidad de Administración de Talento Humano',
+    periodo: `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`,
+    cedula: '',
+    reemplazo_empleado_id: ''
+  };
 };
 
 const getDiasSolicitados = (inicio, fin) => {
@@ -109,7 +111,7 @@ export default function SolicitudesList() {
   const [marks, setMarks] = useState([]);
   
   const [filters, setFilters] = useState({ estado: '', tipo: '' });
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(getInitialForm);
   const [fileAttachment, setFileAttachment] = useState(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -243,7 +245,7 @@ export default function SolicitudesList() {
       await solicitudService.createSolicitud(payload);
       toast.success('Solicitud registrada');
       setOpen(false);
-      setForm(initialForm);
+      setForm(getInitialForm());
       setFileAttachment(null);
       await load();
     } catch (err) {
@@ -317,7 +319,7 @@ export default function SolicitudesList() {
         title="Solicitudes y aprobaciones"
         description="Vacaciones, permisos, ausencias y correcciones con trazabilidad."
         actions={
-          <button className="primary-button compact" onClick={() => { setForm(initialForm); setFileAttachment(null); setOpen(true); }}>
+          <button className="primary-button compact" onClick={() => { setForm(getInitialForm()); setFileAttachment(null); setOpen(true); }}>
             <Plus size={16} />Nueva solicitud
           </button>
         }
