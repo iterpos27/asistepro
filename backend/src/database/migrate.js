@@ -46,6 +46,7 @@ const migrations = [
   '039_marcaciones_almuerzo_tipos.sql',
   '040_reglas_laborales_empresa.sql',
   '041_production_performance_indexes.sql',
+  '042_seed_simulation.js',
 ];
 
 async function runMigrations() {
@@ -72,10 +73,16 @@ async function runMigrations() {
       }
 
       const filePath = path.join(__dirname, migration);
-      const sql = fs.readFileSync(filePath, 'utf8');
 
-      console.log(`Running pending migration: ${migration}`);
-      await client.query(sql);
+      if (migration.endsWith('.js')) {
+        console.log(`Running pending JS migration: ${migration}`);
+        const runMigrationFn = require(filePath);
+        await runMigrationFn(client);
+      } else {
+        const sql = fs.readFileSync(filePath, 'utf8');
+        console.log(`Running pending SQL migration: ${migration}`);
+        await client.query(sql);
+      }
 
       // Registrar la migración como aplicada
       await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [migration]);
