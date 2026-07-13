@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react';
-import { AlarmClock, AlertTriangle, CalendarX, Clock3, Download, Lock, Save, Settings, TimerReset, Unlock, DollarSign, Star } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlarmClock, AlertTriangle, CalendarX, Clock3, Download, Lock, Save, Search, Settings, TimerReset, Unlock, DollarSign, Star, X } from 'lucide-react';
 import MetricCard from '../../components/cards/MetricCard';
 import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
+import PaginationBar from '../../components/tables/PaginationBar';
 import { useAuthContext } from '../../context/AuthContext';
 import * as service from '../../services/laboralService';
 import { toast } from '../../services/toastService';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
+const PAGE_SIZE = 15;
+const ALERT_PAGE_SIZE = 6;
 function hours(minutes) { return `${(Number(minutes || 0) / 60).toFixed(2)} h`; }
 function money(val) { return new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(val || 0); }
 
@@ -20,6 +23,15 @@ export default function CalculoLaboral() {
   const [loading, setLoading] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
   const [activeTab, setActiveTab] = useState('jornadas');
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [detailSearch, setDetailSearch] = useState('');
+  const [detailStatus, setDetailStatus] = useState('');
+  const [detailPage, setDetailPage] = useState(0);
+  const [payrollSearch, setPayrollSearch] = useState('');
+  const [payrollPage, setPayrollPage] = useState(0);
+  const [alertSearch, setAlertSearch] = useState('');
+  const [alertLevel, setAlertLevel] = useState('');
+  const [alertPage, setAlertPage] = useState(0);
 
   const canClose = user?.permisos?.cierres_mensuales?.cerrar === true;
   const canReopen = user?.permisos?.cierres_mensuales?.reabrir === true;
@@ -27,6 +39,24 @@ export default function CalculoLaboral() {
   const closed = data.cierre?.estado === 'cerrado';
   const periodFinished = month < currentMonth;
   const alertas = data.alertas || [];
+  const filteredAlerts = useMemo(() => {
+    const term = alertSearch.trim().toLowerCase();
+    return alertas.filter((item) => (!alertLevel || item.nivel === alertLevel)
+      && (!term || `${item.codigo || ''} ${item.mensaje || ''}`.toLowerCase().includes(term)));
+  }, [alertLevel, alertSearch, alertas]);
+  const filteredDetails = useMemo(() => {
+    const term = detailSearch.trim().toLowerCase();
+    return (data.items || []).filter((item) => (!detailStatus || item.estado === detailStatus)
+      && (!term || `${item.empleado_codigo || ''} ${item.empleado_nombre || ''} ${item.fecha || ''}`.toLowerCase().includes(term)));
+  }, [data.items, detailSearch, detailStatus]);
+  const filteredPayroll = useMemo(() => {
+    const term = payrollSearch.trim().toLowerCase();
+    return (data.prenomina || []).filter((item) => !term
+      || `${item.empleado_codigo || ''} ${item.empleado_nombre || ''}`.toLowerCase().includes(term));
+  }, [data.prenomina, payrollSearch]);
+  const visibleAlerts = filteredAlerts.slice(alertPage * ALERT_PAGE_SIZE, (alertPage + 1) * ALERT_PAGE_SIZE);
+  const visibleDetails = filteredDetails.slice(detailPage * PAGE_SIZE, (detailPage + 1) * PAGE_SIZE);
+  const visiblePayroll = filteredPayroll.slice(payrollPage * PAGE_SIZE, (payrollPage + 1) * PAGE_SIZE);
 
   async function load() {
     setLoading(true);
@@ -48,6 +78,10 @@ export default function CalculoLaboral() {
     load();
   }, [month]);
 
+  useEffect(() => setAlertPage(0), [alertLevel, alertSearch, month]);
+  useEffect(() => setDetailPage(0), [detailSearch, detailStatus, month]);
+  useEffect(() => setPayrollPage(0), [payrollSearch, month]);
+
   async function closeMonth() {
     const critical = alertas.filter(item => item.nivel === 'critica').length;
     const warningText = critical ? `\n\nHay ${critical} alerta(s) critica(s) antes del cierre.` : '';
@@ -63,6 +97,7 @@ export default function CalculoLaboral() {
       const saved = await service.updateReglasLaborales(rules);
       setRules(saved);
       toast.success('Reglas laborales actualizadas');
+      setRulesOpen(false);
       await load();
     } finally {
       setSavingRules(false);
@@ -196,6 +231,12 @@ export default function CalculoLaboral() {
           <Download size={16} />
           Exportar contable
         </button>
+        {rules ? (
+          <button className="outline-button" type="button" onClick={() => setRulesOpen(true)}>
+            <Settings size={16} />
+            Reglas laborales
+          </button>
+        ) : null}
         {closed && canReopen ? <button className="outline-button" onClick={reopenMonth}><Unlock size={16} />Reabrir</button> : canClose && periodFinished ? <button className="primary-button compact" onClick={closeMonth}><Lock size={16} />Cerrar mes</button> : null}
       </>}
     />
@@ -213,10 +254,19 @@ export default function CalculoLaboral() {
       {(data.resumen.servicios_profesionales > 0) && <MetricCard label="Bajo factura" value={data.resumen.servicios_profesionales || 0} icon={DollarSign} tone="accent" />}
     </section>
 
-    {rules ? (
-      <div className="panel">
-        <PanelTitle title="Reglas laborales por empresa" subtitle="Base de calculo, almuerzo, recargos y ausencias pagadas." />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.85rem' }}>
+    {rules && rulesOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setRulesOpen(false)}>
+        <div className="modal-panel large-modal labor-rules-modal" role="dialog" aria-modal="true" aria-labelledby="labor-rules-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="modal-heading">
+            <div>
+              <h2 id="labor-rules-title">Reglas laborales por empresa</h2>
+              <p>Base de cálculo, almuerzo, recargos y ausencias pagadas.</p>
+            </div>
+            <button className="icon-button" type="button" onClick={() => setRulesOpen(false)} aria-label="Cerrar reglas laborales" title="Cerrar">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="labor-rules-grid">
           <label>Horas base mes<input type="number" step="0.01" value={rules.base_calculo_mensual_horas ?? ''} disabled={!canEditRules} onChange={e => updateRule('base_calculo_mensual_horas', e.target.value)} /></label>
           <label>Dias base mes<input type="number" step="0.01" value={rules.dias_base_mes ?? ''} disabled={!canEditRules} onChange={e => updateRule('dias_base_mes', e.target.value)} /></label>
           <label>Tolerancia atraso<input type="number" value={rules.tolerancia_atraso_minutos ?? ''} disabled={!canEditRules} onChange={e => updateRule('tolerancia_atraso_minutos', e.target.value)} /></label>
@@ -229,30 +279,46 @@ export default function CalculoLaboral() {
           <label>Recargo extra<input type="number" step="0.01" value={rules.recargo_extraordinaria ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_extraordinaria', e.target.value)} /></label>
           <label>Recargo noct.<input type="number" step="0.01" value={rules.recargo_nocturna ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_nocturna', e.target.value)} /></label>
           <label>Recargo feriado<input type="number" step="0.01" value={rules.recargo_feriado ?? ''} disabled={!canEditRules} onChange={e => updateRule('recargo_feriado', e.target.value)} /></label>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '1rem' }}>
-          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+          </div>
+          <div className="labor-rule-options">
+          <label>
             <input type="checkbox" checked={rules.descontar_almuerzo_automatico !== false} disabled={!canEditRules} onChange={e => updateRule('descontar_almuerzo_automatico', e.target.checked)} />
             Descontar almuerzo automatico
           </label>
-          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+          <label>
             <input type="checkbox" checked={rules.ausencia_permiso_pagado !== false} disabled={!canEditRules} onChange={e => updateRule('ausencia_permiso_pagado', e.target.checked)} />
             Permiso pagado
           </label>
-          <label style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
+          <label>
             <input type="checkbox" checked={rules.ausencia_incapacidad_pagada !== false} disabled={!canEditRules} onChange={e => updateRule('ausencia_incapacidad_pagada', e.target.checked)} />
             Incapacidad pagada
           </label>
-          {canEditRules ? <button className="primary-button compact" onClick={saveRules} disabled={savingRules}><Save size={16} />{savingRules ? 'Guardando...' : 'Guardar reglas'}</button> : <span className="status-pill"><Settings size={14} />Solo lectura</span>}
+          </div>
+          <div className="form-actions modal-actions">
+            <button className="outline-button" type="button" onClick={() => setRulesOpen(false)}>Cancelar</button>
+            {canEditRules ? <button className="primary-button compact" onClick={saveRules} disabled={savingRules}><Save size={16} />{savingRules ? 'Guardando...' : 'Guardar reglas'}</button> : <span className="status-pill"><Settings size={14} />Solo lectura</span>}
+          </div>
         </div>
       </div>
     ) : null}
 
     {alertas.length ? (
-      <div className="panel">
-        <PanelTitle title="Alertas antes de cerrar" subtitle={`${data.resumen.alertas_criticas || 0} criticas · ${data.resumen.alertas_advertencia || 0} advertencias · ${data.resumen.alertas_info || 0} informativas`} />
-        <div style={{ display: 'grid', gap: '0.65rem' }}>
-          {alertas.slice(0, 12).map((alerta, index) => (
+      <div className="panel labor-alert-panel">
+        <PanelTitle title="Alertas antes de cerrar" subtitle={`${filteredAlerts.length} visibles · ${data.resumen.alertas_criticas || 0} críticas · ${data.resumen.alertas_advertencia || 0} advertencias · ${data.resumen.alertas_info || 0} informativas`} />
+        <div className="table-toolbar compact-toolbar">
+          <label className="search-field">
+            <Search size={16} />
+            <input type="search" value={alertSearch} onChange={(event) => setAlertSearch(event.target.value)} placeholder="Buscar empleado o alerta" aria-label="Buscar alertas" />
+          </label>
+          <select value={alertLevel} onChange={(event) => setAlertLevel(event.target.value)} aria-label="Filtrar alertas por nivel">
+            <option value="">Todos los niveles</option>
+            <option value="critica">Críticas</option>
+            <option value="advertencia">Advertencias</option>
+            <option value="info">Informativas</option>
+          </select>
+        </div>
+        <div className="labor-alert-list">
+          {visibleAlerts.map((alerta, index) => (
             <div key={`${alerta.codigo}-${index}`} className={alerta.nivel === 'critica' ? 'alert-error' : 'alert-success'} style={{
               display: 'flex',
               alignItems: 'center',
@@ -263,8 +329,9 @@ export default function CalculoLaboral() {
               <span>{alerta.mensaje}</span>
             </div>
           ))}
-          {alertas.length > 12 ? <div className="status-pill">+{alertas.length - 12} alertas adicionales en exportacion</div> : null}
+          {!visibleAlerts.length ? <div className="empty-inline">No hay alertas que coincidan con los filtros.</div> : null}
         </div>
+        {filteredAlerts.length > ALERT_PAGE_SIZE ? <PaginationBar page={alertPage} pageSize={ALERT_PAGE_SIZE} total={filteredAlerts.length} onPageChange={setAlertPage} /> : null}
       </div>
     ) : null}
 
@@ -303,8 +370,14 @@ export default function CalculoLaboral() {
 
     {activeTab === 'prenomina' ? (
       <div className="panel">
-        <PanelTitle title="Resumen financiero laboral" subtitle={loading ? 'Calculando...' : `${data.prenomina?.length || 0} empleados`} />
-        <div className="table-wrap">
+        <PanelTitle title="Resumen financiero laboral" subtitle={loading ? 'Calculando...' : `${filteredPayroll.length} de ${data.prenomina?.length || 0} empleados`} />
+        <div className="table-toolbar compact-toolbar">
+          <label className="search-field">
+            <Search size={16} />
+            <input type="search" value={payrollSearch} onChange={(event) => setPayrollSearch(event.target.value)} placeholder="Buscar empleado o código" aria-label="Buscar en resumen financiero" />
+          </label>
+        </div>
+        <div className="table-wrap table-compact">
           <table>
             <thead>
               <tr>
@@ -332,7 +405,7 @@ export default function CalculoLaboral() {
               </tr>
             </thead>
             <tbody>
-              {data.prenomina?.length ? data.prenomina.map((item, index) => (
+              {visiblePayroll.length ? visiblePayroll.map((item, index) => (
                 <tr key={`${item.empleado_id}-${index}`}>
                   <td>{item.empleado_codigo}</td>
                   <td>{item.empleado_nombre}</td>
@@ -373,11 +446,27 @@ export default function CalculoLaboral() {
             </tbody>
           </table>
         </div>
+        {filteredPayroll.length > PAGE_SIZE ? <PaginationBar page={payrollPage} pageSize={PAGE_SIZE} total={filteredPayroll.length} onPageChange={setPayrollPage} /> : null}
       </div>
     ) : (
       <div className="panel">
-        <PanelTitle title="Detalle diario" subtitle={loading ? 'Calculando...' : `${data.items?.length || 0} jornadas`} />
-        <div className="table-wrap">
+        <PanelTitle title="Detalle diario" subtitle={loading ? 'Calculando...' : `${filteredDetails.length} de ${data.items?.length || 0} jornadas`} />
+        <div className="table-toolbar compact-toolbar">
+          <label className="search-field">
+            <Search size={16} />
+            <input type="search" value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Buscar empleado, código o fecha" aria-label="Buscar jornadas" />
+          </label>
+          <select value={detailStatus} onChange={(event) => setDetailStatus(event.target.value)} aria-label="Filtrar jornadas por estado">
+            <option value="">Todos los estados</option>
+            <option value="completa">Completa</option>
+            <option value="incompleta">Incompleta</option>
+            <option value="ausente">Ausente</option>
+            <option value="justificada">Justificada</option>
+            <option value="feriado">Feriado</option>
+            <option value="sin_horario">Sin horario</option>
+          </select>
+        </div>
+        <div className="table-wrap table-compact">
           <table>
             <thead>
               <tr>
@@ -399,7 +488,7 @@ export default function CalculoLaboral() {
               </tr>
             </thead>
             <tbody>
-              {data.items?.length ? data.items.map((item, index) => (
+              {visibleDetails.length ? visibleDetails.map((item, index) => (
                 <tr key={`${item.empleado_id}-${item.fecha}-${index}`}>
                   <td>{item.fecha}</td>
                   <td>{item.empleado_codigo} - {item.empleado_nombre}</td>
@@ -438,13 +527,14 @@ export default function CalculoLaboral() {
             </tbody>
           </table>
         </div>
+        {filteredDetails.length > PAGE_SIZE ? <PaginationBar page={detailPage} pageSize={PAGE_SIZE} total={filteredDetails.length} onPageChange={setDetailPage} /> : null}
       </div>
     )}
 
     {data.servicios_profesionales?.length ? (
       <div className="panel">
         <PanelTitle title="Servicios profesionales / bajo factura" subtitle="Control operativo de asistencia separado del resumen financiero laboral." />
-        <div className="table-wrap">
+        <div className="table-wrap table-compact">
           <table>
             <thead>
               <tr>
@@ -475,7 +565,7 @@ export default function CalculoLaboral() {
 
     <div className="panel">
       <PanelTitle title="Historial de cierres" />
-      <div className="table-wrap">
+      <div className="table-wrap table-compact">
         <table>
           <thead>
             <tr>
