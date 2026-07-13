@@ -243,12 +243,31 @@ async function run() {
       `, [empresaId, emp.id, horarioId]);
     }
 
-    // 6. Delete old mock data (marcaciones, solicitudes, feriados)
-    console.log('Limpiando marcaciones, feriados y solicitudes previas...');
+    // 6. Configure payroll data and clean only the simulated month.
+    console.log('Configurando datos laborales y limpiando junio de 2026...');
     const allEmpIds = employeesRes.rows.map(e => e.id);
-    await client.query("DELETE FROM marcaciones WHERE empresa_id = $1 AND empleado_id = ANY($2)", [empresaId, allEmpIds]);
-    await client.query("DELETE FROM solicitudes WHERE empresa_id = $1 AND empleado_id = ANY($2)", [empresaId, allEmpIds]);
-    await client.query("DELETE FROM feriados WHERE empresa_id = $1", [empresaId]);
+    await client.query(`
+      UPDATE empleados
+      SET salario_base = CASE codigo
+        WHEN 'JUAN_DUEÑAS' THEN 1500
+        WHEN 'GIANELLA_HERRERA' THEN 1200
+        WHEN 'ALBERTO_CHINGA' THEN 1000
+        WHEN 'AMIN_ALARCON' THEN 1000
+        ELSE 650
+      END,
+      tipo_contrato = 'indefinido',
+      fecha_ingreso = COALESCE(fecha_ingreso, '2025-01-02'::date)
+      WHERE empresa_id = $1
+    `, [empresaId]);
+    await client.query(`DELETE FROM marcaciones
+      WHERE empresa_id = $1 AND empleado_id = ANY($2)
+        AND (marcado_en AT TIME ZONE 'America/Guayaquil')::date BETWEEN '2026-06-01' AND '2026-06-30'`, [empresaId, allEmpIds]);
+    await client.query(`DELETE FROM solicitudes
+      WHERE empresa_id = $1 AND empleado_id = ANY($2)
+        AND fecha_inicio <= '2026-06-30' AND fecha_fin >= '2026-06-01'`, [empresaId, allEmpIds]);
+    await client.query(`DELETE FROM reemplazos_sucursal
+      WHERE empresa_id = $1 AND fecha_inicio <= '2026-06-30' AND fecha_fin >= '2026-06-01'`, [empresaId]);
+    await client.query("DELETE FROM feriados WHERE empresa_id = $1 AND fecha BETWEEN '2026-06-01' AND '2026-06-30'", [empresaId]);
 
     // 7. Seed Feriado on June 23, 2026
     console.log('Registrando feriado local...');
@@ -257,103 +276,146 @@ async function run() {
       VALUES ($1, 'Feriado de San Juan (Local)', '2026-06-23', 'Feriado local para descanso y festividades', TRUE)
     `, [empresaId]);
 
-    // 8. Seed Solicitud for Ariel Valdiviezo on June 24, 2026
-    console.log('Registrando solicitud de vacaciones para Ariel Valdiviezo...');
-    const ariel = employees['ariel.valdiviezo@essart.com.ec'];
-    await client.query(`
-      INSERT INTO solicitudes (
-        empresa_id, empleado_id, solicitado_por, tipo, fecha_inicio, fecha_fin, motivo, estado, revisado_por, revisado_en, comentario_revision
-      ) VALUES ($1, $2, $3, 'vacaciones', '2026-06-24', '2026-06-24', 'Descanso anual por vacaciones', 'aprobada', $4, NOW(), 'Aprobada automáticamente por RRHH')
-    `, [empresaId, ariel.id, ariel.usuario_id, getUserId('gianella.herrera@essart.com.ec')]);
+    // 8. Approved requests used by the labor calculation.
+    console.log('Registrando vacaciones, permisos e incapacidad aprobados...');
+    const reviewerId = getUserId('gianella.herrera@essart.com.ec');
+    const requests = [
+      ['ariel.valdiviezo@essart.com.ec', 'vacaciones', '2026-06-24', '2026-06-24', 'Día de vacaciones planificado'],
+      ['johan.garcia@essart.com.ec', 'permiso', '2026-06-10', '2026-06-10', 'Permiso personal aprobado'],
+      ['laura.macias@essart.com.ec', 'incapacidad', '2026-06-18', '2026-06-19', 'Reposo médico autorizado'],
+      ['juan.duenas@essart.com.ec', 'permiso', '2026-06-29', '2026-06-29', 'Trámite personal autorizado'],
+    ];
+    for (const [email, tipo, fechaInicio, fechaFin, motivo] of requests) {
+      const emp = employees[email];
+      if (!emp?.usuario_id) continue;
+      await client.query(`
+        INSERT INTO solicitudes (
+          empresa_id, empleado_id, solicitado_por, tipo, fecha_inicio, fecha_fin, motivo,
+          estado, revisado_por, revisado_en, comentario_revision
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'aprobada', $8, NOW(), 'Escenario demostrativo de junio 2026')
+      `, [empresaId, emp.id, emp.usuario_id, tipo, fechaInicio, fechaFin, motivo, reviewerId]);
+    }
 
-    // 9. Simulate Marcaciones (June 22, 24, 25)
-    console.log('Generando marcaciones simuladas...');
+    // 9. Branch replacements. Their marks below are stored in the destination branch.
+    console.log('Registrando reemplazos entre sucursales...');
+    const replacements = [
+      ['ramiro.muentes@essart.com.ec', 'PORTOVIEJO02', '2026-06-08', '2026-06-09', 'Cobertura por ausencia de Ariel Valdiviezo'],
+      ['johan.garcia@essart.com.ec', 'MATRIZ', '2026-06-15', '2026-06-16', 'Apoyo temporal en bodega Matriz'],
+      ['laura.macias@essart.com.ec', 'GUAYAQUIL01', '2026-06-25', '2026-06-26', 'Reemplazo operativo por vacaciones del personal local'],
+      ['kevin.choez@essart.com.ec', 'MANTA01', '2026-06-29', '2026-06-30', 'Cobertura de cierre mensual en Manta 01'],
+    ];
+    for (const [email, branchCode, fechaInicio, fechaFin, motivo] of replacements) {
+      const emp = employees[email];
+      const branch = sucursales[branchCode];
+      if (!emp || !branch || emp.sucursal_habitual_id === branch.id) continue;
+      await client.query(`
+        INSERT INTO reemplazos_sucursal (
+          empresa_id, empleado_id, sucursal_id, autorizado_por, fecha_inicio, fecha_fin,
+          hora_inicio, hora_fin, motivo, observacion, estado
+        ) VALUES ($1, $2, $3, $4, $5, $6, '07:30', '18:30', $7,
+          'Escenario demostrativo de reemplazo entre sucursales', 'activo')
+      `, [empresaId, emp.id, branch.id, reviewerId, fechaInicio, fechaFin, motivo]);
+    }
 
-    const insertMarcacion = async (email, fecha, horaEntrada, horaSalida, entradaNovedad = null, salidaNovedad = null) => {
+    // 10. Full June attendance: regular days, absences, late arrivals, incomplete
+    // shifts, overtime and marks made at replacement branches.
+    console.log('Generando marcaciones para todos los días laborables de junio...');
+    const replacementBranchByEmployeeDate = new Map();
+    for (const [email, branchCode, fechaInicio, fechaFin] of replacements) {
+      for (let day = Number(fechaInicio.slice(-2)); day <= Number(fechaFin.slice(-2)); day += 1) {
+        replacementBranchByEmployeeDate.set(`${email}:2026-06-${String(day).padStart(2, '0')}`, branchCode);
+      }
+    }
+
+    const insertMarcacion = async (email, fecha, horaEntrada, horaSalida, options = {}) => {
       const emp = employees[email];
       if (!emp) return;
-      const sucId = emp.sucursal_habitual_id || sucursales['MATRIZ'].id;
-      const lat = sucursales['MATRIZ'].latitud;
-      const lon = sucursales['MATRIZ'].longitud;
+      const branchCode = replacementBranchByEmployeeDate.get(`${email}:${fecha}`);
+      const branch = (branchCode && sucursales[branchCode])
+        || sucursalesRes.rows.find(s => s.id === emp.sucursal_habitual_id)
+        || sucursales['MATRIZ'];
+      const isReplacement = Boolean(branchCode);
 
-      if (horaEntrada) {
-        const entTime = `${fecha} ${horaEntrada}`;
-        const entEstado = entradaNovedad ? 'aceptada_con_novedad' : 'aceptada';
+      const insert = async (tipo, hora, novedad) => {
+        if (!hora) return;
+        const detail = novedad || (tipo === 'entrada' && isReplacement ? `Reemplazo autorizado en ${branchCode}` : null);
         await client.query(`
-          INSERT INTO marcaciones (empresa_id, empleado_id, sucursal_id, horario_id, tipo, estado, latitud, longitud, distancia_metros, dentro_geocerca, marcado_en, motivo_novedad, detalle_novedad, anulada)
-          VALUES ($1, $2, $3, $4, 'entrada', $5, $6, $7, 0.00, TRUE, $8::timestamptz, $9, $10, FALSE)
+          INSERT INTO marcaciones (
+            empresa_id, empleado_id, sucursal_id, horario_id, tipo, estado, latitud, longitud,
+            distancia_metros, dentro_geocerca, marcado_en, motivo_novedad, detalle_novedad, anulada
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0.00, TRUE, $9::timestamptz, $10, $11, FALSE)
         `, [
-          empresaId,
-          emp.id,
-          sucId,
-          horarioId,
-          entEstado,
-          lat,
-          lon,
-          entTime,
-          entradaNovedad ? 'atraso' : null,
-          entradaNovedad
+          empresaId, emp.id, branch.id, horarioId, tipo, detail ? 'aceptada_con_novedad' : 'aceptada',
+          branch.latitud, branch.longitud, `${fecha} ${hora}`,
+          novedad ? (tipo === 'entrada' ? 'atraso' : 'salida_novedad') : isReplacement && tipo === 'entrada' ? 'reemplazo_sucursal' : null,
+          detail,
         ]);
-      }
+      };
 
-      if (horaSalida) {
-        const salTime = `${fecha} ${horaSalida}`;
-        const salEstado = salidaNovedad ? 'aceptada_con_novedad' : 'aceptada';
-        await client.query(`
-          INSERT INTO marcaciones (empresa_id, empleado_id, sucursal_id, horario_id, tipo, estado, latitud, longitud, distancia_metros, dentro_geocerca, marcado_en, motivo_novedad, detalle_novedad, anulada)
-          VALUES ($1, $2, $3, $4, 'salida', $5, $6, $7, 0.00, TRUE, $8::timestamptz, $9, $10, FALSE)
-        `, [
-          empresaId,
-          emp.id,
-          sucId,
-          horarioId,
-          salEstado,
-          lat,
-          lon,
-          salTime,
-          salidaNovedad ? 'salida_novedad' : null,
-          salidaNovedad
-        ]);
-      }
+      await insert('entrada', horaEntrada, options.entradaNovedad);
+      await insert('salida', horaSalida, options.salidaNovedad);
     };
 
-    // June 22, 2026 (Monday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-22', '08:00:00', '18:00:00');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-22', '08:00:00', '16:00:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-22', '07:55:00', '18:30:00');
-    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-22', '08:15:00', '17:00:00', 'Llegada tarde a oficina');
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-22', '08:00:00', '17:00:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-22', '08:00:00', '14:00:00');
+    const approvedLeaveDates = new Set([
+      'ariel.valdiviezo@essart.com.ec:2026-06-24',
+      'johan.garcia@essart.com.ec:2026-06-10',
+      'laura.macias@essart.com.ec:2026-06-18',
+      'laura.macias@essart.com.ec:2026-06-19',
+      'juan.duenas@essart.com.ec:2026-06-29',
+    ]);
+    const absences = new Set([
+      'amin.alarcon@essart.com.ec:2026-06-05',
+      'ramiro.muentes@essart.com.ec:2026-06-12',
+      'dexi.zambrano@essart.com.ec:2026-06-17',
+      'pablo.vargas@essart.com.ec:2026-06-22',
+      'jonathan.roldan@essart.com.ec:2026-06-30',
+    ]);
+    const incomplete = new Set([
+      'alberto.chinga@essart.com.ec:2026-06-11',
+      'ruben.zambrano@essart.com.ec:2026-06-26',
+    ]);
+    const lateArrivals = new Map([
+      ['ariel.valdiviezo@essart.com.ec:2026-06-03', '08:24:00'],
+      ['gianella.herrera@essart.com.ec:2026-06-09', '08:18:00'],
+      ['luis.romero@essart.com.ec:2026-06-16', '08:35:00'],
+      ['italo.alvarez@essart.com.ec:2026-06-25', '08:20:00'],
+    ]);
+    const overtime = new Map([
+      ['ramiro.muentes@essart.com.ec:2026-06-04', '19:00:00'],
+      ['gianella.herrera@essart.com.ec:2026-06-12', '18:30:00'],
+      ['kevin.choez@essart.com.ec:2026-06-19', '20:00:00'],
+      ['johan.garcia@essart.com.ec:2026-06-30', '18:15:00'],
+    ]);
+    const weekdays = [];
+    for (let day = 1; day <= 30; day += 1) {
+      const weekday = new Date(Date.UTC(2026, 5, day)).getUTCDay();
+      if (weekday >= 1 && weekday <= 5 && day !== 23) {
+        weekdays.push(`2026-06-${String(day).padStart(2, '0')}`);
+      }
+    }
 
-    // June 24, 2026 (Wednesday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-24', '08:12:00', '18:30:00', 'Atraso menor en transporte');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-24', '08:00:00', '15:30:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-24', '07:58:00', '19:00:00');
-    // Ariel Valdiviezo has APPROVED vacation on June 24 (no marcaciones)
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-24', '08:00:00', '17:00:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-24', '08:00:00', '13:30:00');
+    let marksCreated = 0;
+    for (const email of Object.keys(employees)) {
+      for (const fecha of weekdays) {
+        const key = `${email}:${fecha}`;
+        if (approvedLeaveDates.has(key) || absences.has(key)) continue;
+        const entrada = lateArrivals.get(key) || '08:00:00';
+        const salida = incomplete.has(key) ? null : overtime.get(key) || '17:00:00';
+        await insertMarcacion(email, fecha, entrada, salida, {
+          entradaNovedad: lateArrivals.has(key) ? 'Llegada posterior a la tolerancia del horario' : null,
+        });
+        marksCreated += salida ? 2 : 1;
+      }
+    }
 
-    // June 25, 2026 (Thursday)
-    await insertMarcacion('juan.duenas@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
-    await insertMarcacion('gianella.herrera@essart.com.ec', '2026-06-25', '08:00:00', '19:00:00');
-    await insertMarcacion('alberto.chinga@essart.com.ec', '2026-06-25', '08:00:00', '16:30:00');
-    await insertMarcacion('amin.alarcon@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
-    await insertMarcacion('ramiro.muentes@essart.com.ec', '2026-06-25', '07:57:00', '18:00:00');
-    await insertMarcacion('ariel.valdiviezo@essart.com.ec', '2026-06-25', '08:00:00', '15:00:00');
-    await insertMarcacion('johan.garcia@essart.com.ec', '2026-06-25', '08:00:00', '17:00:00');
-    await insertMarcacion('jonathan.roldan@essart.com.ec', '2026-06-25', '08:00:00', '14:30:00');
-
-    console.log('Marcaciones creadas exitosamente.');
+    console.log(`${marksCreated} marcaciones creadas para ${employeesRes.rows.length} empleados.`);
 
     await client.query('COMMIT');
     console.log('--- MOCK DATA SEEDING COMPLETED SUCCESSFULLY ---');
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Seeding error:', err);
+    process.exitCode = 1;
   } finally {
     client.release();
     await pool.end();
