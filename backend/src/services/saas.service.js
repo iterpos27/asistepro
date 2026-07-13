@@ -94,7 +94,44 @@ async function getOverview() {
   };
 }
 
-async function listTenants() {
+function mapTenantRisk(row) {
+  return {
+    ...row,
+    riesgo_limite_empleados:
+      row.limite_empleados !== null && Number(row.total_empleados) >= Number(row.limite_empleados),
+    riesgo_limite_sucursales:
+      row.limite_sucursales !== null && Number(row.total_sucursales) >= Number(row.limite_sucursales),
+    riesgo_cobranza: Number(row.saldo_pendiente || 0) > 0 && Number(row.facturas_vencidas || 0) > 0,
+    riesgo_importaciones:
+      row.limite_importaciones_mensuales !== null
+      && Number(row.importaciones_mes) >= Number(row.limite_importaciones_mensuales),
+    riesgo_integraciones:
+      row.limite_integraciones !== null && Number(row.integraciones_activas) >= Number(row.limite_integraciones),
+    riesgo_storage:
+      row.limite_almacenamiento_mb !== null && Number(row.almacenamiento_mb || 0) >= Number(row.limite_almacenamiento_mb),
+  };
+}
+
+async function listTenants({ limit = 20, offset = 0, search, estado } = {}) {
+  const filters = [];
+  const values = [];
+
+  if (search) {
+    values.push(`%${search}%`);
+    filters.push(`(e.nombre ILIKE $${values.length} OR e.email ILIKE $${values.length})`);
+  }
+
+  if (estado) {
+    values.push(estado);
+    filters.push(`e.estado = $${values.length}`);
+  }
+
+  values.push(limit);
+  const limitParam = values.length;
+  values.push(offset);
+  const offsetParam = values.length;
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
   const result = await pool.query(
     `
       SELECT
@@ -116,7 +153,8 @@ async function listTenants() {
         COALESCE(marc.total_mes, 0)::int AS marcaciones_mes,
         COALESCE(fin.saldo_pendiente, 0)::numeric(12, 2) AS saldo_pendiente,
         COALESCE(fin.facturas_vencidas, 0)::int AS facturas_vencidas,
-        COALESCE(storage.almacenamiento_mb, 0)::numeric(12, 2) AS almacenamiento_mb
+        COALESCE(storage.almacenamiento_mb, 0)::numeric(12, 2) AS almacenamiento_mb,
+        COUNT(*) OVER() AS total
       FROM empresas e
       LEFT JOIN LATERAL (
         SELECT s.*, p.codigo, p.nombre, p.limite_empleados, p.limite_sucursales,
@@ -164,25 +202,20 @@ async function listTenants() {
         FROM facturas
         WHERE empresa_id = e.id
       ) storage ON TRUE
+      ${where}
       ORDER BY e.creado_en DESC
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
     `,
+    values,
   );
 
-  return result.rows.map((row) => ({
-    ...row,
-    riesgo_limite_empleados:
-      row.limite_empleados !== null && Number(row.total_empleados) >= Number(row.limite_empleados),
-    riesgo_limite_sucursales:
-      row.limite_sucursales !== null && Number(row.total_sucursales) >= Number(row.limite_sucursales),
-    riesgo_cobranza: Number(row.saldo_pendiente || 0) > 0 && Number(row.facturas_vencidas || 0) > 0,
-    riesgo_importaciones:
-      row.limite_importaciones_mensuales !== null
-      && Number(row.importaciones_mes) >= Number(row.limite_importaciones_mensuales),
-    riesgo_integraciones:
-      row.limite_integraciones !== null && Number(row.integraciones_activas) >= Number(row.limite_integraciones),
-    riesgo_storage:
-      row.limite_almacenamiento_mb !== null && Number(row.almacenamiento_mb || 0) >= Number(row.limite_almacenamiento_mb),
-  }));
+  return {
+    items: result.rows.map(({ total, ...row }) => mapTenantRisk(row)),
+    total: Number(result.rows[0]?.total || 0),
+    limit,
+    offset,
+  };
 }
 
 module.exports = {

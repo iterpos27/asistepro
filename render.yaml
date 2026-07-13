@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     rootDir: .
-    buildCommand: npm ci
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health/ready
     envVars:
@@ -22,6 +22,8 @@ services:
         value: "10"
       - key: AUTH_REGISTER_RATE_LIMIT_MAX
         value: "5"
+      - key: SLOW_REQUEST_MS
+        value: "1500"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGIN

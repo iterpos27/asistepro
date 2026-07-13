@@ -131,7 +131,7 @@ async function deleteStoredFileIfNeeded({ bucket, key }) {
 }
 
 async function getNextInvoiceNumber(client) {
-  const result = await client.query("SELECT COUNT(*)::int + 1 AS next FROM facturas");
+  const result = await client.query("SELECT nextval('facturas_numero_seq')::int AS next");
   return `FAC-${String(result.rows[0].next).padStart(6, '0')}`;
 }
 

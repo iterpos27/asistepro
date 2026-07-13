@@ -5,7 +5,7 @@ export async function getOverview() {
   return response.data.data;
 }
 
-export async function listTenants() {
-  const response = await api.get('/saas/tenants');
+export async function listTenants(params = {}) {
+  const response = await api.get('/saas/tenants', { params });
   return response.data.data;
 }

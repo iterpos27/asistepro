@@ -7,6 +7,7 @@ const path = require('path');
 const routes = require('./routes');
 const { auditLogger } = require('./middlewares/audit.middleware');
 const { notFoundHandler, errorHandler } = require('./middlewares/error.middleware');
+const { requestPerformanceLogger } = require('./middlewares/performance.middleware');
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -79,6 +80,7 @@ app.use(
     legacyHeaders: false,
   }),
 );
+app.use(requestPerformanceLogger);
 app.use(auditLogger);
 
 app.use('/api', routes);

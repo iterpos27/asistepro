@@ -9,7 +9,7 @@ function getVersion() {
   );
 }
 
-async function notifyOperationalAlert({ message, path, method, statusCode }) {
+async function notifyOperationalAlert({ message, path, method, statusCode, durationMs }) {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
   if (!webhookUrl || process.env.NODE_ENV !== 'production') return;
 
@@ -25,6 +25,7 @@ async function notifyOperationalAlert({ message, path, method, statusCode }) {
         environment: process.env.NODE_ENV,
         version: getVersion(),
         statusCode,
+        durationMs,
         method,
         path,
         message,

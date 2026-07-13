@@ -26,17 +26,23 @@ function downloadCsv(rows) {
 export default function SaasControl() {
   const [overview, setOverview] = useState(null);
   const [tenants, setTenants] = useState([]);
+  const [tenantPage, setTenantPage] = useState({ total: 0, limit: 20, offset: 0 });
   const [loading, setLoading] = useState(false);
 
-  async function loadData() {
+  async function loadData(offset = 0) {
     setLoading(true);
     try {
       const [overviewResult, tenantsResult] = await Promise.all([
         saasService.getOverview(),
-        saasService.listTenants(),
+        saasService.listTenants({ limit: tenantPage.limit, offset }),
       ]);
       setOverview(overviewResult);
-      setTenants(tenantsResult || []);
+      setTenants(tenantsResult?.items || tenantsResult || []);
+      setTenantPage({
+        total: tenantsResult?.total || 0,
+        limit: tenantsResult?.limit || tenantPage.limit,
+        offset: tenantsResult?.offset || offset,
+      });
     } finally {
       setLoading(false);
     }
@@ -128,6 +134,29 @@ export default function SaasControl() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="pagination-bar">
+          <span>
+            {tenantPage.total ? `${tenantPage.offset + 1}-${Math.min(tenantPage.offset + tenantPage.limit, tenantPage.total)} de ${tenantPage.total}` : '0 de 0'}
+          </span>
+          <div className="pagination-actions">
+            <button
+              className="outline-button"
+              type="button"
+              disabled={loading || tenantPage.offset === 0}
+              onClick={() => loadData(Math.max(0, tenantPage.offset - tenantPage.limit))}
+            >
+              Anterior
+            </button>
+            <button
+              className="outline-button"
+              type="button"
+              disabled={loading || tenantPage.offset + tenantPage.limit >= tenantPage.total}
+              onClick={() => loadData(tenantPage.offset + tenantPage.limit)}
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </div>
     </>

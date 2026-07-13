@@ -31,6 +31,7 @@ COOKIE_SAME_SITE=lax
 RATE_LIMIT_MAX=1000
 AUTH_LOGIN_RATE_LIMIT_MAX=10
 AUTH_REGISTER_RATE_LIMIT_MAX=5
+SLOW_REQUEST_MS=1500
 CRON_SECRET=coloca_un_secreto_largo
 ```
 
@@ -66,7 +67,11 @@ Health Check Path: /api/health/ready
 
 El comando `npm run start` ejecuta migraciones automaticamente antes de iniciar la API.
 
-## 5. Validacion despues del deploy
+## 5. Storage de archivos
+
+Para produccion, configura `STORAGE_DRIVER=supabase` o `STORAGE_DRIVER=s3` y evita guardar PDFs/comprobantes en la base de datos. El driver `database` queda como fallback para pruebas o bajo volumen.
+
+## 6. Validacion despues del deploy
 
 1. Abrir `https://TU_DOMINIO.railway.app/api/health`.
 2. Confirmar `environment: production`.
@@ -76,7 +81,7 @@ El comando `npm run start` ejecuta migraciones automaticamente antes de iniciar 
 6. Iniciar sesion y probar empresas, empleados, horarios, marcaciones y reportes.
 7. Desde celular, probar GPS/camara con HTTPS.
 
-## 6. Cron de suscripciones
+## 7. Cron de suscripciones
 
 En produccion el chequeo en proceso queda desactivado por defecto. Para ejecutarlo como tarea separada, crea un cron/job en Railway con:
 

@@ -1,6 +1,7 @@
 const saasService = require('../services/saas.service');
 const suscripcionService = require('../services/suscripcion.service');
 const { asyncHandler } = require('../utils/async.util');
+const { parsePagination } = require('../utils/pagination.util');
 
 const overview = asyncHandler(async (req, res) => {
   const data = await saasService.getOverview();
@@ -8,7 +9,13 @@ const overview = asyncHandler(async (req, res) => {
 });
 
 const tenants = asyncHandler(async (req, res) => {
-  const data = await saasService.listTenants();
+  const { limit, offset } = parsePagination(req.query, { maxLimit: 100, defaultLimit: 20 });
+  const data = await saasService.listTenants({
+    limit,
+    offset,
+    search: req.query.search,
+    estado: req.query.estado,
+  });
   return res.json({ ok: true, data });
 });
 
@@ -37,4 +44,3 @@ module.exports = {
   tenants,
   runCronCleanup,
 };
-

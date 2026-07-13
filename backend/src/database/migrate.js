@@ -45,6 +45,7 @@ const migrations = [
   '038_empleados_sucursales_autorizadas.sql',
   '039_marcaciones_almuerzo_tipos.sql',
   '040_reglas_laborales_empresa.sql',
+  '041_production_performance_indexes.sql',
 ];
 
 async function runMigrations() {
