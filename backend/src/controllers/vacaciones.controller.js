@@ -28,7 +28,8 @@ async function update(req, res, next) {
       req.tenant.empresa_id,
       req.params.empleadoId,
       parseInt(anio, 10),
-      req.body
+      req.body,
+      req.auth.usuario_id
     );
     return res.json({ ok: true, data });
   } catch (error) { next(error); }

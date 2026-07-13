@@ -47,6 +47,7 @@ const migrations = [
   '040_reglas_laborales_empresa.sql',
   '041_production_performance_indexes.sql',
   '042_seed_simulation.js',
+  '043_vacaciones_ajustes.sql',
 ];
 
 async function runMigrations() {

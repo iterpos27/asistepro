@@ -201,7 +201,24 @@ async function registrarVacacionesAprobadas(empresaId, empleadoId, solicitud, da
   const inicio = new Date(strInicio + 'T00:00:00');
   const fin = new Date(strFin + 'T00:00:00');
   const diffMs = Math.abs(fin - inicio);
-  const diasTomados = Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  let diasTomados = Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+  // Calculate fraction for hourly request
+  if (solicitud.hora_inicio && solicitud.hora_fin) {
+    const timeToMinutes = (val) => {
+      if (!val) return null;
+      const [h, m] = String(val).slice(0, 5).split(':').map(Number);
+      return h * 60 + m;
+    };
+    const startMin = timeToMinutes(solicitud.hora_inicio);
+    const endMin = timeToMinutes(solicitud.hora_fin);
+    if (startMin !== null && endMin !== null) {
+      const durationMin = endMin >= startMin ? endMin - startMin : endMin + 1440 - startMin;
+      // Calculate fraction based on standard 8-hour workday (480 mins)
+      const fraction = Number((durationMin / 480).toFixed(2));
+      diasTomados = Math.min(1.00, fraction);
+    }
+  }
 
   // If HR provided saldo info, use that; otherwise auto-increment
   if (datosAdicionales?.saldo_anterior !== undefined && datosAdicionales?.saldo_actual !== undefined) {
@@ -237,7 +254,7 @@ async function registrarVacacionesAprobadas(empresaId, empleadoId, solicitud, da
 /**
  * Manually adjust a balance (HR override).
  */
-async function updateSaldo(empresaId, empleadoId, anio, payload) {
+async function updateSaldo(empresaId, empleadoId, anio, payload, ajustadoPorId) {
   const existing = await getOrCreateSaldo(empresaId, empleadoId, anio);
   const updates = {};
   if (payload.saldo_inicial !== undefined) updates.saldo_inicial = Number(payload.saldo_inicial);
@@ -251,14 +268,58 @@ async function updateSaldo(empresaId, empleadoId, anio, payload) {
   const setClauses = fields.map((f, i) => `${f} = $${i + 4}`);
   const values = [empresaId, empleadoId, anio, ...fields.map((f) => updates[f])];
 
-  const result = await pool.query(
-    `UPDATE vacaciones_saldo
-     SET ${setClauses.join(', ')}, actualizado_en = NOW()
-     WHERE empresa_id = $1 AND empleado_id = $2 AND anio = $3
-     RETURNING *`,
-    values
-  );
-  return result.rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE vacaciones_saldo
+       SET ${setClauses.join(', ')}, actualizado_en = NOW()
+       WHERE empresa_id = $1 AND empleado_id = $2 AND anio = $3
+       RETURNING *`,
+      values
+    );
+
+    const updated = result.rows[0];
+
+    // Audit the adjustment
+    let actorId = ajustadoPorId;
+    if (!actorId) {
+      const userRes = await client.query('SELECT id FROM usuarios WHERE empresa_id = $1 LIMIT 1', [empresaId]);
+      actorId = userRes.rows[0]?.id || null;
+    }
+
+    await client.query(
+      `INSERT INTO vacaciones_ajustes (
+        empresa_id, empleado_id, anio,
+        saldo_inicial_anterior, saldo_inicial_nuevo,
+        dias_derecho_anterior, dias_derecho_nuevo,
+        dias_tomados_anterior, dias_tomados_nuevo,
+        motivo, ajustado_por
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        empresaId,
+        empleadoId,
+        anio,
+        Number(existing.saldo_inicial || 0),
+        Number(updated.saldo_inicial || 0),
+        Number(existing.dias_derecho || 0),
+        Number(updated.dias_derecho || 0),
+        Number(existing.dias_tomados || 0),
+        Number(updated.dias_tomados || 0),
+        payload.motivo || 'Ajuste manual de vacaciones',
+        actorId
+      ]
+    );
+
+    await client.query('COMMIT');
+    return updated;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = {
