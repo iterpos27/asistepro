@@ -48,6 +48,7 @@ const migrations = [
   '041_production_performance_indexes.sql',
   '042_seed_simulation.js',
   '043_vacaciones_ajustes.sql',
+  '044_fix_essart_june_timezone_lunch.js',
 ];
 
 async function runMigrations() {

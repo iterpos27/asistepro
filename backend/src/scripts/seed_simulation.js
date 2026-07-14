@@ -346,13 +346,17 @@ async function run() {
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0.00, TRUE, $9::timestamptz, $10, $11, FALSE)
         `, [
           empresaId, emp.id, branch.id, horarioId, tipo, detail ? 'aceptada_con_novedad' : 'aceptada',
-          branch.latitud, branch.longitud, `${fecha} ${hora}`,
+          branch.latitud, branch.longitud, `${fecha}T${hora}-05:00`,
           novedad ? (tipo === 'entrada' ? 'atraso' : 'salida_novedad') : isReplacement && tipo === 'entrada' ? 'reemplazo_sucursal' : null,
           detail,
         ]);
       };
 
       await insert('entrada', horaEntrada, options.entradaNovedad);
+      if (horaSalida) {
+        await insert('salida_almuerzo', options.salidaAlmuerzo || '12:00:00');
+        await insert('entrada_almuerzo', options.entradaAlmuerzo || '13:00:00');
+      }
       await insert('salida', horaSalida, options.salidaNovedad);
     };
 
@@ -404,7 +408,7 @@ async function run() {
         await insertMarcacion(email, fecha, entrada, salida, {
           entradaNovedad: lateArrivals.has(key) ? 'Llegada posterior a la tolerancia del horario' : null,
         });
-        marksCreated += salida ? 2 : 1;
+        marksCreated += salida ? 4 : 1;
       }
     }
 
