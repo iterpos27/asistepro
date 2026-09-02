@@ -10,7 +10,7 @@ import * as empleadoService from '../../services/empleadoService';
 import * as sucursalService from '../../services/sucursalService';
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(new Date());
 }
 
 function tipoLabel(tipo) {
@@ -31,7 +31,7 @@ function statusClass(estado) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' });
 }
 
 export default function HistorialMarcaciones() {
@@ -202,6 +202,7 @@ export default function HistorialMarcaciones() {
 
       <div className="panel">
         <PanelTitle title="Marcaciones registradas" />
+        {error && <p role="alert">{error}</p>}
         <div className="table-wrap">
           <table>
             <thead>

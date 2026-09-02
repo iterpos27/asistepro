@@ -443,7 +443,7 @@ async function registrarMarcacion({ empresaId, auth, payload }) {
   };
 }
 
-async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado, fechaDesde, fechaHasta, soloMios, limit = 20, offset = 0 }) {
+async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado, fechaDesde, fechaHasta, soloMios, limit = 20, offset = 0 }, db = pool) {
   const filters = ['m.empresa_id = $1'];
   const values = [empresaId];
 
@@ -467,12 +467,12 @@ async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado
 
   if (fechaDesde) {
     values.push(fechaDesde);
-    filters.push(`m.marcado_en >= $${values.length}::timestamptz`);
+    filters.push(`m.marcado_en >= ($${values.length}::date::timestamp AT TIME ZONE 'America/Guayaquil')`);
   }
 
   if (fechaHasta) {
     values.push(fechaHasta);
-    filters.push(`m.marcado_en <= $${values.length}::timestamptz`);
+    filters.push(`m.marcado_en < (($${values.length}::date + 1)::timestamp AT TIME ZONE 'America/Guayaquil')`);
   }
 
   values.push(limit);
@@ -480,7 +480,7 @@ async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado
   values.push(offset);
   const offsetParam = values.length;
 
-  const result = await pool.query(
+  const result = await db.query(
     `
       SELECT
         m.*,
