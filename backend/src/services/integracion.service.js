@@ -219,6 +219,11 @@ async function assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn, i
 }
 
 async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
+  if (integracion.configuracion?.modo_conexion === 'adms') {
+    const error = new Error('Este equipo usa la bandeja ADMS. La importacion a asistencia aun no esta habilitada.');
+    error.statusCode = 409;
+    throw error;
+  }
   let marks = Array.isArray(payload?.marcaciones) ? payload.marcaciones : [];
   let deviceSummary = null;
   const directConnection = integracion.configuracion?.modo_conexion === 'directo'

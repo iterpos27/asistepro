@@ -45,7 +45,39 @@ si el piloto esta en ejecucion. El piloto expira tras 60 minutos; comprobar su
 `/health` antes de restaurar el destino. Este diagnostico no debe quedar como
 solucion operativa: no importa ni confirma asistencia.
 
-## Fase 2 pendiente: recepcion duradera y autenticada
+## Fase 2a implementada: registro y bandeja privada del piloto
+
+En Integraciones, crear o seleccionar un biometrico y abrir **Bandeja ADMS**.
+Registrar su serie y sucursal; estas quedan fijas, la sucursal debe pertenecer a
+la empresa autenticada. El registro cambia el modo a ADMS para excluir al equipo
+del scheduler TCP. No registra empleados ni habilita el endpoint publico.
+
+Seleccionar una fecha y el JSON `attendance-pending.json` del piloto. La pantalla
+previsualiza el numero de eventos de ese dia; solo despues de confirmar envia
+los campos ID, hora, estado y verificacion (maximo 1000 eventos por carga).
+No envia todo el historial, nombres, claves o plantillas. La hora local se conserva.
+La carga es manual y queda auditada como tal; no es evidencia de ADMS automatico.
+
+La migracion `046_adms_inbox.js` usa el ejecutor propio del proyecto, crea
+`biometrico_dispositivos` y `biometrico_eventos` con claves compuestas de empresa,
+RLS y sin permisos PUBLIC/anon/authenticated. Solo el backend autorizado consulta
+la bandeja, con filtros de empresa, dispositivo y dia, paginada en grupos de 50.
+El archivo solo se confirma despues del COMMIT; los reenvios se deduplican.
+Los eventos no modifican `marcaciones` ni reportes o nomina. El estado numerico del
+reloj no se interpreta automaticamente como entrada/salida.
+
+Prueba aislada de PostgreSQL local (esquema temporal transaccional y rollback):
+
+```powershell
+$env:ADMS_DB_TEST='true'
+node --test backend/tests/adms-inbox.test.js
+Remove-Item Env:ADMS_DB_TEST
+```
+
+La CLI de Supabase no esta instalada en este entorno; no se modifico su historial
+de migraciones. El esquema se verifica con el mismo driver PostgreSQL del backend.
+
+## Fase 2b pendiente: recepcion publica duradera y autenticada
 
 No se monta `adms-pilot.js` en Render. Su fichero local no es almacenamiento central
 duradero. Tampoco se habilita importacion basandose solamente en numero de serie.
@@ -75,9 +107,9 @@ Diseno de la siguiente fase, sujeto a esa comprobacion:
 7. Comprobar continuidad del alojamiento: el plan gratuito puede suspenderse por
    inactividad. No prometer tiempo real permanente sin verificar el plan operativo.
 
-No se ha creado esta fase, cambiado la base de produccion, publicado el fichero de
-marcaciones ni habilitado nuevas reglas de firewall. La ruta de diagnostico puede
-quitarse revirtiendo su montaje sin tocar datos.
+No se ha creado la recepcion publica de esta fase ni habilitado nuevas reglas de
+firewall. El archivo del piloto permanece fuera de Git. La ruta de diagnostico
+puede quitarse revirtiendo su montaje sin tocar los eventos ya guardados.
 
 ## Fuentes
 

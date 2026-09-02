@@ -1,0 +1,101 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { randomUUID } = require('node:crypto');
+const { validLocalTime, uploadSchema, registerSchema, querySchema } = require('../src/services/adms-inbox.service');
+const { sanitizeValue } = require('../src/middlewares/audit.middleware');
+const record = { userId: '4', localTime: '2026-09-02 16:01:17', status: 4, verification: 1 };
+
+test('valida registros, fechas reales y limites; no admite huellas ni datos laborales', () => {
+  assert.equal(validLocalTime(record.localTime), true);
+  assert.equal(validLocalTime('2026-02-30 16:01:17'), false);
+  assert.equal(uploadSchema.safeParse({ serial: 'TEST', payload: { records: [record] } }).success, true);
+  for (const records of [[], Array(1001).fill(record), [{ ...record, status: -1 }], [{ ...record, template: 'secret' }], [{ ...record, status: '4' }]]) {
+    assert.equal(uploadSchema.safeParse({ serial: 'TEST', payload: { records } }).success, false);
+  }
+  assert.equal(registerSchema.safeParse({ serial: 'X\nY', sucursal_id: randomUUID() }).success, false);
+  assert.equal(querySchema.safeParse({ fecha: '2026-02-30' }).success, false);
+  assert.equal(querySchema.safeParse({ fecha: '2026-09-02', pagina: '0' }).success, false);
+  assert.deepEqual(sanitizeValue({ serial: 'TEST', payload: { records: [record] } }), { serial: 'TEST', payload: '[redacted]' });
+});
+
+test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip: process.env.ADMS_DB_TEST !== 'true' }, async () => {
+  require('../src/utils/env.util').loadBackendEnv();
+  const { Pool } = require('pg');
+  const url = process.env.DATABASE_URL;
+  const host = url ? new URL(url).hostname : process.env.DB_HOST || 'localhost';
+  assert.ok(['localhost', '127.0.0.1', '::1'].includes(host), 'La prueba solo permite PostgreSQL local');
+  const testPool = new Pool(url ? { connectionString: url } : { host, port: Number(process.env.DB_PORT || 5432),
+    database: process.env.DB_NAME || 'asistepro', user: process.env.DB_USER || 'postgres', password: process.env.DB_PASSWORD || 'postgres' });
+  const client = await testPool.connect();
+  const schema = 'adms_test_' + randomUUID().replaceAll('-', '');
+  const company = randomUUID(), other = randomUUID(), branch = randomUUID(), otherBranch = randomUUID();
+  const id = randomUUID(), otherId = randomUUID(), actor = randomUUID();
+  let failAudit = false;
+  const scoped = { query: (sql, values) => {
+    if (sql === 'BEGIN') return client.query('SAVEPOINT request_tx');
+    if (sql === 'COMMIT') return client.query('RELEASE SAVEPOINT request_tx');
+    if (sql === 'ROLLBACK') return client.query('ROLLBACK TO SAVEPOINT request_tx');
+    if (failAudit && sql.includes('INSERT INTO integracion_ejecuciones')) throw new Error('simulated audit failure');
+    return client.query(sql, values);
+  }, release() {} };
+  const db = { ...scoped, connect: async () => scoped };
+  const service = require('../src/services/adms-inbox.service');
+  const args = { empresaId: company, usuarioId: actor, id };
+  try {
+    await client.query('BEGIN');
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    await client.query(`CREATE TABLE usuarios(id uuid PRIMARY KEY);
+      CREATE TABLE sucursales(id uuid PRIMARY KEY,empresa_id uuid,estado text,nombre text);
+      CREATE TABLE integraciones_externas(id uuid PRIMARY KEY,empresa_id uuid,tipo text,estado text,
+        configuracion jsonb DEFAULT '{}',actualizado_por uuid,actualizado_en timestamptz);
+      CREATE TABLE integracion_ejecuciones(integracion_id uuid,empresa_id uuid,ejecutado_por uuid,accion text,estado text,resumen jsonb,errores jsonb);`);
+    await require('../src/database/046_adms_inbox')(client);
+    await require('../src/database/046_adms_inbox')(client); // migration retry
+    await client.query('INSERT INTO usuarios VALUES($1)', [actor]);
+    await client.query("INSERT INTO sucursales VALUES($1,$2,'activa','MATRIZ'),($3,$4,'activa','OTRA')", [branch, company, otherBranch, other]);
+    await client.query("INSERT INTO integraciones_externas(id,empresa_id,tipo,estado) VALUES($1,$2,'biometrico','activa'),($3,$4,'biometrico','activa')", [id, company, otherId, other]);
+    await assert.rejects(service.register({ ...args, body: { serial: 'TEST', sucursal_id: otherBranch } }, db), /Sucursal activa/);
+    await assert.rejects(service.register({ ...args, empresaId: other, body: { serial: 'TEST', sucursal_id: branch } }, db), /Biometrico activo/);
+    await service.register({ ...args, body: { serial: 'TEST', sucursal_id: branch } }, db);
+    await service.register({ ...args, body: { serial: 'TEST', sucursal_id: branch } }, db);
+    await assert.rejects(service.register({ ...args, body: { serial: 'CHANGED', sucursal_id: branch } }, db), /no se reasignan/);
+    await assert.rejects(service.register({ ...args, id: otherId, empresaId: other, body: { serial: 'TEST', sucursal_id: otherBranch } }, db), /No se pudo registrar/);
+    await assert.rejects(service.uploadPilot({ ...args, body: { serial: 'WRONG', payload: { records: [record] } } }, db), /serie del archivo/);
+    const body = { serial: 'TEST', payload: { records: [record, record] } };
+    const first = await service.uploadPilot({ ...args, body }, db);
+    assert.equal(first.nuevas, 1); assert.equal(first.duplicadas, 1); assert.equal(first.importadas_asistencia, 0);
+    assert.equal((await service.uploadPilot({ ...args, body }, db)).nuevas, 0);
+    failAudit = true;
+    await assert.rejects(service.uploadPilot({ ...args, body: { serial: 'TEST', payload: { records: [{ ...record, userId: '52' }] } } }, db), /simulated/);
+    failAudit = false;
+    const inbox = await service.list({ ...args, query: { fecha: '2026-09-02' } }, db);
+    assert.equal(inbox.total, 1); assert.equal(inbox.items[0].fecha_hora_local, record.localTime);
+    assert.equal(inbox.items[0].origen, 'piloto_manual'); assert.equal(inbox.recepcion_publica, 'bloqueada');
+    assert.equal((await service.list({ ...args, query: { fecha: '2026-09-03' } }, db)).total, 0);
+    await assert.rejects(service.list({ ...args, empresaId: other, query: { fecha: '2026-09-02' } }, db), /no encontrado/);
+    const security = await client.query(`SELECT relname,relrowsecurity,
+      NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE grantee=0) AS no_public_grant
+      FROM pg_class c WHERE relnamespace=$1::regnamespace AND relname IN ('biometrico_eventos','biometrico_dispositivos')`, [schema]);
+    assert.equal(security.rows.length, 2);
+    for (const r of security.rows) { assert.equal(r.relrowsecurity, true); assert.equal(r.no_public_grant, true); }
+    // Comprobar FK compuesta: otro tenant no puede adjuntar eventos al dispositivo.
+    await client.query('SAVEPOINT cross_tenant');
+    await assert.rejects(client.query(`INSERT INTO biometrico_eventos
+      SELECT $1,integracion_id,repeat('a',64),dispositivo_usuario_id,fecha_hora_local,estado_dispositivo,verificacion,origen,recibido_por,recibido_en
+      FROM biometrico_eventos`, [other]), error => error.code === '23503');
+    await client.query('ROLLBACK TO SAVEPOINT cross_tenant');
+  } finally {
+    await client.query('ROLLBACK'); // esquema y fixtures no persisten
+    client.release(); await testPool.end();
+  }
+});
+
+test('archivo piloto: selecciona solo el dia y no envia plantillas, claves ni otras fechas', async () => {
+  const { preparePilotFile } = await import('../../frontend/src/pages/integraciones/adms-pilot-file.js');
+  const saved = { version: 1, serial: 'TEST', records: { a: { ...record, id: 'ignored', template: 'never send' },
+    b: { ...record, localTime: '2026-09-01 16:00:00' } } };
+  assert.deepEqual(preparePilotFile(JSON.stringify(saved), 'TEST', '2026-09-02'), { serial: 'TEST', payload: { records: [record] } });
+  assert.throws(() => preparePilotFile(JSON.stringify(saved), 'OTHER', '2026-09-02'), /serie/);
+  assert.throws(() => preparePilotFile(JSON.stringify(saved), 'TEST', '2026-09-03'), /no contiene/);
+});

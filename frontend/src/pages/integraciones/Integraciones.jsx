@@ -6,6 +6,7 @@ import { toast } from '../../services/toastService';
 import * as integracionService from '../../services/integracionService';
 import * as sucursalService from '../../services/sucursalService';
 import UsuariosBiometrico from './UsuariosBiometrico';
+import BandejaAdms from './BandejaAdms';
 
 const initialForm = {
   nombre: '',
@@ -45,6 +46,7 @@ export default function Integraciones() {
   const [saving, setSaving] = useState(false);
   const [sucursales, setSucursales] = useState([]);
   const [biometricId, setBiometricId] = useState('');
+  const [admsId, setAdmsId] = useState('');
 
   async function loadData() {
     const result = await integracionService.listIntegraciones();
@@ -138,6 +140,9 @@ export default function Integraciones() {
   }
 
   const biometric = data.items.find(item => item.id === biometricId);
+  const adms = data.items.find(item => item.id === admsId);
+  if (adms) return <BandejaAdms key={adms.id} integration={adms} sucursales={sucursales}
+    onChanged={loadData} onBack={() => { setAdmsId(''); resetForm(); }} />;
   if (biometric) return <UsuariosBiometrico key={biometric.id} integration={biometric}
     onChanged={loadData} onBack={() => { setBiometricId(''); resetForm(); }} />;
 
@@ -172,6 +177,11 @@ export default function Integraciones() {
             {form.tipo === 'biometrico' ? (
               <>
                 <div className="toolbar-grid">
+                  <select aria-label="Modo de conexión" value={parseJson(form.configuracion).modo_conexion || 'directo'}
+                    onChange={event => updateBiometricConfig('modo_conexion', event.target.value)}>
+                    <option value="directo">TCP local</option>
+                    <option value="adms">ADMS · registro y bandeja (sin recepción pública)</option>
+                  </select>
                   <input
                     aria-label="IP del biometrico"
                     placeholder="IP del biometrico"
@@ -239,7 +249,8 @@ export default function Integraciones() {
                   <td>{item.ultima_ejecucion_estado || '-'}</td>
                   <td>
                     <div className="row-actions">
-                      {item.tipo === 'biometrico' && item.configuracion?.ip && <button className="outline-button" type="button" onClick={() => setBiometricId(item.id)}>Usuarios del biométrico</button>}
+                      {item.tipo === 'biometrico' && <button className="outline-button" type="button" onClick={() => setAdmsId(item.id)}>Bandeja ADMS</button>}
+                      {item.tipo === 'biometrico' && item.configuracion?.ip && item.configuracion?.modo_conexion !== 'adms' && <button className="outline-button" type="button" onClick={() => setBiometricId(item.id)}>Usuarios del biométrico</button>}
                       <button className="icon-button" type="button" onClick={() => editItem(item)} title="Editar" aria-label="Editar">
                         <PlugZap size={16} />
                       </button>
