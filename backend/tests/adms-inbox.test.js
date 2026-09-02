@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { validLocalTime, uploadSchema, registerSchema, querySchema } = require('../src/services/adms-inbox.service');
+const { validLocalTime, uploadSchema, registerSchema, querySchema, importSchema } = require('../src/services/adms-inbox.service');
 const { sanitizeValue } = require('../src/middlewares/audit.middleware');
 const record = { userId: '4', localTime: '2026-09-02 16:01:17', status: 4, verification: 1 };
 
@@ -15,6 +15,11 @@ test('valida registros, fechas reales y limites; no admite huellas ni datos labo
   assert.equal(registerSchema.safeParse({ serial: 'X\nY', sucursal_id: randomUUID() }).success, false);
   assert.equal(querySchema.safeParse({ fecha: '2026-02-30' }).success, false);
   assert.equal(querySchema.safeParse({ fecha: '2026-09-02', pagina: '0' }).success, false);
+  const request = { referencia: 'a'.repeat(64), empleado_id: randomUUID(), tipo: 'salida', confirmado: true };
+  assert.equal(importSchema.safeParse(request).success, true);
+  for (const invalid of [{ ...request, confirmado: false }, { ...request, tipo: '4' }, { ...request, fecha: '2026-09-02' }, { ...request, empresa_id: randomUUID() }]) {
+    assert.equal(importSchema.safeParse(invalid).success, false);
+  }
   assert.deepEqual(sanitizeValue({ serial: 'TEST', payload: { records: [record] } }), { serial: 'TEST', payload: '[redacted]' });
 });
 
@@ -50,6 +55,13 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
       CREATE TABLE integraciones_externas(id uuid PRIMARY KEY,empresa_id uuid,tipo text,estado text,
         configuracion jsonb DEFAULT '{}',actualizado_por uuid,actualizado_en timestamptz);
       CREATE TABLE integracion_ejecuciones(integracion_id uuid,empresa_id uuid,ejecutado_por uuid,accion text,estado text,resumen jsonb,errores jsonb);`);
+    await client.query(`CREATE TABLE empleados(id uuid PRIMARY KEY,empresa_id uuid,codigo text,nombres text,apellidos text,estado text);
+      CREATE TABLE cierres_mensuales(id uuid DEFAULT gen_random_uuid(),empresa_id uuid,mes text,estado text);
+      CREATE TABLE marcaciones(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),empresa_id uuid,empleado_id uuid,sucursal_id uuid,
+        tipo text,estado text,anulada boolean DEFAULT false,latitud numeric,longitud numeric,distancia_metros numeric,dentro_geocerca boolean,
+        mensaje text,marcado_en timestamptz,origen text,integracion_id uuid,origen_referencia varchar(64));
+      CREATE UNIQUE INDEX test_marcacion_ref ON marcaciones(integracion_id,origen_referencia)
+        WHERE integracion_id IS NOT NULL AND origen_referencia IS NOT NULL;`);
     await require('../src/database/046_adms_inbox')(client);
     await require('../src/database/046_adms_inbox')(client); // migration retry
     await client.query('INSERT INTO usuarios VALUES($1)', [actor]);
@@ -85,6 +97,47 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
       SELECT $1,integracion_id,repeat('a',64),dispositivo_usuario_id,fecha_hora_local,estado_dispositivo,verificacion,origen,recibido_por,recibido_en
       FROM biometrico_eventos`, [other]), error => error.code === '23503');
     await client.query('ROLLBACK TO SAVEPOINT cross_tenant');
+    const employee = randomUUID(), foreignEmployee = randomUUID(), inactive = randomUUID();
+    await client.query(`INSERT INTO empleados VALUES($1,$2,'EMP-1','Persona','Prueba','activo'),
+      ($3,$4,'EMP-2','Otra','Empresa','activo'),($5,$2,'EMP-3','Persona','Inactiva','inactivo')`,
+    [employee, company, foreignEmployee, other, inactive]);
+    const request = { ...args, body: { referencia: inbox.items[0].referencia, empleado_id: employee, tipo: 'salida', confirmado: true } };
+    await assert.rejects(service.importEvent({ ...request, empresaId: other }, db), /no encontrado/);
+    await assert.rejects(service.importEvent({ ...request, body: { ...request.body, referencia: 'f'.repeat(64) } }, db), /Evento no encontrado/);
+    for (const empleado_id of [foreignEmployee, inactive]) {
+      await assert.rejects(service.importEvent({ ...request, body: { ...request.body, empleado_id } }, db), /Empleado activo/);
+    }
+    await client.query("INSERT INTO cierres_mensuales(empresa_id,mes,estado) VALUES($1,'2026-09','cerrado')", [company]);
+    await assert.rejects(service.importEvent(request, db), /periodo mensual esta cerrado/);
+    await client.query("UPDATE cierres_mensuales SET estado='reabierto'");
+    failAudit = true;
+    await assert.rejects(service.importEvent(request, db), /simulated/);
+    failAudit = false;
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones')).rows[0].n, 0);
+    assert.equal((await client.query('SELECT configuracion FROM integraciones_externas WHERE id=$1', [id])).rows[0].configuracion.adms_usuarios_mapeo, undefined);
+    const imported = await service.importEvent(request, db);
+    assert.equal(imported.nueva, true);
+    const saved = (await client.query('SELECT * FROM marcaciones WHERE id=$1', [imported.marcacion_id])).rows[0];
+    assert.equal(saved.empleado_id, employee); assert.equal(saved.sucursal_id, branch);
+    assert.equal(saved.marcado_en.toISOString(), '2026-09-02T21:01:17.000Z');
+    assert.equal(saved.tipo, 'salida'); assert.equal(saved.origen, 'biometrico');
+    assert.equal((await service.importEvent(request, db)).nueva, false);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones')).rows[0].n, 1);
+    const updatedInbox = await service.list({ ...args, query: { fecha: '2026-09-02' } }, db);
+    assert.equal(updatedInbox.items[0].marcacion_id, imported.marcacion_id);
+    assert.equal(updatedInbox.vinculos['4'], employee);
+    assert.equal(updatedInbox.empleados.length, 1);
+    await assert.rejects(service.importEvent({ ...request, body: { ...request.body, tipo: 'entrada' } }, db), /ya tiene una marcacion distinta/);
+    // Otro evento con la misma salida no duplica la asistencia.
+    await service.uploadPilot({ ...args, body: { serial: 'TEST', payload: { records: [{ ...record, localTime: '2026-09-02 16:02:00' }] } } }, db);
+    const second = (await service.list({ ...args, query: { fecha: '2026-09-02' } }, db)).items.find(r => !r.marcacion_id);
+    await assert.rejects(service.importEvent({ ...request, body: { ...request.body, referencia: second.referencia } }, db), /ya tiene una marcacion de este tipo/);
+    // No reasigna ID ni revive registros anulados.
+    await client.query("UPDATE empleados SET estado='activo' WHERE id=$1", [inactive]);
+    await assert.rejects(service.importEvent({ ...request, body: { ...request.body, empleado_id: inactive } }, db), /vinculo distinto/);
+    await client.query('UPDATE marcaciones SET anulada=true WHERE id=$1', [imported.marcacion_id]);
+    await assert.rejects(service.importEvent(request, db), /anulada o rechazada/);
+    assert.equal((await client.query("SELECT count(*)::int AS n FROM integracion_ejecuciones WHERE accion='importar_evento_adms'")).rows[0].n, 1);
   } finally {
     await client.query('ROLLBACK'); // esquema y fixtures no persisten
     client.release(); await testPool.end();
