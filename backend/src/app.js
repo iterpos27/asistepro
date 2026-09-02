@@ -8,6 +8,7 @@ const routes = require('./routes');
 const { auditLogger } = require('./middlewares/audit.middleware');
 const { notFoundHandler, errorHandler } = require('./middlewares/error.middleware');
 const { requestPerformanceLogger } = require('./middlewares/performance.middleware');
+const { createAdmsDiagnostics } = require('./routes/adms.routes');
 
 const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -34,6 +35,9 @@ function getHostFromOrigin(origin) {
 }
 
 app.use(helmet());
+// Protocolo del reloj fuera de /api. No pasar datos ADMS por JSON, auditoria
+// ni por el fallback HTML. Solo diagnostico: no confirma/importa marcaciones.
+app.use('/iclock', createAdmsDiagnostics());
 app.use(
   cors((req, callback) => {
     const corsOptions = {
