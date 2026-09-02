@@ -12,6 +12,14 @@ services:
         value: production
       - key: DB_SSL
         value: "true"
+      - key: DB_POOL_MAX
+        value: "10"
+      - key: DB_POOL_CONN_TIMEOUT
+        value: "10000"
+      - key: DB_CONNECT_RETRIES
+        value: "4"
+      - key: DB_CONNECT_RETRY_DELAY_MS
+        value: "3000"
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAME_SITE

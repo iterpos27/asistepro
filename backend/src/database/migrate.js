@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-const { pool } = require('../config/database');
+const { pool, connectWithRetry, describeConnectionError } = require('../config/database');
 
 const migrations = [
   '001_schema.sql',
@@ -53,8 +53,10 @@ const migrations = [
 ];
 
 async function runMigrations() {
-  const client = await pool.connect();
+  let client;
+
   try {
+    client = await connectWithRetry();
     await client.query('BEGIN');
 
     // Crear tabla de control de versiones si no existe
@@ -94,13 +96,23 @@ async function runMigrations() {
     await client.query('COMMIT');
     console.log('Database migrations completed successfully');
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('Database migration failed:', error.message);
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Database migration rollback failed:', describeConnectionError(rollbackError));
+      }
+    }
+
+    console.error('Database migration failed:', describeConnectionError(error));
     process.exitCode = 1;
   } finally {
-    client.release();
+    client?.release();
     await pool.end();
   }
 }
 
-runMigrations();
+runMigrations().catch((error) => {
+  console.error('Unexpected database migration failure:', describeConnectionError(error));
+  process.exitCode = 1;
+});
