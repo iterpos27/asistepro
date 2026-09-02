@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+const { loadBackendEnv } = require('../utils/env.util');
+loadBackendEnv();
 const { pool, connectWithRetry, describeConnectionError } = require('../config/database');
 
 const migrations = [

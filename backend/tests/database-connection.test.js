@@ -91,13 +91,15 @@ test('migraciones cierra el pool y falla limpiamente si no obtiene conexion', as
   const migrate = fs.readFileSync(path.join(__dirname, '../src/database/migrate.js'), 'utf8');
   let ended = false;
   let attempts = 0;
+  let envLoaded = false;
   const fakeProcess = {};
   const sandbox = {
     require(name) {
       if (name === 'fs') return fs;
       if (name === 'path') return path;
-      if (name === 'dotenv') return { config() {} };
+      if (name === '../utils/env.util') return { loadBackendEnv() { envLoaded = true; } };
       assert.equal(name, '../config/database');
+      assert.equal(envLoaded, true, 'debe cargar el entorno antes de crear el pool');
       return {
         pool: { async end() { ended = true; } },
         async connectWithRetry() { attempts++; throw new Error('timeout'); },
@@ -112,4 +114,24 @@ test('migraciones cierra el pool y falla limpiamente si no obtiene conexion', as
   assert.equal(attempts, 1);
   assert.equal(ended, true);
   assert.equal(fakeProcess.exitCode, 1);
+});
+
+test('el cargador compartido fuerza produccion en Render aunque NODE_ENV diga development', () => {
+  const envSource = fs.readFileSync(path.join(__dirname, '../src/utils/env.util.js'), 'utf8');
+  const env = { NODE_ENV: 'development', RENDER: 'true' };
+  const sandbox = {
+    require(name) {
+      if (name === 'path') return path;
+      assert.equal(name, 'dotenv');
+      return { config() {} };
+    },
+    __dirname,
+    process: { env },
+    module: { exports: {} },
+  };
+  vm.runInNewContext(envSource, sandbox);
+  sandbox.module.exports.loadBackendEnv();
+  assert.equal(env.NODE_ENV, 'production');
+  const db = loadDatabase({ ...env, DATABASE_URL: 'postgres://example.invalid/db' });
+  assert.equal(db.config.connectionTimeoutMillis, 10000);
 });
