@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { emptyBody, emptyParams, idParamSchema, idParams, updateBodySchema } = require('./common.validator');
+const { emptyBody, emptyParams, idParamSchema, idParams, updateBodySchema, isoDate } = require('./common.validator');
 
 const integrationBodyBase = z.object({
   nombre: z.string().trim().min(1).max(160),
@@ -42,6 +42,13 @@ const runIntegrationSchema = z.object({
 });
 
 module.exports = {
+  biometricUsersSchema: z.object({ body: emptyBody, params: idParams, query: z.object({ fecha_desde: isoDate('fecha_desde') }) }),
+  biometricLinkSchema: z.object({
+    params: idParams,
+    query: z.object({}).passthrough(),
+    body: z.object({ dispositivo_usuario_id: z.string().trim().regex(/^[a-zA-Z0-9_-]{1,24}$/),
+      empleado_id: z.uuid(), fecha_desde: isoDate('fecha_desde') }),
+  }),
   createIntegrationSchema,
   idParamSchema,
   runIntegrationSchema,

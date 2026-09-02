@@ -10,6 +10,8 @@ const {
   idParamSchema,
   runIntegrationSchema,
   updateIntegrationSchema,
+  biometricUsersSchema,
+  biometricLinkSchema,
 } = require('../validators/integracion.validator');
 
 const router = Router();
@@ -21,6 +23,8 @@ router.use(subscriptionGuard);
 router.use(featureGuard('integraciones'));
 
 router.get('/', permissionGuard('integraciones', 'ver'), integracionController.list);
+router.get('/:id/usuarios-biometrico', permissionGuard('integraciones', 'ver'), validateSchema(biometricUsersSchema), integracionController.listBiometricUsers);
+router.post('/:id/usuarios-biometrico/vincular', permissionGuard('integraciones', 'editar'), permissionGuard('integraciones', 'exportar'), validateSchema(biometricLinkSchema), integracionController.linkBiometricUser);
 router.post('/', permissionGuard('integraciones', 'crear'), validateSchema(createIntegrationSchema), integracionController.create);
 router.put('/:id', permissionGuard('integraciones', 'editar'), validateSchema(updateIntegrationSchema), integracionController.update);
 router.delete('/:id', permissionGuard('integraciones', 'editar'), validateSchema(idParamSchema), integracionController.remove);

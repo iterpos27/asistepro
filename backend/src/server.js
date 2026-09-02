@@ -6,6 +6,7 @@ validateProductionEnv();
 const app = require('./app');
 const { checkDatabaseConnection } = require('./config/database');
 const suscripcionService = require('./services/suscripcion.service');
+const { startBiometricScheduler } = require('./services/biometrico-scheduler.service');
 
 const PORT = process.env.PORT || 4001;
 
@@ -15,6 +16,7 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`ASISTEPRO API running on port ${PORT}`);
   });
+  startBiometricScheduler();
 
   // Programar verificación de expiración solo fuera de producción o si se habilita explícitamente
   if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_IN_PROCESS_CRON === 'true') {

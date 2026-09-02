@@ -4,10 +4,11 @@ const ExcelJS = require('exceljs');
 const { pool } = require('../config/database');
 const laboralService = require('./laboral.service');
 const { getStorageStatus } = require('./storage.service');
+const { readZktecoDevice } = require('../integrations/zkteco.client');
 
 const INTEGRATION_TYPES = ['nomina', 'biometrico', 'storage'];
 const INTEGRATION_STATES = ['activa', 'inactiva', 'error'];
-const MARK_TYPES = ['entrada', 'salida'];
+const MARK_TYPES = ['entrada', 'salida_almuerzo', 'entrada_almuerzo', 'salida'];
 const NOMINA_PLANTILLAS = ['detalle_diario', 'resumen_mensual', 'cliente'];
 
 function hashApiKey(value) {
@@ -194,7 +195,7 @@ async function assertSucursal(client, empresaId, sucursalId) {
   }
 }
 
-async function assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn) {
+async function assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn, integracionId = null, referencia = null) {
   const result = await client.query(
     `
       SELECT id
@@ -204,10 +205,11 @@ async function assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn) {
         AND tipo = $3
         AND estado <> 'rechazada'
         AND anulada = FALSE
+        AND ($6::text IS NULL OR integracion_id IS DISTINCT FROM $5 OR origen_referencia IS DISTINCT FROM $6)
         AND (marcado_en AT TIME ZONE 'America/Guayaquil')::date = ($4::timestamptz AT TIME ZONE 'America/Guayaquil')::date
       LIMIT 1
     `,
-    [empresaId, empleadoId, tipo, marcadoEn],
+    [empresaId, empleadoId, tipo, marcadoEn, integracionId, referencia],
   );
   if (result.rows.length) {
     const error = new Error(`Ya existe una marcacion de ${tipo} para la fecha ${String(marcadoEn).slice(0, 10)}`);
@@ -217,9 +219,36 @@ async function assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn) {
 }
 
 async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
-  const marks = Array.isArray(payload?.marcaciones) ? payload.marcaciones : [];
+  let marks = Array.isArray(payload?.marcaciones) ? payload.marcaciones : [];
+  let deviceSummary = null;
+  const directConnection = integracion.configuracion?.modo_conexion === 'directo'
+    || (!marks.length && integracion.configuracion?.ip);
+
+  if (directConnection) {
+    const deviceResult = await readZktecoDevice(integracion.configuracion || {});
+    marks = deviceResult.records;
+    deviceSummary = {
+      leidas_dispositivo: deviceResult.totalRead,
+      omitidas_excedentes: deviceResult.omitted,
+      marcaciones_sin_vincular: deviceResult.unmappedCount,
+      usuarios_sin_vincular: deviceResult.unmappedUsers,
+      informacion: deviceResult.info,
+    };
+  }
   if (!marks.length) {
-    const error = new Error('Debe enviar marcaciones para sincronizar');
+    if (directConnection) {
+      const resumen = { sincronizadas: 0, rechazadas: 0, ...(deviceSummary || {}) };
+      await logExecution({
+        integracionId: integracion.id,
+        empresaId,
+        usuarioId,
+        accion: 'sincronizar_biometrico',
+        estado: 'ok',
+        resumen,
+      });
+      return { resumen, errores: [] };
+    }
+    const error = new Error('No se encontraron marcaciones para sincronizar');
     error.statusCode = 400;
     throw error;
   }
@@ -229,6 +258,7 @@ async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
   const errors = [];
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [integracion.id]);
     for (const mark of marks) {
       await client.query(`SAVEPOINT mark_sync`);
       try {
@@ -240,20 +270,41 @@ async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
         const sucursalId = mark.sucursal_id || integracion.configuracion?.sucursal_id;
         await assertSucursal(client, empresaId, sucursalId);
         await laboralService.assertPeriodoAbierto(empresaId, marcadoEn, client);
-        await assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn);
+        const referencia = mark.referencia || null;
+        await assertMarkLimit(client, empresaId, empleadoId, tipo, marcadoEn, integracion.id, referencia);
 
-        await client.query(
+        const result = await client.query(
           `
             INSERT INTO marcaciones (
               empresa_id, empleado_id, sucursal_id, tipo, estado, latitud, longitud, distancia_metros,
-              dentro_geocerca, motivo_novedad, detalle_novedad, mensaje, marcado_en, origen
+              dentro_geocerca, motivo_novedad, detalle_novedad, mensaje, marcado_en, origen,
+              integracion_id, origen_referencia
             ) VALUES (
-              $1, $2, $3, $4, 'aceptada', 0, 0, 0, TRUE, NULL, NULL, $5, $6::timestamptz, 'biometrico'
+              $1, $2, $3, $4, 'aceptada', 0, 0, 0, TRUE, NULL, NULL, $5, $6::timestamptz, 'biometrico',
+              $7, $8
             )
+            ON CONFLICT (integracion_id, origen_referencia)
+              WHERE integracion_id IS NOT NULL AND origen_referencia IS NOT NULL
+            DO UPDATE SET
+              empleado_id = EXCLUDED.empleado_id,
+              sucursal_id = EXCLUDED.sucursal_id,
+              tipo = EXCLUDED.tipo,
+              marcado_en = EXCLUDED.marcado_en,
+              mensaje = EXCLUDED.mensaje
+            RETURNING (xmax = 0) AS inserted
           `,
-          [empresaId, empleadoId, sucursalId, tipo, `Marcacion sincronizada desde ${integracion.proveedor}`, marcadoEn],
+          [
+            empresaId,
+            empleadoId,
+            sucursalId,
+            tipo,
+            `Marcacion sincronizada desde ${integracion.proveedor}`,
+            marcadoEn,
+            integracion.id,
+            referencia,
+          ],
         );
-        inserted += 1;
+        if (result.rows[0]?.inserted) inserted += 1;
       } catch (error) {
         await client.query(`ROLLBACK TO SAVEPOINT mark_sync`);
         errors.push({ empleado_codigo: mark.empleado_codigo || null, motivo: error.message });
@@ -268,9 +319,55 @@ async function syncBiometrico({ empresaId, usuarioId, integracion, payload }) {
   }
 
   const estado = errors.length ? inserted ? 'warning' : 'error' : 'ok';
-  const resumen = { sincronizadas: inserted, rechazadas: errors.length };
+  const resumen = { sincronizadas: inserted, rechazadas: errors.length, ...(deviceSummary || {}) };
   await logExecution({ integracionId: integracion.id, empresaId, usuarioId, accion: 'sincronizar_biometrico', estado, resumen, errores: errors });
   return { resumen, errores: errors };
+}
+
+async function syncConfiguredBiometrics() {
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM integraciones_externas
+      WHERE tipo = 'biometrico'
+        AND estado = 'activa'
+        AND configuracion->>'ip' IS NOT NULL
+        AND COALESCE(configuracion->>'modo_conexion', 'directo') = 'directo'
+      ORDER BY ultima_sincronizacion_en ASC NULLS FIRST
+    `,
+  );
+
+  const summaries = [];
+  for (const integracion of result.rows) {
+    const intervalSeconds = Math.max(30, Number(integracion.configuracion?.intervalo_segundos || 60));
+    const lastRun = integracion.ultima_sincronizacion_en
+      ? new Date(integracion.ultima_sincronizacion_en).getTime()
+      : 0;
+    if (Date.now() - lastRun < intervalSeconds * 1000) continue;
+
+    try {
+      const syncResult = await syncBiometrico({
+        empresaId: integracion.empresa_id,
+        usuarioId: null,
+        integracion,
+        payload: {},
+      });
+      summaries.push({ integracion_id: integracion.id, ok: true, ...syncResult.resumen });
+    } catch (error) {
+      const resumen = { sincronizadas: 0, rechazadas: 0, error: error.message };
+      await logExecution({
+        integracionId: integracion.id,
+        empresaId: integracion.empresa_id,
+        usuarioId: null,
+        accion: 'sincronizar_biometrico',
+        estado: 'error',
+        resumen,
+        errores: [{ motivo: error.message }],
+      });
+      summaries.push({ integracion_id: integracion.id, ok: false, error: error.message });
+    }
+  }
+  return summaries;
 }
 
 async function exportNomina({ empresaId, usuarioId, integracion, payload }) {
@@ -467,7 +564,22 @@ async function runIntegration({ empresaId, usuarioId, id, payload }) {
   }
 
   if (integracion.tipo === 'biometrico') {
-    return syncBiometrico({ empresaId, usuarioId, integracion, payload });
+    try {
+      return await syncBiometrico({ empresaId, usuarioId, integracion, payload });
+    } catch (error) {
+      if (integracion.configuracion?.ip) {
+        await logExecution({
+          integracionId: integracion.id,
+          empresaId,
+          usuarioId,
+          accion: 'sincronizar_biometrico',
+          estado: 'error',
+          resumen: { sincronizadas: 0, rechazadas: 0, error: error.message },
+          errores: [{ motivo: error.message }],
+        });
+      }
+      throw error;
+    }
   }
   if (integracion.tipo === 'nomina') {
     return exportNomina({ empresaId, usuarioId, integracion, payload });
@@ -499,4 +611,5 @@ module.exports = {
   listIntegraciones,
   runIntegration,
   saveIntegracion,
+  syncConfiguredBiometrics,
 };

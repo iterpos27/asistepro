@@ -1,5 +1,21 @@
 const integracionService = require('../services/integracion.service');
 const tenantService = require('../services/tenant.service');
+const biometricUsers = require('../services/biometrico-usuarios.service');
+
+async function listBiometricUsers(req, res, next) {
+  try {
+    const data = await biometricUsers.listUsers({ empresaId: getEmpresaId(req), id: req.params.id, fechaDesde: req.query.fecha_desde });
+    return res.json({ ok: true, data });
+  } catch (error) { return next(error); }
+}
+
+async function linkBiometricUser(req, res, next) {
+  try {
+    const data = await biometricUsers.linkUser({ empresaId: getEmpresaId(req), usuarioId: req.auth.usuario_id,
+      id: req.params.id, deviceId: req.body.dispositivo_usuario_id, empleadoId: req.body.empleado_id, fechaDesde: req.body.fecha_desde });
+    return res.json({ ok: true, data });
+  } catch (error) { return next(error); }
+}
 
 function getEmpresaId(req) {
   return req.tenant.empresa_id;
@@ -88,6 +104,8 @@ async function download(req, res, next) {
 }
 
 module.exports = {
+  listBiometricUsers,
+  linkBiometricUser,
   create,
   download,
   list,

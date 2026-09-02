@@ -4,6 +4,8 @@ import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import { toast } from '../../services/toastService';
 import * as integracionService from '../../services/integracionService';
+import * as sucursalService from '../../services/sucursalService';
+import UsuariosBiometrico from './UsuariosBiometrico';
 
 const initialForm = {
   nombre: '',
@@ -12,6 +14,19 @@ const initialForm = {
   estado: 'activa',
   api_key: '',
   configuracion: '{\n  "sucursal_id": ""\n}',
+};
+
+const biometricConfig = {
+  modo_conexion: 'directo',
+  ip: '192.168.1.201',
+  puerto: 4370,
+  timeout_ms: 10000,
+  puerto_udp_local: 4000,
+  sucursal_id: '',
+  intervalo_segundos: 60,
+  dias_importar: 30,
+  zona_horaria_offset: '-05:00',
+  usuarios_mapeo: {},
 };
 
 function parseJson(value) {
@@ -28,6 +43,8 @@ export default function Integraciones() {
   const [selectedId, setSelectedId] = useState('');
   const [runPayload, setRunPayload] = useState('{\n  "mes": "2026-06",\n  "plantilla": "detalle_diario",\n  "tipo_archivo": "csv"\n}');
   const [saving, setSaving] = useState(false);
+  const [sucursales, setSucursales] = useState([]);
+  const [biometricId, setBiometricId] = useState('');
 
   async function loadData() {
     const result = await integracionService.listIntegraciones();
@@ -36,11 +53,33 @@ export default function Integraciones() {
 
   useEffect(() => {
     loadData();
+    sucursalService.listSucursales({ estado: 'activa', limit: 100 })
+      .then((result) => setSucursales(result.items || []))
+      .catch(() => setSucursales([]));
   }, []);
 
   function resetForm() {
     setSelectedId('');
     setForm(initialForm);
+  }
+
+  function changeType(tipo) {
+    setForm((current) => ({
+      ...current,
+      tipo,
+      proveedor: tipo === 'biometrico' && !current.proveedor ? 'ZKTeco MB10-VL' : current.proveedor,
+      configuracion: tipo === 'biometrico'
+        ? JSON.stringify(biometricConfig, null, 2)
+        : current.configuracion,
+    }));
+  }
+
+  function updateBiometricConfig(key, value) {
+    const configuration = parseJson(form.configuracion);
+    setForm((current) => ({
+      ...current,
+      configuracion: JSON.stringify({ ...configuration, [key]: value }, null, 2),
+    }));
   }
 
   function editItem(item) {
@@ -98,6 +137,10 @@ export default function Integraciones() {
     toast.success('Archivo descargado');
   }
 
+  const biometric = data.items.find(item => item.id === biometricId);
+  if (biometric) return <UsuariosBiometrico key={biometric.id} integration={biometric}
+    onChanged={loadData} onBack={() => { setBiometricId(''); resetForm(); }} />;
+
   return (
     <>
       <PageHeader
@@ -112,7 +155,7 @@ export default function Integraciones() {
           <form className="stack-form" onSubmit={saveIntegration}>
             <div className="toolbar-grid">
               <input placeholder="Nombre" value={form.nombre} onChange={(event) => setForm((current) => ({ ...current, nombre: event.target.value }))} />
-              <select value={form.tipo} onChange={(event) => setForm((current) => ({ ...current, tipo: event.target.value }))}>
+              <select value={form.tipo} onChange={(event) => changeType(event.target.value)}>
                 <option value="nomina">Exportacion laboral</option>
                 <option value="biometrico">Biometrico</option>
                 <option value="storage">Storage</option>
@@ -126,6 +169,32 @@ export default function Integraciones() {
               <input placeholder="API key opcional" value={form.api_key} onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))} />
             </div>
             <textarea rows="10" value={form.configuracion} onChange={(event) => setForm((current) => ({ ...current, configuracion: event.target.value }))} />
+            {form.tipo === 'biometrico' ? (
+              <>
+                <div className="toolbar-grid">
+                  <input
+                    aria-label="IP del biometrico"
+                    placeholder="IP del biometrico"
+                    value={parseJson(form.configuracion).ip || ''}
+                    onChange={(event) => updateBiometricConfig('ip', event.target.value)}
+                  />
+                  <select
+                    aria-label="Sucursal del biometrico"
+                    value={parseJson(form.configuracion).sucursal_id || ''}
+                    onChange={(event) => updateBiometricConfig('sucursal_id', event.target.value)}
+                  >
+                    <option value="">Selecciona la sucursal</option>
+                    {sucursales.map((sucursal) => (
+                      <option key={sucursal.id} value={sucursal.id}>{sucursal.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="inline-hint">
+                  <span>Vincula los IDs del equipo desde Usuarios del biométrico después de guardar.</span>
+                  <span>Usa una IP fija local para el equipo.</span>
+                </div>
+              </>
+            ) : null}
             <div className="form-actions">
               <button className="outline-button" type="button" onClick={resetForm}>Limpiar</button>
               <button className="primary-button" type="submit" disabled={saving}>
@@ -137,7 +206,7 @@ export default function Integraciones() {
         </div>
 
         <div className="panel">
-          <PanelTitle title="Ejecucion manual" subtitle="Prueba exportes laborales, lotes biometricos o validacion del storage configurado." />
+          <PanelTitle title="Ejecucion manual" subtitle="En biometricos con conexion directa no necesitas modificar este contenido: pulsa Ejecutar." />
           <textarea rows="14" value={runPayload} onChange={(event) => setRunPayload(event.target.value)} />
           <div className="inline-hint">
             <span>Laboral: usa `plantilla` = `detalle_diario`, `resumen_mensual` o `cliente`.</span>
@@ -170,6 +239,7 @@ export default function Integraciones() {
                   <td>{item.ultima_ejecucion_estado || '-'}</td>
                   <td>
                     <div className="row-actions">
+                      {item.tipo === 'biometrico' && item.configuracion?.ip && <button className="outline-button" type="button" onClick={() => setBiometricId(item.id)}>Usuarios del biométrico</button>}
                       <button className="icon-button" type="button" onClick={() => editItem(item)} title="Editar" aria-label="Editar">
                         <PlugZap size={16} />
                       </button>

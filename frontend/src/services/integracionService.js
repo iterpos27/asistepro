@@ -1,5 +1,15 @@
 import { api } from './api';
 
+export async function listUsuariosBiometrico(id, fechaDesde) {
+  const response = await api.get(`/integraciones/${id}/usuarios-biometrico`, { params: { fecha_desde: fechaDesde }, timeout: 120000 });
+  return response.data.data;
+}
+
+export async function vincularUsuarioBiometrico(id, payload) {
+  const response = await api.post(`/integraciones/${id}/usuarios-biometrico/vincular`, payload, { timeout: 180000 });
+  return response.data.data;
+}
+
 export async function listIntegraciones() {
   const response = await api.get('/integraciones');
   return response.data.data;
