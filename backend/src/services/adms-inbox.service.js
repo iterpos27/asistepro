@@ -24,6 +24,7 @@ const uploadSchema = z.object({ serial: serialSchema, payload: z.object({
 const registerSchema = z.object({ serial: serialSchema, sucursal_id: z.uuid() }).strict();
 const importSchema = z.object({ referencia: z.string().regex(/^[a-f0-9]{64}$/), empleado_id: z.uuid(),
   tipo: z.enum(['entrada', 'salida_almuerzo', 'entrada_almuerzo', 'salida']), confirmado: z.literal(true) }).strict();
+const receptionSchema = z.object({ activa: z.boolean(), revision_manual: z.literal(true) }).strict();
 const querySchema = z.object({
   fecha: z.string().refine(value => validLocalTime(value + ' 00:00:00')),
   pagina: z.coerce.number().int().min(1).max(10000).default(1),
@@ -87,7 +88,7 @@ async function list({ empresaId, id, query }, db = pool) {
     WHERE empresa_id=$1 AND integracion_id=$2 AND fecha_hora_local >= $3::date AND fecha_hora_local < $3::date+interval '1 day'`, values);
   const rows = await db.query(`SELECT b.referencia, b.dispositivo_usuario_id,
     to_char(b.fecha_hora_local,'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_local,
-    b.estado_dispositivo, b.verificacion, b.origen, b.recibido_en,
+    b.estado_dispositivo, b.verificacion, b.origen, b.recibido_en, b.adms_recibido_en,
     m.id AS marcacion_id, m.tipo, m.estado AS estado_marcacion, m.anulada,
     m.empleado_id, concat_ws(' ',e.nombres,e.apellidos) AS empleado_nombre
     FROM biometrico_eventos b
@@ -98,9 +99,29 @@ async function list({ empresaId, id, query }, db = pool) {
     ORDER BY b.fecha_hora_local DESC, b.referencia LIMIT 50 OFFSET $4`, [...values, (pagina - 1) * 50]);
   const employees = await db.query(`SELECT id,codigo,nombres,apellidos FROM empleados
     WHERE empresa_id=$1 AND estado='activo' ORDER BY apellidos,nombres,id`, [empresaId]);
-  return { dispositivo: { serial: device.serial, sucursal_id: device.sucursal_id, sucursal_nombre: device.sucursal_nombre },
+  return { dispositivo: { serial: device.serial, sucursal_id: device.sucursal_id, sucursal_nombre: device.sucursal_nombre,
+    recepcion_directa: device.recepcion_directa, ultimo_contacto_en: device.ultimo_contacto_en,
+    ultimo_lote_en: device.ultimo_lote_en, ultimo_lote_registros: device.ultimo_lote_registros, ultimo_lote_nuevos: device.ultimo_lote_nuevos },
     items: rows.rows, empleados: employees.rows, vinculos: device.configuracion?.adms_usuarios_mapeo || {},
-    total: count.rows[0].total, pagina, fecha, recepcion_publica: 'bloqueada', importacion_asistencia: 'manual_individual' };
+    total: count.rows[0].total, pagina, fecha, recepcion_publica: device.recepcion_directa ? 'bandeja_no_verificada' : 'bloqueada', importacion_asistencia: 'manual_individual' };
+}
+
+async function setReception({ empresaId, usuarioId, id, body }, db = pool) {
+  const input = parse(receptionSchema, body);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    const device = await getDevice(client, empresaId, id, true);
+    if (!device) fail('Biometrico activo no encontrado', 404);
+    if (device.sucursal_estado !== 'activa') fail('Sucursal inactiva', 409);
+    await client.query('UPDATE biometrico_dispositivos SET recepcion_directa=$3 WHERE empresa_id=$1 AND integracion_id=$2', [empresaId, id, input.activa]);
+    await client.query(`INSERT INTO integracion_ejecuciones(integracion_id,empresa_id,ejecutado_por,accion,estado,resumen,errores)
+      VALUES($1,$2,$3,'configurar_recepcion_adms','ok',$4::jsonb,'[]'::jsonb)`,
+    [id, empresaId, usuarioId, JSON.stringify({ recepcion_directa: input.activa, identidad: 'no_verificada', importacion_asistencia: 'manual' })]);
+    await client.query('COMMIT');
+    return { recepcion_directa: input.activa };
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 }
 
 // Solo importa un evento almacenado, con identidad y tipo confirmados por un administrador.
@@ -116,7 +137,7 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
     const device = await getDevice(client, empresaId, id, true);
     if (!device) fail('Biometrico activo no encontrado', 404);
     if (device.sucursal_estado !== 'activa') fail('La sucursal del equipo esta inactiva', 409);
-    const events = await client.query(`SELECT dispositivo_usuario_id,
+    const events = await client.query(`SELECT dispositivo_usuario_id,origen,
       to_char(fecha_hora_local,'YYYY-MM-DD HH24:MI:SS') AS local_time
       FROM biometrico_eventos WHERE empresa_id=$1 AND integracion_id=$2 AND referencia=$3 FOR UPDATE`,
     [empresaId, id, input.referencia]);
@@ -166,14 +187,14 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
        mensaje,marcado_en,origen,integracion_id,origen_referencia)
       VALUES($1,$2,$3,$4,'aceptada',0,0,0,TRUE,$5,$6::timestamptz,'biometrico',$7,$8) RETURNING id`,
     [empresaId, employee.id, device.sucursal_id, input.tipo,
-      'Piloto ADMS: importacion manual individual; identidad y tipo confirmados por administrador. Sin geolocalizacion.', timestamp, id, input.referencia]);
+      'ADMS: importacion manual individual; identidad y tipo confirmados por administrador. Sin geolocalizacion.', timestamp, id, input.referencia]);
     await client.query(`UPDATE integraciones_externas SET configuracion=configuracion || $3::jsonb,
       actualizado_por=$4,actualizado_en=now() WHERE empresa_id=$1 AND id=$2`,
     [empresaId, id, JSON.stringify({ adms_usuarios_mapeo: { ...mapped, [event.dispositivo_usuario_id]: employee.id } }), usuarioId]);
     await client.query(`INSERT INTO integracion_ejecuciones(integracion_id,empresa_id,ejecutado_por,accion,estado,resumen,errores)
       VALUES($1,$2,$3,'importar_evento_adms','ok',$4::jsonb,'[]'::jsonb)`,
     [id, empresaId, usuarioId, JSON.stringify({ referencia: input.referencia, dispositivo_usuario_id: event.dispositivo_usuario_id,
-      empleado_id: employee.id, tipo: input.tipo, marcacion_id: mark.rows[0].id, origen: 'piloto_manual', importadas_asistencia: 1 })]);
+      empleado_id: employee.id, tipo: input.tipo, marcacion_id: mark.rows[0].id, origen: event.origen, importadas_asistencia: 1 })]);
     await client.query('COMMIT');
     return { marcacion_id: mark.rows[0].id, nueva: true, tipo: input.tipo };
   } catch (error) { await client.query('ROLLBACK'); throw error; }
@@ -203,4 +224,4 @@ async function uploadPilot({ empresaId, usuarioId, id, body }, db = pool) {
   finally { client.release(); }
 }
 
-module.exports = { register, list, uploadPilot, importEvent, validLocalTime, uploadSchema, querySchema, registerSchema, importSchema };
+module.exports = { register, list, uploadPilot, importEvent, setReception, validLocalTime, uploadSchema, querySchema, registerSchema, importSchema, receptionSchema };

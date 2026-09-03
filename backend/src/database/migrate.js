@@ -52,6 +52,7 @@ const migrations = [
   '044_fix_essart_june_timezone_lunch.js',
   '045_zkteco_biometric_sync.sql',
   '046_adms_inbox.js',
+  '047_adms_direct_inbox.js',
 ];
 
 async function runMigrations() {

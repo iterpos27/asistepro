@@ -64,6 +64,8 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
         WHERE integracion_id IS NOT NULL AND origen_referencia IS NOT NULL;`);
     await require('../src/database/046_adms_inbox')(client);
     await require('../src/database/046_adms_inbox')(client); // migration retry
+    await require('../src/database/047_adms_direct_inbox')(client);
+    await require('../src/database/047_adms_direct_inbox')(client);
     await client.query('INSERT INTO usuarios VALUES($1)', [actor]);
     await client.query("INSERT INTO sucursales VALUES($1,$2,'activa','MATRIZ'),($3,$4,'activa','OTRA')", [branch, company, otherBranch, other]);
     await client.query("INSERT INTO integraciones_externas(id,empresa_id,tipo,estado) VALUES($1,$2,'biometrico','activa'),($3,$4,'biometrico','activa')", [id, company, otherId, other]);
@@ -138,6 +140,42 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     await client.query('UPDATE marcaciones SET anulada=true WHERE id=$1', [imported.marcacion_id]);
     await assert.rejects(service.importEvent(request, db), /anulada o rechazada/);
     assert.equal((await client.query("SELECT count(*)::int AS n FROM integracion_ejecuciones WHERE accion='importar_evento_adms'")).rows[0].n, 1);
+    const receiver = require('../src/services/adms-receiver.service');
+    const { parseAttendance } = require('../src/integrations/adms-protocol');
+    const incoming = parseAttendance('52\t2026-09-02 17:00:00\t4\t1', 'TEST');
+    assert.equal(await receiver.contact('TEST', db), false);
+    await assert.rejects(receiver.accept('TEST', incoming, db), /disabled_device/);
+    await assert.rejects(service.setReception({ ...args, empresaId: other, body: { activa: true, revision_manual: true } }, db), /no encontrado/);
+    await assert.rejects(service.setReception({ ...args, body: { activa: true, revision_manual: false } }, db), /invalidos/);
+    failAudit = true;
+    await assert.rejects(service.setReception({ ...args, body: { activa: true, revision_manual: true } }, db), /simulated/);
+    failAudit = false;
+    assert.equal(await receiver.contact('TEST', db), false);
+    await service.setReception({ ...args, body: { activa: true, revision_manual: true } }, db);
+    assert.equal(await receiver.contact('TEST', db), true);
+    assert.equal(await receiver.contact('UNKNOWN', db), false);
+    const direct = await receiver.accept('TEST', incoming, db);
+    assert.equal(direct.nuevas, 1); assert.equal(direct.recibidas, 1);
+    assert.equal((await receiver.accept('TEST', [...incoming, ...incoming], db)).nuevas, 0);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones')).rows[0].n, 1, 'la recepcion publica NUNCA importa asistencia');
+    const directInbox = await service.list({ ...args, query: { fecha: '2026-09-02' } }, db);
+    const received = directInbox.items.find(row => row.dispositivo_usuario_id === '52');
+    assert.equal(received.origen, 'adms_sin_verificar'); assert.ok(received.adms_recibido_en);
+    assert.equal(received.marcacion_id, null); assert.ok(directInbox.dispositivo.ultimo_lote_en);
+    assert.equal(directInbox.recepcion_publica, 'bandeja_no_verificada');
+    const replay = parseAttendance('4\t2026-09-02 16:01:17\t4\t1', 'TEST');
+    assert.equal((await receiver.accept('TEST', replay, db)).nuevas, 0);
+    assert.equal((await client.query('SELECT origen FROM biometrico_eventos WHERE referencia=$1', [replay[0].referencia])).rows[0].origen, 'piloto_manual');
+    // Fallo despues de insertar: revierte el lote completo; un reintento lo recupera.
+    const brokenDb = { connect: async () => ({ ...scoped, query: (sql, values) => {
+      if (sql.includes('ultimo_lote_registros=$3')) throw new Error('simulated write failure');
+      return scoped.query(sql, values);
+    } }) };
+    const later = parseAttendance('52\t2026-09-02 17:01:00\t4\t1', 'TEST');
+    await assert.rejects(receiver.accept('TEST', later, brokenDb), /simulated write failure/);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM biometrico_eventos WHERE referencia=$1', [later[0].referencia])).rows[0].n, 0);
+    await service.setReception({ ...args, body: { activa: false, revision_manual: true } }, db);
+    await assert.rejects(receiver.accept('TEST', later, db), /disabled_device/);
   } finally {
     await client.query('ROLLBACK'); // esquema y fixtures no persisten
     client.release(); await testPool.end();

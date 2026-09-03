@@ -19,6 +19,8 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
   const [employeeId, setEmployeeId] = useState('');
   const [tipo, setTipo] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [receptionConsent, setReceptionConsent] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const confirmationRef = useRef(null);
   const types = { entrada: 'Entrada', salida_almuerzo: 'Salida al almuerzo', entrada_almuerzo: 'Regreso del almuerzo', salida: 'Salida' };
 
@@ -38,6 +40,23 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [integration.id, fecha, pagina, revision]);
+
+  useEffect(() => {
+    if (!autoRefresh || saving || selected || preview || loading) return;
+    const timer = setTimeout(() => setRevision(value => value + 1), 30000);
+    return () => clearTimeout(timer);
+  }, [autoRefresh, saving, selected, preview, loading, revision]);
+
+  async function toggleReception() {
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const activa = !data.dispositivo.recepcion_directa;
+      await api.post(`/integraciones/${integration.id}/adms/recepcion`, { activa, revision_manual: true }, { skipToast: true });
+      setNotice(activa ? 'Recepción directa activada. Esperando conexión y registros del biométrico.' : 'Recepción directa pausada. Los datos guardados se conservan.');
+      setReceptionConsent(false); setRevision(value => value + 1);
+    } catch (err) { setError(err.response?.data?.message || 'No se pudo cambiar la recepción.'); }
+    finally { setSaving(false); }
+  }
 
   async function register(event) {
     event.preventDefault(); setSaving(true); setError('');
@@ -97,8 +116,8 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
     <PageHeader title="Bandeja del biométrico" description={integration.nombre}
       actions={<button type="button" className="outline-button" disabled={saving} onClick={onBack}>Volver</button>} />
     <div className="panel">
-      <p><strong>Recepción pública bloqueada. Importación manual individual disponible.</strong></p>
-      <p>HTTPS está en diagnóstico; no hay sincronización automática. Los registros del piloto solo afectan asistencia, reportes y cálculos laborales cuando confirmas su importación individual.</p>
+      <p><strong>Conexión directa ADMS · sin computadora en la empresa.</strong></p>
+      <p>El biométrico envía sus registros a producción por HTTPS. La recepción es automática; su incorporación a asistencia se confirma manualmente.</p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <div className="toolbar-grid">
@@ -106,6 +125,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
           setFecha(e.target.value); setPagina(1); setPreview(null); setSelected(null); setNotice('');
         }} /></label>
         <button type="button" className="outline-button" disabled={loading || saving || !fecha} onClick={() => setRevision(value => value + 1)}>Actualizar bandeja</button>
+        <label><input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />Actualizar pantalla cada 30 segundos</label>
       </div>
       {loading && <p role="status">Consultando registros…</p>}
       {!loading && data && !data.dispositivo && <form className="stack-form" onSubmit={register}>
@@ -120,6 +140,11 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
       </form>}
       {!loading && data?.dispositivo && <>
         <p>Serie: <strong>{data.dispositivo.serial}</strong> · Sucursal: <strong>{data.dispositivo.sucursal_nombre}</strong></p>
+        <p>Recepción directa: <strong>{data.dispositivo.recepcion_directa ? 'Activada' : 'Pausada'}</strong> · Último contacto declarado: {data.dispositivo.ultimo_contacto_en ? new Date(data.dispositivo.ultimo_contacto_en).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : 'Sin contacto'}</p>
+        <p>Último lote guardado: {data.dispositivo.ultimo_lote_en ? `${new Date(data.dispositivo.ultimo_lote_en).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })} · ${data.dispositivo.ultimo_lote_registros} recibidos · ${data.dispositivo.ultimo_lote_nuevos} nuevos` : 'Esperando registros del reloj'}</p>
+        <p>Seguridad: este protocolo identifica la serie declarada, pero no autentica al remitente. Los eventos directos quedan sin verificar: comprueba su procedencia antes de incorporarlos a asistencia. No se aceptan huellas, rostros ni fotos.</p>
+        {!data.dispositivo.recepcion_directa && <label><input type="checkbox" checked={receptionConsent} disabled={saving} onChange={e => setReceptionConsent(e.target.checked)} />Acepto recibir registros sin autenticación del equipo y revisarlos manualmente antes de incorporarlos a asistencia.</label>}
+        <button type="button" className="outline-button" disabled={saving || (!data.dispositivo.recepcion_directa && !receptionConsent)} onClick={toggleReception}>{data.dispositivo.recepcion_directa ? 'Pausar recepción directa' : 'Activar recepción directa'}</button>
         <p><strong>{data.total}</strong> registros en la bandeja para {data.fecha}. Revisa la situación de cada evento.</p>
         <label>Cargar archivo JSON del piloto (solo la fecha seleccionada)
           <input type="file" accept=".json,application/json" disabled={saving} onChange={chooseFile} />
@@ -132,6 +157,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
         {selected && <form className="stack-form" onSubmit={importSelected} ref={confirmationRef} tabIndex={-1} aria-label="Importar una marcación">
           <h2>Vincular e importar un evento</h2>
           <p>ID del reloj <strong>{selected.dispositivo_usuario_id}</strong> · {selected.fecha_hora_local} (Ecuador) · {data.dispositivo.sucursal_nombre}</p>
+          {selected.origen === 'adms_sin_verificar' && <p role="alert">Evento ADMS sin autenticación del remitente. Verifica que la marcación sea real antes de confirmar; la serie por sí sola no lo demuestra.</p>}
           <label>Empleado confirmado<select required value={employeeId} disabled={saving} onChange={e => { setEmployeeId(e.target.value); setConfirmed(false); }}>
             <option value="">Selecciona el empleado</option>
             {(data.empleados || []).map(employee => <option key={employee.id} value={employee.id}>{employee.nombres} {employee.apellidos} · {employee.codigo}</option>)}
@@ -140,7 +166,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
             <option value="">Selecciona entrada o salida</option>
             {Object.entries(types).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
-          <p>Se guardará el vínculo de este ID con el empleado y se incorporará únicamente este evento a asistencia. No se importarán otros registros ni se habilitará la sincronización automática.</p>
+          <p>Se guardará el vínculo de este ID con el empleado y se incorporará únicamente este evento a asistencia. Los demás eventos seguirán pendientes de revisión, aunque la recepción ADMS esté activada.</p>
           {selectedEmployee && tipo && <label><input type="checkbox" required checked={confirmed} disabled={saving} onChange={e => setConfirmed(e.target.checked)} />Confirmo que corresponde a {selectedEmployee.nombres} {selectedEmployee.apellidos}, como {types[tipo]}, y autorizo incorporarla a asistencia y cálculos laborales.</label>}
           <div className="form-actions">
             <button type="submit" className="primary-button" disabled={saving || !confirmed || !employeeId || !tipo}>Confirmar vínculo e importar este evento</button>
@@ -151,7 +177,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
           <thead><tr><th>ID del reloj</th><th>Fecha y hora del reloj</th><th>Estado original</th><th>Verificación</th><th>Origen</th><th>Situación</th></tr></thead>
           <tbody>{data.items.length ? data.items.map(row => <tr key={row.referencia}>
             <td>{row.dispositivo_usuario_id}</td><td>{row.fecha_hora_local}</td><td>{row.estado_dispositivo}</td>
-            <td>{row.verificacion}</td><td>Piloto · carga manual</td><td>{row.marcacion_id
+            <td>{row.verificacion}</td><td>{row.origen === 'adms_sin_verificar' ? 'ADMS directo · sin verificar' : 'Piloto · carga manual'}{row.adms_recibido_en && <small> · Recibido por ADMS</small>}</td><td>{row.marcacion_id
               ? <>{row.anulada ? 'Anulada' : row.estado_marcacion === 'rechazada' ? 'Rechazada' : 'Importada'} · {row.empleado_nombre} · {types[row.tipo] || row.tipo}</>
               : <>Pendiente; no importada <button type="button" className="outline-button" disabled={saving} onClick={() => selectEvent(row)} aria-label={`Importar ID ${row.dispositivo_usuario_id} del ${row.fecha_hora_local}`}>Vincular e importar</button></>}</td>
           </tr>) : <tr><td colSpan="6">Sin marcaciones recibidas para esta fecha.</td></tr>}</tbody>

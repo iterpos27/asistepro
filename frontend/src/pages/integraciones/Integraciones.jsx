@@ -122,6 +122,11 @@ export default function Integraciones() {
   }
 
   async function runIntegration(id) {
+    const item = data.items.find(integration => integration.id === id);
+    if (item?.tipo === 'biometrico' && item.configuracion?.modo_conexion === 'adms') {
+      setAdmsId(id);
+      return;
+    }
     const result = await integracionService.runIntegracion(id, parseJson(runPayload));
     toast.success('Integracion ejecutada');
     setRunPayload(JSON.stringify(result, null, 2));
@@ -180,7 +185,7 @@ export default function Integraciones() {
                   <select aria-label="Modo de conexión" value={parseJson(form.configuracion).modo_conexion || 'directo'}
                     onChange={event => updateBiometricConfig('modo_conexion', event.target.value)}>
                     <option value="directo">TCP local</option>
-                    <option value="adms">ADMS · registro y bandeja (sin recepción pública)</option>
+                    <option value="adms">ADMS · recepción directa en bandeja</option>
                   </select>
                   <input
                     aria-label="IP del biometrico"
@@ -216,7 +221,7 @@ export default function Integraciones() {
         </div>
 
         <div className="panel">
-          <PanelTitle title="Ejecucion manual" subtitle="En biometricos con conexion directa no necesitas modificar este contenido: pulsa Ejecutar." />
+          <PanelTitle title="Ejecucion manual" subtitle="En ADMS, Ejecutar abre la bandeja recibida desde el reloj. TCP local requiere acceso a la red del equipo." />
           <textarea rows="14" value={runPayload} onChange={(event) => setRunPayload(event.target.value)} />
           <div className="inline-hint">
             <span>Laboral: usa `plantilla` = `detalle_diario`, `resumen_mensual` o `cliente`.</span>

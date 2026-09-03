@@ -35,6 +35,7 @@ router.get('/:id/adms', permissionGuard('integraciones', 'ver'), validateSchema(
 router.post('/:id/adms/registro', permissionGuard('integraciones', 'editar'), validateSchema(idParamSchema), admsAction(admsInbox.register));
 router.post('/:id/adms/piloto', permissionGuard('integraciones', 'editar'), permissionGuard('integraciones', 'exportar'), validateSchema(idParamSchema), admsAction(admsInbox.uploadPilot));
 router.post('/:id/adms/importar', permissionGuard('integraciones', 'editar'), permissionGuard('integraciones', 'exportar'), validateSchema(idParamSchema), admsAction(admsInbox.importEvent));
+router.post('/:id/adms/recepcion', permissionGuard('integraciones', 'editar'), permissionGuard('integraciones', 'exportar'), validateSchema(idParamSchema), admsAction(admsInbox.setReception));
 router.get('/:id/usuarios-biometrico', permissionGuard('integraciones', 'ver'), validateSchema(biometricUsersSchema), integracionController.listBiometricUsers);
 router.post('/:id/usuarios-biometrico/vincular', permissionGuard('integraciones', 'editar'), permissionGuard('integraciones', 'exportar'), validateSchema(biometricLinkSchema), integracionController.linkBiometricUser);
 router.post('/', permissionGuard('integraciones', 'crear'), validateSchema(createIntegrationSchema), integracionController.create);
