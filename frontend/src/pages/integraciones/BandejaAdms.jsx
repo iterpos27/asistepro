@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import PageHeader from '../../components/common/PageHeader';
 import { api } from '../../services/api';
 import { preparePilotFile } from './adms-pilot-file';
+import AdmsSyncPanel from './AdmsSyncPanel';
 
 export default function BandejaAdms({ integration, sucursales, onBack, onChanged }) {
   const [fecha, setFecha] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guayaquil' }).format(new Date()));
@@ -21,6 +22,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
   const [confirmed, setConfirmed] = useState(false);
   const [receptionConsent, setReceptionConsent] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [batchEditing, setBatchEditing] = useState(false);
   const confirmationRef = useRef(null);
   const types = { entrada: 'Entrada', salida_almuerzo: 'Salida al almuerzo', entrada_almuerzo: 'Regreso del almuerzo', salida: 'Salida' };
 
@@ -33,7 +35,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(''); setData(null);
+    setLoading(true); setError('');
     api.get(`/integraciones/${integration.id}/adms`, { params: { fecha, pagina }, skipToast: true })
       .then(response => { if (!cancelled) setData(response.data.data); })
       .catch(err => { if (!cancelled) setError(err.response?.data?.message || 'No se pudo consultar la bandeja.'); })
@@ -42,10 +44,10 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
   }, [integration.id, fecha, pagina, revision]);
 
   useEffect(() => {
-    if (!autoRefresh || saving || selected || preview || loading) return;
+    if (!autoRefresh || saving || selected || preview || loading || batchEditing) return;
     const timer = setTimeout(() => setRevision(value => value + 1), 30000);
     return () => clearTimeout(timer);
-  }, [autoRefresh, saving, selected, preview, loading, revision]);
+  }, [autoRefresh, saving, selected, preview, loading, revision, batchEditing]);
 
   async function toggleReception() {
     setSaving(true); setError(''); setNotice('');
@@ -117,7 +119,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
       actions={<button type="button" className="outline-button" disabled={saving} onClick={onBack}>Volver</button>} />
     <div className="panel">
       <p><strong>Conexión directa ADMS · sin computadora en la empresa.</strong></p>
-      <p>El biométrico envía sus registros a producción por HTTPS. La recepción es automática; su incorporación a asistencia se confirma manualmente.</p>
+      <p>El biométrico envía sus registros a producción por HTTPS. Vincula cada ID una vez y usa «Sincronizar vinculados» para incorporarlos a asistencia por lote.</p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       <div className="toolbar-grid">
@@ -138,13 +140,15 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
         </select></label>
         <button className="primary-button" type="submit" disabled={saving}>Registrar equipo y sucursal</button>
       </form>}
-      {!loading && data?.dispositivo && <>
+      {data?.dispositivo && <>
         <p>Serie: <strong>{data.dispositivo.serial}</strong> · Sucursal: <strong>{data.dispositivo.sucursal_nombre}</strong></p>
         <p>Recepción directa: <strong>{data.dispositivo.recepcion_directa ? 'Activada' : 'Pausada'}</strong> · Último contacto declarado: {data.dispositivo.ultimo_contacto_en ? new Date(data.dispositivo.ultimo_contacto_en).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' }) : 'Sin contacto'}</p>
         <p>Último lote guardado: {data.dispositivo.ultimo_lote_en ? `${new Date(data.dispositivo.ultimo_lote_en).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })} · ${data.dispositivo.ultimo_lote_registros} recibidos · ${data.dispositivo.ultimo_lote_nuevos} nuevos` : 'Esperando registros del reloj'}</p>
-        <p>Seguridad: este protocolo identifica la serie declarada, pero no autentica al remitente. Los eventos directos quedan sin verificar: comprueba su procedencia antes de incorporarlos a asistencia. No se aceptan huellas, rostros ni fotos.</p>
+        <p>Seguridad: la serie no autentica al remitente. Al sincronizar autorizas incorporar los eventos de la fecha seleccionada según los vínculos y reglas guardados. No se aceptan huellas, rostros ni fotos.</p>
         {!data.dispositivo.recepcion_directa && <label><input type="checkbox" checked={receptionConsent} disabled={saving} onChange={e => setReceptionConsent(e.target.checked)} />Acepto recibir registros sin autenticación del equipo y revisarlos manualmente antes de incorporarlos a asistencia.</label>}
         <button type="button" className="outline-button" disabled={saving || (!data.dispositivo.recepcion_directa && !receptionConsent)} onClick={toggleReception}>{data.dispositivo.recepcion_directa ? 'Pausar recepción directa' : 'Activar recepción directa'}</button>
+        <AdmsSyncPanel integrationId={integration.id} data={data} fecha={fecha} busy={saving || loading || Boolean(error)}
+          onBusy={setSaving} onEditing={setBatchEditing} onChanged={() => setRevision(value => value + 1)} />
         <p><strong>{data.total}</strong> registros en la bandeja para {data.fecha}. Revisa la situación de cada evento.</p>
         <label>Cargar archivo JSON del piloto (solo la fecha seleccionada)
           <input type="file" accept=".json,application/json" disabled={saving} onChange={chooseFile} />

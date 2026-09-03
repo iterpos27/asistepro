@@ -12,8 +12,12 @@ edicion y exportacion puede activarla o pausarla. La decision queda auditada.
 
 - La serie declarada enruta hacia una bandeja; NO autentica al remitente.
 - Los eventos de Internet se etiquetan `adms_sin_verificar`; nunca se incorporan
-  automaticamente a asistencia, reportes ni nomina. El administrador comprueba
-  procedencia, empleado y tipo antes de usar la importacion individual existente.
+  automaticamente a asistencia al recibirlos. El administrador vincula los IDs
+  una vez y configura el significado de los estados del equipo. El boton privado
+  "Sincronizar vinculados" incorpora por lote los eventos del dia seleccionado
+  usando esas reglas, sin confirmacion individual. Los IDs sin vinculo, estados
+  sin regla, empleados inactivos, fechas futuras y cierres laborales se omiten
+  con un resumen. La importacion individual sigue disponible para excepciones.
 - Solo ATTLOG y el informe de capacidades: no usuarios, claves, fotos ni plantillas.
 - No se envian comandos para cambiar hora, usuarios o borrar registros.
 - `OK: cantidad` se entrega solo despues del COMMIT de todo el lote. Los fallos
@@ -26,12 +30,19 @@ edicion y exportacion puede activarla o pausarla. La decision queda auditada.
   lote completo sin ACK; requiere revision administrativa, nunca borrado automatico.
 - No hay acceso publico de lectura ni nuevos permisos Data API en Supabase.
 
-La pantalla actualiza cada 30 segundos (pausa mientras se edita una importacion).
+La pantalla actualiza cada 30 segundos (pausa mientras se edita o sincroniza).
 Actualizar bandeja consulta datos YA recibidos; no fuerza una lectura LAN.
+Sincronizar vinculados es una accion privada autenticada, no se ejecuta desde
+el receptor publico. Procesa todas las paginas del dia en solicitudes de 10
+eventos; cada evento es atomico e idempotente. No cambia las asistencias ya
+procesadas/anuladas/rechazadas ni reasigna vinculos. Mantener abierta la pantalla
+durante esta accion; la recepcion ADMS sigue funcionando con la pantalla cerrada.
+Un corte puede dejar progreso parcial: volver a ejecutar no duplica lo guardado.
+No hay reglas de estado predeterminadas: confirmar la configuracion del firmware.
 Ultimo contacto indica conexion con serie declarada, no autenticacion.
 Ultimo lote guardado confirma persistencia. Un contacto sin lote no prueba recepcion
 de marcaciones; verificar ambos y una marcacion conocida antes de darlo por operativo.
 
-Para futura importacion automatica a asistencia se necesita autenticar al equipo
+Para futura importacion desatendida a asistencia se necesita autenticar al equipo
 o aislar el transporte y confirmar el significado de sus estados. No deducir tipos
 por posicion de eventos ni extrapolar una salida confirmada a todo el firmware.

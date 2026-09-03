@@ -25,6 +25,11 @@ const registerSchema = z.object({ serial: serialSchema, sucursal_id: z.uuid() })
 const importSchema = z.object({ referencia: z.string().regex(/^[a-f0-9]{64}$/), empleado_id: z.uuid(),
   tipo: z.enum(['entrada', 'salida_almuerzo', 'entrada_almuerzo', 'salida']), confirmado: z.literal(true) }).strict();
 const receptionSchema = z.object({ activa: z.boolean(), revision_manual: z.literal(true) }).strict();
+const linkSchema = z.object({ dispositivo_usuario_id: z.string().regex(/^[A-Za-z0-9_-]{1,24}$/), empleado_id: z.uuid() }).strict();
+const typesSchema = z.object({ estados_mapeo: z.record(z.string().regex(/^(0|[1-9]\d{0,2})$/), importSchema.shape.tipo)
+  .refine(value => Object.keys(value).length > 0 && Object.keys(value).length <= 32) }).strict();
+const syncSchema = z.object({ fecha: z.string().refine(value => validLocalTime(value + ' 00:00:00')),
+  despues: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict();
 const querySchema = z.object({
   fecha: z.string().refine(value => validLocalTime(value + ' 00:00:00')),
   pagina: z.coerce.number().int().min(1).max(10000).default(1),
@@ -103,7 +108,8 @@ async function list({ empresaId, id, query }, db = pool) {
     recepcion_directa: device.recepcion_directa, ultimo_contacto_en: device.ultimo_contacto_en,
     ultimo_lote_en: device.ultimo_lote_en, ultimo_lote_registros: device.ultimo_lote_registros, ultimo_lote_nuevos: device.ultimo_lote_nuevos },
     items: rows.rows, empleados: employees.rows, vinculos: device.configuracion?.adms_usuarios_mapeo || {},
-    total: count.rows[0].total, pagina, fecha, recepcion_publica: device.recepcion_directa ? 'bandeja_no_verificada' : 'bloqueada', importacion_asistencia: 'manual_individual' };
+    estados_mapeo: device.configuracion?.adms_estados_mapeo || {},
+    total: count.rows[0].total, pagina, fecha, recepcion_publica: device.recepcion_directa ? 'bandeja_no_verificada' : 'bloqueada', importacion_asistencia: 'vinculados_por_boton' };
 }
 
 async function setReception({ empresaId, usuarioId, id, body }, db = pool) {
@@ -126,7 +132,7 @@ async function setReception({ empresaId, usuarioId, id, body }, db = pool) {
 
 // Solo importa un evento almacenado, con identidad y tipo confirmados por un administrador.
 // No deduce el tipo a partir del estado del firmware ni consulta el reloj por TCP.
-async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
+async function importEvent({ empresaId, usuarioId, id, body, linked = false }, db = pool) {
   const input = parse(importSchema, body);
   const client = await db.connect();
   try {
@@ -137,7 +143,7 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
     const device = await getDevice(client, empresaId, id, true);
     if (!device) fail('Biometrico activo no encontrado', 404);
     if (device.sucursal_estado !== 'activa') fail('La sucursal del equipo esta inactiva', 409);
-    const events = await client.query(`SELECT dispositivo_usuario_id,origen,
+    const events = await client.query(`SELECT dispositivo_usuario_id,origen,estado_dispositivo,
       to_char(fecha_hora_local,'YYYY-MM-DD HH24:MI:SS') AS local_time
       FROM biometrico_eventos WHERE empresa_id=$1 AND integracion_id=$2 AND referencia=$3 FOR UPDATE`,
     [empresaId, id, input.referencia]);
@@ -148,6 +154,12 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
     if (!employee) fail('Empleado activo no encontrado en esta empresa', 404);
     const mapped = device.configuracion?.adms_usuarios_mapeo || {};
     const legacy = device.configuracion?.usuarios_mapeo || {};
+    // El endpoint publico nunca llama a esta funcion. En sincronizacion privada,
+    // releer las reglas bajo bloqueo evita usar vinculos/tipos cambiados durante el lote.
+    if (linked && (mapped[event.dispositivo_usuario_id] !== employee.id
+      || device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo] !== input.tipo)) {
+      fail('El vinculo o la regla del estado cambio. Vuelve a sincronizar.', 409);
+    }
     if ((mapped[event.dispositivo_usuario_id] && mapped[event.dispositivo_usuario_id] !== employee.id)
       || (legacy[event.dispositivo_usuario_id] && String(legacy[event.dispositivo_usuario_id]).toUpperCase() !== employee.codigo.toUpperCase())
       || Object.entries(mapped).some(([key, value]) => key !== event.dispositivo_usuario_id && value === employee.id)
@@ -171,6 +183,7 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
       return { marcacion_id: existing.id, nueva: false, tipo: existing.tipo };
     }
     const timestamp = event.local_time.replace(' ', 'T') + '-05:00';
+    if (linked && new Date(timestamp).getTime() > Date.now()) fail('La fecha del reloj esta en el futuro. Revisa el equipo.', 409);
     // Impide que un cierre se escriba entre la comprobacion y esta importacion breve.
     await client.query('LOCK TABLE cierres_mensuales IN SHARE MODE');
     await assertPeriodoAbierto(empresaId, timestamp, client);
@@ -187,14 +200,16 @@ async function importEvent({ empresaId, usuarioId, id, body }, db = pool) {
        mensaje,marcado_en,origen,integracion_id,origen_referencia)
       VALUES($1,$2,$3,$4,'aceptada',0,0,0,TRUE,$5,$6::timestamptz,'biometrico',$7,$8) RETURNING id`,
     [empresaId, employee.id, device.sucursal_id, input.tipo,
-      'ADMS: importacion manual individual; identidad y tipo confirmados por administrador. Sin geolocalizacion.', timestamp, id, input.referencia]);
-    await client.query(`UPDATE integraciones_externas SET configuracion=configuracion || $3::jsonb,
+      linked ? 'ADMS: sincronizacion solicitada por administrador; usuario vinculado y tipo segun regla del equipo. Remitente no autenticado. Sin geolocalizacion.'
+        : 'ADMS: importacion manual individual; identidad y tipo confirmados por administrador. Sin geolocalizacion.', timestamp, id, input.referencia]);
+    if (!linked) await client.query(`UPDATE integraciones_externas SET configuracion=configuracion || $3::jsonb,
       actualizado_por=$4,actualizado_en=now() WHERE empresa_id=$1 AND id=$2`,
     [empresaId, id, JSON.stringify({ adms_usuarios_mapeo: { ...mapped, [event.dispositivo_usuario_id]: employee.id } }), usuarioId]);
     await client.query(`INSERT INTO integracion_ejecuciones(integracion_id,empresa_id,ejecutado_por,accion,estado,resumen,errores)
       VALUES($1,$2,$3,'importar_evento_adms','ok',$4::jsonb,'[]'::jsonb)`,
     [id, empresaId, usuarioId, JSON.stringify({ referencia: input.referencia, dispositivo_usuario_id: event.dispositivo_usuario_id,
-      empleado_id: employee.id, tipo: input.tipo, marcacion_id: mark.rows[0].id, origen: event.origen, importadas_asistencia: 1 })]);
+      empleado_id: employee.id, tipo: input.tipo, marcacion_id: mark.rows[0].id, origen: event.origen,
+      modo: linked ? 'sincronizar_vinculados' : 'individual', importadas_asistencia: 1 })]);
     await client.query('COMMIT');
     return { marcacion_id: mark.rows[0].id, nueva: true, tipo: input.tipo };
   } catch (error) { await client.query('ROLLBACK'); throw error; }
@@ -224,4 +239,85 @@ async function uploadPilot({ empresaId, usuarioId, id, body }, db = pool) {
   finally { client.release(); }
 }
 
-module.exports = { register, list, uploadPilot, importEvent, setReception, validLocalTime, uploadSchema, querySchema, registerSchema, importSchema, receptionSchema };
+async function configure({ empresaId, usuarioId, id, body }, db, kind) {
+  const input = parse(kind === 'vinculo' ? linkSchema : typesSchema, body);
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout='5s'");
+    await client.query("SET LOCAL statement_timeout='15s'");
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [id]);
+    const device = await getDevice(client, empresaId, id, true);
+    if (!device) fail('Biometrico activo no encontrado', 404);
+    if (device.sucursal_estado !== 'activa') fail('Sucursal inactiva', 409);
+    let update;
+    if (kind === 'vinculo') {
+      const uid = input.dispositivo_usuario_id;
+      const known = await client.query('SELECT referencia FROM biometrico_eventos WHERE empresa_id=$1 AND integracion_id=$2 AND dispositivo_usuario_id=$3 LIMIT 1', [empresaId, id, uid]);
+      if (!known.rowCount) fail('El ID no tiene registros recibidos en este equipo', 404);
+      const employee = (await client.query("SELECT id,codigo FROM empleados WHERE empresa_id=$1 AND id=$2 AND estado='activo' FOR UPDATE", [empresaId, input.empleado_id])).rows[0];
+      if (!employee) fail('Empleado activo no encontrado en esta empresa', 404);
+      const mapped = device.configuracion?.adms_usuarios_mapeo || {}, legacy = device.configuracion?.usuarios_mapeo || {};
+      if ((mapped[uid] && mapped[uid] !== employee.id)
+        || (legacy[uid] && String(legacy[uid]).toUpperCase() !== employee.codigo.toUpperCase())
+        || Object.entries(mapped).some(([key, value]) => key !== uid && value === employee.id)
+        || Object.entries(legacy).some(([key, value]) => key !== uid && String(value).toUpperCase() === employee.codigo.toUpperCase())) fail('Existe un vinculo distinto. No se reasigna el historial.', 409);
+      const conflict = await client.query(`SELECT m.id FROM biometrico_eventos b JOIN marcaciones m
+        ON m.empresa_id=b.empresa_id AND m.integracion_id=b.integracion_id AND m.origen_referencia=b.referencia
+        WHERE b.empresa_id=$1 AND b.integracion_id=$2 AND
+        ((b.dispositivo_usuario_id=$3 AND m.empleado_id<>$4) OR (b.dispositivo_usuario_id<>$3 AND m.empleado_id=$4)) LIMIT 1`, [empresaId, id, uid, employee.id]);
+      if (conflict.rowCount) fail('El historial contiene un vinculo distinto', 409);
+      update = { adms_usuarios_mapeo: { ...mapped, [uid]: employee.id } };
+    } else update = { adms_estados_mapeo: input.estados_mapeo };
+    await client.query(`UPDATE integraciones_externas SET configuracion=configuracion || $3::jsonb,
+      actualizado_por=$4,actualizado_en=now() WHERE empresa_id=$1 AND id=$2`, [empresaId, id, JSON.stringify(update), usuarioId]);
+    await client.query(`INSERT INTO integracion_ejecuciones(integracion_id,empresa_id,ejecutado_por,accion,estado,resumen,errores)
+      VALUES($1,$2,$3,$4,'ok',$5::jsonb,'[]'::jsonb)`, [id, empresaId, usuarioId, `configurar_adms_${kind}`, JSON.stringify(input)]);
+    await client.query('COMMIT');
+    return { guardado: true };
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+}
+
+const linkUser = (args, db = pool) => configure(args, db, 'vinculo');
+const setTypes = (args, db = pool) => configure(args, db, 'estados');
+
+// Lotes pequenos para no agotar el timeout HTTP de produccion. Cada evento se
+// confirma atomicamente: un reintento tras perder la respuesta no lo duplica.
+async function syncLinked({ empresaId, usuarioId, id, body }, db = pool) {
+  const input = parse(syncSchema, body);
+  const device = await getDevice(db, empresaId, id);
+  if (!device) fail('Biometrico activo no encontrado', 404);
+  if (device.sucursal_estado !== 'activa') fail('Sucursal inactiva', 409);
+  const result = { nuevas: 0, existentes: 0, sin_vinculo: 0, sin_tipo: 0, errores: [], siguiente: null };
+  // Cursor por referencia inmutable, acotado siempre al mismo tenant/equipo/dia.
+  const rows = (await db.query(`SELECT b.referencia,b.dispositivo_usuario_id,b.estado_dispositivo,m.id AS marcacion_id
+    FROM biometrico_eventos b LEFT JOIN marcaciones m ON m.empresa_id=b.empresa_id
+      AND m.integracion_id=b.integracion_id AND m.origen_referencia=b.referencia
+    WHERE b.empresa_id=$1 AND b.integracion_id=$2 AND b.fecha_hora_local >= $3::date
+      AND b.fecha_hora_local < $3::date+interval '1 day'
+      AND ($4::text IS NULL OR (b.fecha_hora_local,b.referencia) >
+        (SELECT fecha_hora_local,referencia FROM biometrico_eventos WHERE empresa_id=$1 AND integracion_id=$2
+          AND referencia=$4 AND fecha_hora_local >= $3::date AND fecha_hora_local < $3::date+interval '1 day'))
+    ORDER BY b.fecha_hora_local,b.referencia LIMIT 11`, [empresaId, id, input.fecha, input.despues || null])).rows;
+  for (const event of rows.slice(0, 10)) {
+    if (event.marcacion_id) { result.existentes++; continue; }
+    const employee = device.configuracion?.adms_usuarios_mapeo?.[event.dispositivo_usuario_id];
+    const type = device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo];
+    if (!employee) { result.sin_vinculo++; continue; }
+    if (!type) { result.sin_tipo++; continue; }
+    try {
+      const saved = await importEvent({ empresaId, usuarioId, id, linked: true,
+        body: { referencia: event.referencia, empleado_id: employee, tipo: type, confirmado: true } }, db);
+      if (saved.nueva) result.nuevas++; else result.existentes++;
+    } catch (error) {
+      if (!error.statusCode) throw error; // fallo de infraestructura: detener; reintento seguro
+      result.errores.push({ referencia: event.referencia, dispositivo_usuario_id: event.dispositivo_usuario_id, motivo: error.message });
+    }
+  }
+  if (rows.length > 10) result.siguiente = rows[9].referencia;
+  return result;
+}
+
+module.exports = { register, list, uploadPilot, importEvent, setReception, linkUser, setTypes, syncLinked,
+  validLocalTime, uploadSchema, querySchema, registerSchema, importSchema, receptionSchema, linkSchema, typesSchema, syncSchema };

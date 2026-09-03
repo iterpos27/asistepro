@@ -176,6 +176,64 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     assert.equal((await client.query('SELECT count(*)::int AS n FROM biometrico_eventos WHERE referencia=$1', [later[0].referencia])).rows[0].n, 0);
     await service.setReception({ ...args, body: { activa: false, revision_manual: true } }, db);
     await assert.rejects(receiver.accept('TEST', later, db), /disabled_device/);
+    // Vinculacion independiente + sincronizacion paginada exclusivamente privada.
+    const syncId = randomUUID(), syncArgs = { ...args, id: syncId };
+    await client.query("INSERT INTO integraciones_externas(id,empresa_id,tipo,estado) VALUES($1,$2,'biometrico','activa')", [syncId, company]);
+    await service.register({ ...syncArgs, body: { serial: 'SYNC', sucursal_id: branch } }, db);
+    const syncRecords = Array.from({ length: 11 }, (_, index) => ({ userId: index < 3 ? '100' : String(100 + index),
+      localTime: `2026-09-02 08:${String(index).padStart(2, '0')}:00`, status: [0, 1, 9][index % 3], verification: 1 }));
+    await service.uploadPilot({ ...syncArgs, body: { serial: 'SYNC', payload: { records: syncRecords } } }, db);
+    const link = { ...syncArgs, body: { dispositivo_usuario_id: '100', empleado_id: inactive } };
+    await assert.rejects(service.linkUser({ ...link, empresaId: other }, db), /no encontrado/);
+    await assert.rejects(service.linkUser({ ...link, body: { ...link.body, empleado_id: foreignEmployee } }, db), /Empleado activo/);
+    await assert.rejects(service.linkUser({ ...link, body: { ...link.body, dispositivo_usuario_id: 'UNKNOWN' } }, db), /no tiene registros/);
+    failAudit = true;
+    await assert.rejects(service.linkUser(link, db), /simulated/);
+    failAudit = false;
+    assert.equal((await service.list({ ...syncArgs, query: { fecha: '2026-09-02' } }, db)).vinculos['100'], undefined);
+    await service.linkUser(link, db);
+    await service.linkUser(link, db); // idempotente
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones WHERE integracion_id=$1', [syncId])).rows[0].n, 0);
+    await assert.rejects(service.linkUser({ ...link, body: { ...link.body, dispositivo_usuario_id: '103' } }, db), /vinculo distinto/);
+    await assert.rejects(service.linkUser({ ...link, body: { ...link.body, empleado_id: employee } }, db), /vinculo distinto/);
+    assert.equal(service.typesSchema.safeParse({ estados_mapeo: { 0: 'desconocido' } }).success, false);
+    assert.equal(service.typesSchema.safeParse({ estados_mapeo: { '00': 'entrada' } }).success, false);
+    assert.equal(service.syncSchema.safeParse({ fecha: '2026-02-30' }).success, false);
+    assert.equal(service.syncSchema.safeParse({ fecha: '2026-09-02', empresa_id: other }).success, false);
+    const syncRequest = { ...syncArgs, body: { fecha: '2026-09-02' } };
+    const withoutRules = await service.syncLinked(syncRequest, db);
+    assert.equal(withoutRules.nuevas, 0); assert.equal(withoutRules.sin_tipo, 3);
+    await assert.rejects(service.setTypes({ ...syncArgs, empresaId: other, body: { estados_mapeo: { 0: 'entrada' } } }, db), /no encontrado/);
+    await service.setTypes({ ...syncArgs, body: { estados_mapeo: { 0: 'entrada', 1: 'salida' } } }, db);
+    await client.query("UPDATE cierres_mensuales SET estado='cerrado' WHERE empresa_id=$1", [company]);
+    const closed = await service.syncLinked(syncRequest, db);
+    assert.equal(closed.nuevas, 0); assert.equal(closed.errores.length, 2);
+    assert.ok(closed.errores.every(error => /cerrado/.test(error.motivo)));
+    await client.query("UPDATE cierres_mensuales SET estado='reabierto' WHERE empresa_id=$1", [company]);
+    await client.query("UPDATE empleados SET estado='inactivo' WHERE id=$1", [inactive]);
+    const inactiveResult = await service.syncLinked(syncRequest, db);
+    assert.equal(inactiveResult.nuevas, 0); assert.equal(inactiveResult.errores.length, 2);
+    await client.query("UPDATE empleados SET estado='activo' WHERE id=$1", [inactive]);
+    failAudit = true;
+    await assert.rejects(service.syncLinked(syncRequest, db), /simulated/);
+    failAudit = false;
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones WHERE integracion_id=$1', [syncId])).rows[0].n, 0);
+    const synced = await service.syncLinked(syncRequest, db);
+    assert.equal(synced.nuevas, 2); assert.equal(synced.sin_tipo, 1); assert.equal(synced.sin_vinculo, 7); assert.ok(synced.siguiente);
+    const lastPage = await service.syncLinked({ ...syncRequest, body: { fecha: '2026-09-02', despues: synced.siguiente } }, db);
+    assert.equal(lastPage.sin_vinculo, 1); assert.equal(lastPage.siguiente, null);
+    const again = await service.syncLinked(syncRequest, db);
+    assert.equal(again.nuevas, 0); assert.equal(again.existentes, 2);
+    const savedSync = (await client.query('SELECT * FROM marcaciones WHERE integracion_id=$1 ORDER BY marcado_en', [syncId])).rows;
+    assert.equal(savedSync.length, 2); assert.equal(savedSync[0].marcado_en.toISOString(), '2026-09-02T13:00:00.000Z');
+    assert.deepEqual(savedSync.map(row => row.tipo), ['entrada', 'salida']);
+    assert.match(savedSync[0].mensaje, /Remitente no autenticado/);
+    // Configuracion revalidada dentro de la transaccion, incluso para llamadas en curso.
+    await assert.rejects(service.importEvent({ ...syncArgs, linked: true, body: { referencia: savedSync[0].origen_referencia,
+      empleado_id: inactive, tipo: 'salida', confirmado: true } }, db), /regla del estado cambio/);
+    await assert.rejects(service.syncLinked({ ...syncRequest, empresaId: other }, db), /no encontrado/);
+    const priorMark = (await client.query('SELECT anulada FROM marcaciones WHERE id=$1', [imported.marcacion_id])).rows[0];
+    assert.equal(priorMark.anulada, true, 'no revive asistencia anulada de otra integracion');
   } finally {
     await client.query('ROLLBACK'); // esquema y fixtures no persisten
     client.release(); await testPool.end();
