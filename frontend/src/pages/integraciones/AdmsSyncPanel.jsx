@@ -30,32 +30,32 @@ export default function AdmsSyncPanel({ integrationId, data, fecha, busy, onBusy
   }
   async function synchronize() {
     onBusy(true); setError(''); setMessage('');
-    const summary = { nuevas: 0, existentes: 0, sin_vinculo: 0, sin_tipo: 0, errores: 0, detalles: [] };
+    const summary = { nuevas: 0, existentes: 0, provisionales: 0, pendientes_existentes: 0, sin_vinculo: 0, sin_tipo: 0, errores: 0, detalles: [] };
     let despues;
     try {
       do {
         const response = await api.post(`${base}/sincronizar`, { fecha, ...(despues ? { despues } : {}) }, { skipToast: true, timeout: 60000 });
         const batch = response.data.data;
-        for (const key of ['nuevas', 'existentes', 'sin_vinculo', 'sin_tipo']) summary[key] += batch[key];
+        for (const key of ['nuevas', 'existentes', 'provisionales', 'pendientes_existentes', 'sin_vinculo', 'sin_tipo']) summary[key] += batch[key] || 0;
         summary.errores += batch.errores.length;
         summary.detalles = [...summary.detalles, ...batch.errores].slice(0, 20);
         setResult({ ...summary });
         despues = batch.siguiente;
       } while (despues);
-      setMessage('Sincronización terminada. Las nuevas marcaciones ya están en Historial y Reportes.');
+      setMessage('Sincronización terminada. Consulta Historial general. Los pendientes de clasificación no afectan asistencia ni nómina.');
     } catch (err) {
       setError(`${err.response?.data?.message || 'Se interrumpió la sincronización.'} Las marcaciones ya guardadas se conservan; puedes reintentar sin duplicarlas.`);
     } finally { onBusy(false); onChanged(); }
   }
   return <section className="panel" aria-label="Sincronizar usuarios vinculados">
     <h2>Vincular una vez · sincronizar marcaciones</h2>
-    <p>La recepción desde el reloj ya es automática. Este botón incorpora a asistencia los registros del {fecha}, de todas las páginas, solo para IDs vinculados y estados con regla configurada.</p>
+    <p>Este botón sincroniza los registros recibidos del {fecha}, de todas las páginas, para IDs vinculados. Con regla pasan a asistencia; sin regla aparecen en Historial como pendientes de clasificación.</p>
     <div className="form-actions">
       <button type="button" className="outline-button" disabled={busy} onClick={() => edit('link')}>Vincular usuario</button>
       <button type="button" className="outline-button" disabled={busy} onClick={() => edit('rules')}>Configurar tipos del equipo</button>
-      <button type="button" className="primary-button" disabled={busy || Boolean(mode) || !Object.keys(data.estados_mapeo || {}).length || !Object.keys(data.vinculos || {}).length} onClick={synchronize}>Sincronizar vinculados</button>
+      <button type="button" className="primary-button" disabled={busy || Boolean(mode) || !Object.keys(data.vinculos || {}).length} onClick={synchronize}>Sincronizar vinculados</button>
     </div>
-    {!Object.keys(data.estados_mapeo || {}).length && <p>Falta configurar qué significa cada estado del reloj. No se deduce entrada/salida por la hora ni por el orden.</p>}
+    {!Object.keys(data.estados_mapeo || {}).length && <p>Modo provisional activo: puedes sincronizar sin configurar tipos. No se deduce entrada/salida por la hora ni por el orden. Cuando guardes las reglas, vuelve a sincronizar para procesar los pendientes.</p>}
     <p>Vínculos guardados: {Object.entries(data.vinculos || {}).map(([id, employeeId]) => {
       const person = data.empleados.find(item => item.id === employeeId);
       return `${id} → ${person ? `${person.nombres} ${person.apellidos} (${person.codigo})` : 'Empleado no activo'}`;
@@ -84,7 +84,7 @@ export default function AdmsSyncPanel({ integrationId, data, fecha, busy, onBusy
     {message && <p role="status">{message}</p>}
     {error && <p role="alert">{error}</p>}
     {result && <div role="status">
-      <p>{result.nuevas} nuevas · {result.existentes} ya procesadas · {result.sin_vinculo} sin vínculo · {result.sin_tipo} sin regla · {result.errores} con incidencias.</p>
+      <p>{result.nuevas} nuevas en asistencia · {result.existentes} ya en asistencia · {result.provisionales} nuevos pendientes · {result.pendientes_existentes} pendientes ya guardados · {result.sin_vinculo} sin vínculo · {result.errores} con incidencias.</p>
       {result.detalles.map(item => <p key={item.referencia}>ID {item.dispositivo_usuario_id}: {item.motivo}</p>)}
     </div>}
   </section>;

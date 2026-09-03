@@ -183,7 +183,7 @@ export default function BandejaAdms({ integration, sucursales, onBack, onChanged
             <td>{row.dispositivo_usuario_id}</td><td>{row.fecha_hora_local}</td><td>{row.estado_dispositivo}</td>
             <td>{row.verificacion}</td><td>{row.origen === 'adms_sin_verificar' ? 'ADMS directo · sin verificar' : 'Piloto · carga manual'}{row.adms_recibido_en && <small> · Recibido por ADMS</small>}</td><td>{row.marcacion_id
               ? <>{row.anulada ? 'Anulada' : row.estado_marcacion === 'rechazada' ? 'Rechazada' : 'Importada'} · {row.empleado_nombre} · {types[row.tipo] || row.tipo}</>
-              : <>Pendiente; no importada <button type="button" className="outline-button" disabled={saving} onClick={() => selectEvent(row)} aria-label={`Importar ID ${row.dispositivo_usuario_id} del ${row.fecha_hora_local}`}>Vincular e importar</button></>}</td>
+              : <>{row.pendiente_clasificacion ? `En Historial · pendiente de clasificación · ${row.empleado_nombre}` : 'Pendiente; no sincronizada'} <button type="button" className="outline-button" disabled={saving} onClick={() => selectEvent(row)} aria-label={`Importar ID ${row.dispositivo_usuario_id} del ${row.fecha_hora_local}`}>{row.pendiente_clasificacion ? 'Clasificar e importar' : 'Vincular e importar'}</button></>}</td>
           </tr>) : <tr><td colSpan="6">Sin marcaciones recibidas para esta fecha.</td></tr>}</tbody>
         </table></div>
         <div className="form-actions">

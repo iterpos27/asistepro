@@ -53,6 +53,7 @@ const migrations = [
   '045_zkteco_biometric_sync.sql',
   '046_adms_inbox.js',
   '047_adms_direct_inbox.js',
+  '048_adms_provisional_sync.js',
 ];
 
 async function runMigrations() {

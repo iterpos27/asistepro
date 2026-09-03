@@ -38,7 +38,7 @@ const listMarcacionesSchema = z
     query: paginationQuery.extend({
       empleado_id: maybeUuid('empleado_id'),
       sucursal_id: maybeUuid('sucursal_id'),
-      estado: marcacionEstado.optional(),
+      estado: marcacionEstado.or(z.literal('pendiente_clasificacion')).optional(),
       fecha_desde: maybeIsoDate('fecha_desde'),
       fecha_hasta: maybeIsoDate('fecha_hasta'),
       solo_mios: z.string().optional(),

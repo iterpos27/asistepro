@@ -29,11 +29,13 @@ test('PostgreSQL: misma fecha incluye medianoche y tarde, excluye dias vecinos y
     await client.query('BEGIN');
     await client.query(`CREATE SCHEMA ${schema}`);
     await client.query(`SET LOCAL search_path TO ${schema}`);
-    await client.query(`CREATE TABLE empleados(id text,codigo text,nombres text,apellidos text,usuario_id text);
-      CREATE TABLE sucursales(id text,nombre text); CREATE TABLE horarios(id text,nombre text);
-      CREATE TABLE marcaciones(id text,empresa_id text,empleado_id text,sucursal_id text,horario_id text,marcado_en timestamptz);
-      INSERT INTO empleados VALUES('employee','EMP','Persona','Prueba','user');
-      INSERT INTO sucursales VALUES('branch','Matriz');
+    await client.query(`CREATE TABLE empleados(id text,codigo text,nombres text,apellidos text,usuario_id text,empresa_id text);
+      CREATE TABLE sucursales(id text,nombre text,empresa_id text); CREATE TABLE horarios(id text,nombre text);
+      CREATE TABLE marcaciones(id text,empresa_id text,empleado_id text,sucursal_id text,horario_id text,marcado_en timestamptz,estado text,integracion_id text,origen_referencia text);
+      CREATE TABLE biometrico_dispositivos(empresa_id text,integracion_id text,sucursal_id text);
+      CREATE TABLE biometrico_eventos(empresa_id text,integracion_id text,referencia text,sincronizado_empleado_id text,fecha_hora_local timestamp,estado_dispositivo int,dispositivo_usuario_id text);
+      INSERT INTO empleados VALUES('employee','EMP','Persona','Prueba','user','company');
+      INSERT INTO sucursales VALUES('branch','Matriz','company');
       INSERT INTO marcaciones(id,empresa_id,empleado_id,sucursal_id,marcado_en) VALUES
         ('before','company','employee','branch','2026-09-01 23:59:59-05'),
         ('start','company','employee','branch','2026-09-02 00:00:00-05'),

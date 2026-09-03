@@ -66,6 +66,8 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     await require('../src/database/046_adms_inbox')(client); // migration retry
     await require('../src/database/047_adms_direct_inbox')(client);
     await require('../src/database/047_adms_direct_inbox')(client);
+    await require('../src/database/048_adms_provisional_sync')(client);
+    await require('../src/database/048_adms_provisional_sync')(client);
     await client.query('INSERT INTO usuarios VALUES($1)', [actor]);
     await client.query("INSERT INTO sucursales VALUES($1,$2,'activa','MATRIZ'),($3,$4,'activa','OTRA')", [branch, company, otherBranch, other]);
     await client.query("INSERT INTO integraciones_externas(id,empresa_id,tipo,estado) VALUES($1,$2,'biometrico','activa'),($3,$4,'biometrico','activa')", [id, company, otherId, other]);
@@ -96,6 +98,7 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     // Comprobar FK compuesta: otro tenant no puede adjuntar eventos al dispositivo.
     await client.query('SAVEPOINT cross_tenant');
     await assert.rejects(client.query(`INSERT INTO biometrico_eventos
+      (empresa_id,integracion_id,referencia,dispositivo_usuario_id,fecha_hora_local,estado_dispositivo,verificacion,origen,recibido_por,recibido_en)
       SELECT $1,integracion_id,repeat('a',64),dispositivo_usuario_id,fecha_hora_local,estado_dispositivo,verificacion,origen,recibido_por,recibido_en
       FROM biometrico_eventos`, [other]), error => error.code === '23503');
     await client.query('ROLLBACK TO SAVEPOINT cross_tenant');
@@ -201,8 +204,40 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     assert.equal(service.syncSchema.safeParse({ fecha: '2026-02-30' }).success, false);
     assert.equal(service.syncSchema.safeParse({ fecha: '2026-09-02', empresa_id: other }).success, false);
     const syncRequest = { ...syncArgs, body: { fecha: '2026-09-02' } };
+    failAudit = true;
+    await assert.rejects(service.syncLinked(syncRequest, db), /simulated/);
+    failAudit = false;
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM biometrico_eventos WHERE sincronizado_empleado_id IS NOT NULL')).rows[0].n, 0);
     const withoutRules = await service.syncLinked(syncRequest, db);
     assert.equal(withoutRules.nuevas, 0); assert.equal(withoutRules.sin_tipo, 3);
+    assert.equal(withoutRules.provisionales, 3);
+    const repeatedPending = await service.syncLinked(syncRequest, db);
+    assert.equal(repeatedPending.provisionales, 0); assert.equal(repeatedPending.pendientes_existentes, 3);
+    assert.equal((await client.query('SELECT count(*)::int AS n FROM marcaciones WHERE integracion_id=$1', [syncId])).rows[0].n, 0);
+    const pendingInbox = await service.list({ ...syncArgs, query: { fecha: '2026-09-02' } }, db);
+    assert.equal(pendingInbox.items.filter(row => row.pendiente_clasificacion).length, 3);
+    // Aislamiento en la FK: ni una configuracion mal editada permite empleados de otra empresa.
+    await client.query('SAVEPOINT foreign_pending');
+    await assert.rejects(client.query('UPDATE biometrico_eventos SET sincronizado_empleado_id=$1 WHERE integracion_id=$2',
+      [foreignEmployee, syncId]), error => error.code === '23503');
+    await client.query('ROLLBACK TO SAVEPOINT foreign_pending');
+    // Proyeccion del Historial: mismo tenant, empleado, sucursal, fechas y paginacion.
+    await client.query('ALTER TABLE empleados ADD COLUMN usuario_id uuid; ALTER TABLE marcaciones ADD COLUMN horario_id uuid; CREATE TABLE horarios(id uuid,nombre text)');
+    await client.query('UPDATE empleados SET usuario_id=$1 WHERE id=$2', [actor, inactive]);
+    const { listMarcaciones } = require('../src/services/marcacion.service');
+    const historyArgs = { empresaId: company, auth: { rol: 'ADMIN_EMPRESA' }, empleadoId: inactive,
+      fechaDesde: '2026-09-02', fechaHasta: '2026-09-02' };
+    const pendingHistory = await listMarcaciones(historyArgs, db);
+    assert.equal(pendingHistory.total, 3);
+    assert.ok(pendingHistory.items.every(row => row.tipo === null && row.pendiente_clasificacion && row.latitud === null));
+    assert.equal((await listMarcaciones({ ...historyArgs, estado: 'aceptada' }, db)).total, 0);
+    assert.equal((await listMarcaciones({ ...historyArgs, empresaId: other }, db)).total, 0);
+    assert.equal((await listMarcaciones({ ...historyArgs, sucursalId: otherBranch }, db)).total, 0);
+    assert.equal((await listMarcaciones({ ...historyArgs, fechaDesde: '2026-09-03', fechaHasta: '2026-09-03' }, db)).total, 0);
+    assert.equal((await listMarcaciones({ ...historyArgs, limit: 1, offset: 1 }, db)).items.length, 1);
+    assert.equal((await listMarcaciones({ ...historyArgs, limit: 1, offset: 1 }, db)).total, 3);
+    assert.equal((await listMarcaciones({ ...historyArgs, auth: { rol: 'EMPLEADO', usuario_id: actor } }, db)).total, 3);
+    assert.equal((await listMarcaciones({ ...historyArgs, auth: { rol: 'EMPLEADO', usuario_id: randomUUID() } }, db)).total, 0);
     await assert.rejects(service.setTypes({ ...syncArgs, empresaId: other, body: { estados_mapeo: { 0: 'entrada' } } }, db), /no encontrado/);
     await service.setTypes({ ...syncArgs, body: { estados_mapeo: { 0: 'entrada', 1: 'salida' } } }, db);
     await client.query("UPDATE cierres_mensuales SET estado='cerrado' WHERE empresa_id=$1", [company]);
@@ -212,7 +247,7 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     await client.query("UPDATE cierres_mensuales SET estado='reabierto' WHERE empresa_id=$1", [company]);
     await client.query("UPDATE empleados SET estado='inactivo' WHERE id=$1", [inactive]);
     const inactiveResult = await service.syncLinked(syncRequest, db);
-    assert.equal(inactiveResult.nuevas, 0); assert.equal(inactiveResult.errores.length, 2);
+    assert.equal(inactiveResult.nuevas, 0); assert.equal(inactiveResult.errores.length, 3);
     await client.query("UPDATE empleados SET estado='activo' WHERE id=$1", [inactive]);
     failAudit = true;
     await assert.rejects(service.syncLinked(syncRequest, db), /simulated/);
@@ -227,6 +262,14 @@ test('PostgreSQL: registro, aislamiento, deduplicacion, rollback y RLS', { skip:
     const savedSync = (await client.query('SELECT * FROM marcaciones WHERE integracion_id=$1 ORDER BY marcado_en', [syncId])).rows;
     assert.equal(savedSync.length, 2); assert.equal(savedSync[0].marcado_en.toISOString(), '2026-09-02T13:00:00.000Z');
     assert.deepEqual(savedSync.map(row => row.tipo), ['entrada', 'salida']);
+    const classifiedHistory = await listMarcaciones(historyArgs, db);
+    assert.equal(classifiedHistory.total, 3, 'clasificar reemplaza la proyeccion sin duplicar el historial');
+    assert.equal(classifiedHistory.items.filter(row => row.pendiente_clasificacion).length, 1);
+    assert.equal((await listMarcaciones({ ...historyArgs, estado: 'pendiente_clasificacion' }, db)).total, 1);
+    // Aun eliminando accidentalmente el mapeo, el historial provisional impide reasignar.
+    await client.query("UPDATE integraciones_externas SET configuracion=configuracion - 'adms_usuarios_mapeo' WHERE id=$1", [syncId]);
+    await assert.rejects(service.linkUser({ ...link, body: { ...link.body, empleado_id: employee } }, db), /historial/);
+    await service.linkUser(link, db);
     assert.match(savedSync[0].mensaje, /Remitente no autenticado/);
     // Configuracion revalidada dentro de la transaccion, incluso para llamadas en curso.
     await assert.rejects(service.importEvent({ ...syncArgs, linked: true, body: { referencia: savedSync[0].origen_referencia,

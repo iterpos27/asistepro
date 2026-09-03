@@ -95,10 +95,12 @@ async function list({ empresaId, id, query }, db = pool) {
     to_char(b.fecha_hora_local,'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_local,
     b.estado_dispositivo, b.verificacion, b.origen, b.recibido_en, b.adms_recibido_en,
     m.id AS marcacion_id, m.tipo, m.estado AS estado_marcacion, m.anulada,
-    m.empleado_id, concat_ws(' ',e.nombres,e.apellidos) AS empleado_nombre
+    COALESCE(m.empleado_id,b.sincronizado_empleado_id) AS empleado_id,
+    (m.id IS NULL AND b.sincronizado_empleado_id IS NOT NULL) AS pendiente_clasificacion,
+    concat_ws(' ',e.nombres,e.apellidos) AS empleado_nombre
     FROM biometrico_eventos b
     LEFT JOIN marcaciones m ON m.empresa_id=b.empresa_id AND m.integracion_id=b.integracion_id AND m.origen_referencia=b.referencia
-    LEFT JOIN empleados e ON e.empresa_id=m.empresa_id AND e.id=m.empleado_id
+    LEFT JOIN empleados e ON e.empresa_id=b.empresa_id AND e.id=COALESCE(m.empleado_id,b.sincronizado_empleado_id)
     WHERE b.empresa_id=$1 AND b.integracion_id=$2
     AND b.fecha_hora_local >= $3::date AND b.fecha_hora_local < $3::date+interval '1 day'
     ORDER BY b.fecha_hora_local DESC, b.referencia LIMIT 50 OFFSET $4`, [...values, (pagina - 1) * 50]);
@@ -132,8 +134,9 @@ async function setReception({ empresaId, usuarioId, id, body }, db = pool) {
 
 // Solo importa un evento almacenado, con identidad y tipo confirmados por un administrador.
 // No deduce el tipo a partir del estado del firmware ni consulta el reloj por TCP.
-async function importEvent({ empresaId, usuarioId, id, body, linked = false }, db = pool) {
-  const input = parse(importSchema, body);
+async function importEvent({ empresaId, usuarioId, id, body, linked = false, provisional = false }, db = pool) {
+  const input = parse(provisional ? importSchema.omit({ tipo: true }) : importSchema, body);
+  if (provisional && !linked) fail('La sincronizacion provisional requiere un vinculo guardado');
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -157,7 +160,8 @@ async function importEvent({ empresaId, usuarioId, id, body, linked = false }, d
     // El endpoint publico nunca llama a esta funcion. En sincronizacion privada,
     // releer las reglas bajo bloqueo evita usar vinculos/tipos cambiados durante el lote.
     if (linked && (mapped[event.dispositivo_usuario_id] !== employee.id
-      || device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo] !== input.tipo)) {
+      || (provisional ? Boolean(device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo])
+        : device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo] !== input.tipo))) {
       fail('El vinculo o la regla del estado cambio. Vuelve a sincronizar.', 409);
     }
     if ((mapped[event.dispositivo_usuario_id] && mapped[event.dispositivo_usuario_id] !== employee.id)
@@ -167,16 +171,17 @@ async function importEvent({ empresaId, usuarioId, id, body, linked = false }, d
       fail('Existe un vinculo distinto para este ID o empleado. No se reasigna el historial.', 409);
     }
     // El historial prevalece incluso si alguien edita la configuracion del dispositivo.
-    const conflict = await client.query(`SELECT m.id FROM biometrico_eventos b JOIN marcaciones m
+    const conflict = await client.query(`SELECT b.referencia FROM biometrico_eventos b LEFT JOIN marcaciones m
       ON m.empresa_id=b.empresa_id AND m.integracion_id=b.integracion_id AND m.origen_referencia=b.referencia
       WHERE b.empresa_id=$1 AND b.integracion_id=$2 AND
-      ((b.dispositivo_usuario_id=$3 AND m.empleado_id<>$4) OR (b.dispositivo_usuario_id<>$3 AND m.empleado_id=$4)) LIMIT 1`,
+      ((b.dispositivo_usuario_id=$3 AND (m.empleado_id<>$4 OR b.sincronizado_empleado_id<>$4))
+        OR (b.dispositivo_usuario_id<>$3 AND (m.empleado_id=$4 OR b.sincronizado_empleado_id=$4))) LIMIT 1`,
     [empresaId, id, event.dispositivo_usuario_id, employee.id]);
     if (conflict.rows.length) fail('El historial contiene un vinculo distinto. Requiere revision.', 409);
     const existing = (await client.query(`SELECT id,empleado_id,tipo,estado,anulada FROM marcaciones
       WHERE empresa_id=$1 AND integracion_id=$2 AND origen_referencia=$3 FOR UPDATE`, [empresaId, id, input.referencia])).rows[0];
     if (existing) {
-      if (existing.empleado_id !== employee.id || existing.tipo !== input.tipo || existing.anulada || existing.estado === 'rechazada') {
+      if (existing.empleado_id !== employee.id || (!provisional && existing.tipo !== input.tipo) || existing.anulada || existing.estado === 'rechazada') {
         fail('El evento ya tiene una marcacion distinta, anulada o rechazada. No se sobrescribe.', 409);
       }
       await client.query('COMMIT');
@@ -184,6 +189,20 @@ async function importEvent({ empresaId, usuarioId, id, body, linked = false }, d
     }
     const timestamp = event.local_time.replace(' ', 'T') + '-05:00';
     if (linked && new Date(timestamp).getTime() > Date.now()) fail('La fecha del reloj esta en el futuro. Revisa el equipo.', 409);
+    if (provisional) {
+      // Conserva la vinculacion historica. No inserta en marcaciones, no calcula
+      // jornadas y no reabre periodos; el Historial proyecta estos registros aparte.
+      const saved = await client.query(`UPDATE biometrico_eventos
+        SET sincronizado_empleado_id=$4,sincronizado_por=$5,sincronizado_en=now()
+        WHERE empresa_id=$1 AND integracion_id=$2 AND referencia=$3 AND sincronizado_empleado_id IS NULL`,
+      [empresaId, id, input.referencia, employee.id, usuarioId]);
+      if (saved.rowCount) await client.query(`INSERT INTO integracion_ejecuciones(integracion_id,empresa_id,ejecutado_por,accion,estado,resumen,errores)
+        VALUES($1,$2,$3,'sincronizar_adms_provisional','ok',$4::jsonb,'[]'::jsonb)`,
+      [id, empresaId, usuarioId, JSON.stringify({ referencia: input.referencia, empleado_id: employee.id,
+        estado_dispositivo: event.estado_dispositivo, importadas_asistencia: 0 })]);
+      await client.query('COMMIT');
+      return { provisional: true, nueva: Boolean(saved.rowCount) };
+    }
     // Impide que un cierre se escriba entre la comprobacion y esta importacion breve.
     await client.query('LOCK TABLE cierres_mensuales IN SHARE MODE');
     await assertPeriodoAbierto(empresaId, timestamp, client);
@@ -262,10 +281,11 @@ async function configure({ empresaId, usuarioId, id, body }, db, kind) {
         || (legacy[uid] && String(legacy[uid]).toUpperCase() !== employee.codigo.toUpperCase())
         || Object.entries(mapped).some(([key, value]) => key !== uid && value === employee.id)
         || Object.entries(legacy).some(([key, value]) => key !== uid && String(value).toUpperCase() === employee.codigo.toUpperCase())) fail('Existe un vinculo distinto. No se reasigna el historial.', 409);
-      const conflict = await client.query(`SELECT m.id FROM biometrico_eventos b JOIN marcaciones m
+      const conflict = await client.query(`SELECT b.referencia FROM biometrico_eventos b LEFT JOIN marcaciones m
         ON m.empresa_id=b.empresa_id AND m.integracion_id=b.integracion_id AND m.origen_referencia=b.referencia
         WHERE b.empresa_id=$1 AND b.integracion_id=$2 AND
-        ((b.dispositivo_usuario_id=$3 AND m.empleado_id<>$4) OR (b.dispositivo_usuario_id<>$3 AND m.empleado_id=$4)) LIMIT 1`, [empresaId, id, uid, employee.id]);
+        ((b.dispositivo_usuario_id=$3 AND (m.empleado_id<>$4 OR b.sincronizado_empleado_id<>$4))
+          OR (b.dispositivo_usuario_id<>$3 AND (m.empleado_id=$4 OR b.sincronizado_empleado_id=$4))) LIMIT 1`, [empresaId, id, uid, employee.id]);
       if (conflict.rowCount) fail('El historial contiene un vinculo distinto', 409);
       update = { adms_usuarios_mapeo: { ...mapped, [uid]: employee.id } };
     } else update = { adms_estados_mapeo: input.estados_mapeo };
@@ -289,7 +309,7 @@ async function syncLinked({ empresaId, usuarioId, id, body }, db = pool) {
   const device = await getDevice(db, empresaId, id);
   if (!device) fail('Biometrico activo no encontrado', 404);
   if (device.sucursal_estado !== 'activa') fail('Sucursal inactiva', 409);
-  const result = { nuevas: 0, existentes: 0, sin_vinculo: 0, sin_tipo: 0, errores: [], siguiente: null };
+  const result = { nuevas: 0, existentes: 0, provisionales: 0, pendientes_existentes: 0, sin_vinculo: 0, sin_tipo: 0, errores: [], siguiente: null };
   // Cursor por referencia inmutable, acotado siempre al mismo tenant/equipo/dia.
   const rows = (await db.query(`SELECT b.referencia,b.dispositivo_usuario_id,b.estado_dispositivo,m.id AS marcacion_id
     FROM biometrico_eventos b LEFT JOIN marcaciones m ON m.empresa_id=b.empresa_id
@@ -305,11 +325,13 @@ async function syncLinked({ empresaId, usuarioId, id, body }, db = pool) {
     const employee = device.configuracion?.adms_usuarios_mapeo?.[event.dispositivo_usuario_id];
     const type = device.configuracion?.adms_estados_mapeo?.[event.estado_dispositivo];
     if (!employee) { result.sin_vinculo++; continue; }
-    if (!type) { result.sin_tipo++; continue; }
     try {
-      const saved = await importEvent({ empresaId, usuarioId, id, linked: true,
-        body: { referencia: event.referencia, empleado_id: employee, tipo: type, confirmado: true } }, db);
-      if (saved.nueva) result.nuevas++; else result.existentes++;
+      const saved = await importEvent({ empresaId, usuarioId, id, linked: true, provisional: !type,
+        body: { referencia: event.referencia, empleado_id: employee, ...(type ? { tipo: type } : {}), confirmado: true } }, db);
+      if (saved.provisional) {
+        result.sin_tipo++;
+        if (saved.nueva) result.provisionales++; else result.pendientes_existentes++;
+      } else if (saved.nueva) result.nuevas++; else result.existentes++;
     } catch (error) {
       if (!error.statusCode) throw error; // fallo de infraestructura: detener; reintento seguro
       result.errores.push({ referencia: event.referencia, dispositivo_usuario_id: event.dispositivo_usuario_id, motivo: error.message });

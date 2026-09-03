@@ -482,20 +482,42 @@ async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado
 
   const result = await db.query(
     `
+      WITH historial AS (
+        SELECT m.id::text,m.empresa_id,m.empleado_id,m.sucursal_id,m.horario_id,
+          m.estado::text,m.marcado_en,to_jsonb(m) AS datos
+        FROM marcaciones m WHERE m.empresa_id=$1
+        UNION ALL
+        SELECT 'adms:' || b.integracion_id || ':' || b.referencia,b.empresa_id,
+          b.sincronizado_empleado_id,d.sucursal_id,NULL,'pendiente_clasificacion',
+          b.fecha_hora_local AT TIME ZONE 'America/Guayaquil',
+          jsonb_build_object('id','adms:' || b.integracion_id || ':' || b.referencia,
+            'empresa_id',b.empresa_id,'empleado_id',b.sincronizado_empleado_id,'sucursal_id',d.sucursal_id,
+            'tipo',NULL,'estado','pendiente_clasificacion','pendiente_clasificacion',true,
+            'marcado_en',b.fecha_hora_local AT TIME ZONE 'America/Guayaquil',
+            'origen','biometrico','integracion_id',b.integracion_id,'origen_referencia',b.referencia,
+            'estado_dispositivo',b.estado_dispositivo,'dispositivo_usuario_id',b.dispositivo_usuario_id,
+            'motivo_novedad','ADMS sin clasificar: no afecta asistencia ni nomina',
+            'latitud',NULL,'longitud',NULL,'distancia_metros',NULL)
+        FROM biometrico_eventos b JOIN biometrico_dispositivos d
+          ON d.empresa_id=b.empresa_id AND d.integracion_id=b.integracion_id
+        WHERE b.empresa_id=$1 AND b.sincronizado_empleado_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM marcaciones existente WHERE existente.empresa_id=b.empresa_id
+            AND existente.integracion_id=b.integracion_id AND existente.origen_referencia=b.referencia)
+      )
       SELECT
-        m.*,
+        m.datos,
         e.codigo AS empleado_codigo,
         e.nombres AS empleado_nombres,
         e.apellidos AS empleado_apellidos,
         s.nombre AS sucursal_nombre,
         h.nombre AS horario_nombre,
         COUNT(*) OVER() AS total
-      FROM marcaciones m
-      INNER JOIN empleados e ON e.id = m.empleado_id
-      INNER JOIN sucursales s ON s.id = m.sucursal_id
+      FROM historial m
+      INNER JOIN empleados e ON e.empresa_id=m.empresa_id AND e.id = m.empleado_id
+      INNER JOIN sucursales s ON s.empresa_id=m.empresa_id AND s.id = m.sucursal_id
       LEFT JOIN horarios h ON h.id = m.horario_id
       WHERE ${filters.join(' AND ')}
-      ORDER BY m.marcado_en DESC
+      ORDER BY m.marcado_en DESC, m.id
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
     `,
@@ -503,7 +525,7 @@ async function listMarcaciones({ empresaId, auth, empleadoId, sucursalId, estado
   );
 
   return {
-    items: result.rows.map(({ total, ...marcacion }) => marcacion),
+    items: result.rows.map(({ total, datos, ...names }) => ({ ...datos, ...names })),
     total: Number(result.rows[0]?.total || 0),
     limit,
     offset,

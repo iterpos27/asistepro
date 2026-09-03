@@ -173,6 +173,7 @@ export default function HistorialMarcaciones() {
             <option value="aceptada">Aceptada</option>
             <option value="aceptada_con_novedad">Con novedad</option>
             <option value="rechazada">Rechazada</option>
+            <option value="pendiente_clasificacion">Pendiente de clasificación</option>
           </select>
 
           {isGeneral ? (
@@ -202,6 +203,7 @@ export default function HistorialMarcaciones() {
 
       <div className="panel">
         <PanelTitle title="Marcaciones registradas" />
+        <p>Los registros ADMS pendientes conservan la hora del biométrico, pero no cuentan como entrada/salida ni afectan asistencia o nómina hasta clasificarlos.</p>
         {error && <p role="alert">{error}</p>}
         <div className="table-wrap">
           <table>
@@ -234,9 +236,9 @@ export default function HistorialMarcaciones() {
                       )}
                     </td>
                     <td>{marcacion.sucursal_nombre || '-'}</td>
-                    <td>{tipoLabel(marcacion.tipo)}</td>
+                    <td>{marcacion.pendiente_clasificacion ? `Sin clasificar (estado ${marcacion.estado_dispositivo})` : tipoLabel(marcacion.tipo)}</td>
                     <td>
-                      <span className={statusClass(marcacion.estado)}>{marcacion.estado.replace(/_/g, ' ')}</span>
+                      <span className={statusClass(marcacion.estado)}>{marcacion.pendiente_clasificacion ? 'Pendiente de clasificación' : marcacion.estado.replace(/_/g, ' ')}</span>
                     </td>
                     <td>{marcacion.distancia_metros ? `${Number(marcacion.distancia_metros).toFixed(2)} m` : '-'}</td>
                     {canSeeGps ? (
