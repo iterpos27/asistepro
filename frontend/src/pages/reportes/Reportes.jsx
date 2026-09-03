@@ -10,13 +10,14 @@ import * as reporteService from '../../services/reporteService';
 import * as sucursalService from '../../services/sucursalService';
 import { toast } from '../../services/toastService';
 import { ROLES } from '../../utils/roles';
+import { ecuadorDate, ecuadorDateTime } from '../../utils/ecuador-date';
 
 const emptyReport = { resumen: {}, items: [], total: 0 };
 const attendanceStates = ['presente', 'ausente'];
 const markStates = ['aceptada', 'aceptada_con_novedad', 'rechazada'];
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return ecuadorDate();
 }
 
 function currentMonth(value) {
@@ -25,7 +26,7 @@ function currentMonth(value) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return new Date(value).toLocaleString();
+  return ecuadorDateTime(value);
 }
 
 function formatDecimalHours(value) {

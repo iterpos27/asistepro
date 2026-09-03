@@ -6,9 +6,10 @@ import { useAuthContext } from '../../context/AuthContext';
 import { ROLES } from '../../utils/roles';
 import * as solicitudService from '../../services/solicitudService';
 import { toast } from '../../services/toastService';
+import { ecuadorDate } from '../../utils/ecuador-date';
 
 const getInitialForm = () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ecuadorDate();
   return {
     empleado_id: '',
     tipo: 'vacaciones',

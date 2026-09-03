@@ -4,6 +4,7 @@ import PageHeader from '../../components/common/PageHeader';
 import PanelTitle from '../../components/common/PanelTitle';
 import * as service from '../../services/auditoriaService';
 import * as empresaService from '../../services/empresaService';
+import { ecuadorDate } from '../../utils/ecuador-date';
 
 const FIELD_LABELS = {
   nombres: 'Nombres', apellidos: 'Apellidos', apellido: 'Apellido', nombre: 'Nombre',
@@ -24,7 +25,7 @@ const FIELD_LABELS = {
 };
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return ecuadorDate();
 }
 
 function FriendlyMetadata({ metadata }) {

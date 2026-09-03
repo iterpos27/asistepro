@@ -22,6 +22,7 @@ import DataPanel from '../../components/tables/DataPanel';
 import { useAuthContext } from '../../context/AuthContext';
 import useResource from '../../hooks/useResource';
 import { ROLES, getRoleLabel } from '../../utils/roles';
+import { ecuadorDate, ecuadorDateTime } from '../../utils/ecuador-date';
 
 const DashboardChart = lazy(() => import('./DashboardChart'));
 
@@ -105,7 +106,7 @@ export default function Dashboard() {
   const isEmpleado = role === ROLES.EMPLEADO;
   const canSeeTenantOps = isAdminEmpresa || isRrhh;
   const canSeeAttendance = isAdminEmpresa || isRrhh || isEmpleado;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ecuadorDate();
   const month = today.slice(0, 7);
 
   const empresas = useResource('/empresas?limit=100', { items: [], total: 0 }, [role], { enabled: isSuperAdmin });
@@ -385,7 +386,7 @@ export default function Dashboard() {
               </Suspense>
             </div>
           </section>
-          <DataPanel title="Historial personal" rows={getRows(marcaciones.data)} columns={['sucursal_nombre', 'tipo', 'estado', 'marcado_en']} />
+          <DataPanel title="Historial personal" rows={getRows(marcaciones.data).map(row => ({ ...row, marcado_en: ecuadorDateTime(row.marcado_en) }))} columns={['sucursal_nombre', 'tipo', 'estado', 'marcado_en']} />
         </>
       )}
 

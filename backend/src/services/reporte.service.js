@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const { ecuadorDate } = require('../utils/ecuador-date.util');
 
 const REPORT_TIME_ZONE = 'America/Guayaquil';
 
@@ -541,7 +542,7 @@ async function resumenEjecutivo({ empresaId, fechaDesde, fechaHasta, sucursalId,
 async function asistenciaRango({ empresaId, fechaDesde, fechaHasta, sucursalId, empleadoId, estado }) {
   const filters = ['e.empresa_id = $1'];
   const values = [empresaId];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ecuadorDate();
 
   values.push(fechaDesde || today);
   const fromParam = values.length;

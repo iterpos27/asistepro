@@ -7,12 +7,13 @@ import * as empleadoService from '../../services/empleadoService';
 import * as reemplazoService from '../../services/reemplazoService';
 import * as sucursalService from '../../services/sucursalService';
 import { toast } from '../../services/toastService';
+import { ecuadorDate } from '../../utils/ecuador-date';
 
 const emptyForm = {
   empleado_id: '',
   sucursal_id: '',
-  fecha_inicio: new Date().toISOString().slice(0, 10),
-  fecha_fin: new Date().toISOString().slice(0, 10),
+  fecha_inicio: ecuadorDate(),
+  fecha_fin: ecuadorDate(),
   hora_inicio: '',
   hora_fin: '',
   motivo: '',
